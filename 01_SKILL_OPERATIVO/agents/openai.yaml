@@ -1,0 +1,14 @@
+interface:
+  display_name: Nika Media Creative Studio
+  short_description: Produce contenido multimarca consistente para Nika Media.
+  default_prompt: Usa Nika Media Creative Studio para crear este contenido según el
+    manual de la marca indicada.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

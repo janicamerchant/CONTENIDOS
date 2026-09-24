@@ -1,0 +1,6 @@
+# API key local del Estudio: nunca subir
+04_STUDIO_APP/data/config.json
+.env
+
+# Sistema
+.DS_Store

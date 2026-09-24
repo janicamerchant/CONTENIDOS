@@ -1,0 +1,202 @@
+{
+  "id": "p1790281998187",
+  "brand": "eva",
+  "name": "EVA · Velocidad de respuesta",
+  "caption": "Cada minuto que un lead espera, la conversación se enfría. EVA responde, califica y agenda por tu equipo, incluso fuera de horario.\n\nEscribe EVA por DM y te mostramos cómo funciona.",
+  "slides": [
+    {
+      "id": "xi8g2nx",
+      "layout": "portada",
+      "theme": "dark",
+      "kicker": "Ventas · Seguimiento",
+      "title": "Tu lead no esperó.\n*Se fue con otro.*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Janica Merchant, expresión seria, luz lateral suave, B/N editorial",
+      "image": "/files/01_SKILL_OPERATIVO/assets/janica-serious-face.png",
+      "ix": 50,
+      "iy": 22,
+      "iz": 1,
+      "bw": true,
+      "textBack": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "7cdxgbe",
+      "layout": "frase",
+      "theme": "light",
+      "kicker": "El problema",
+      "title": "Cada minuto sin respuesta *enfría* la conversación.",
+      "body": "Cuando alguien escribe, está listo para hablar. Si nadie contesta, sigue buscando.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "",
+      "image": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "textBack": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "uxf79nl",
+      "layout": "comparar",
+      "theme": "dark",
+      "kicker": "Antes y después",
+      "title": "Lo que cambia con *EVA*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "Hoy",
+      "leftItems": [
+        "Respuestas manuales cuando alguien se acuerda",
+        "Leads acumulados en WhatsApp",
+        "Sin visibilidad del pipeline"
+      ],
+      "rightLabel": "Con EVA",
+      "rightItems": [
+        "Respuesta inmediata, también de noche",
+        "Calificación y agenda automáticas",
+        "Cada cita visible en el dashboard"
+      ],
+      "cta": "",
+      "photo": "",
+      "image": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "textBack": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "phx6y58",
+      "layout": "cifra",
+      "theme": "dark",
+      "kicker": "Caso real de un cliente",
+      "title": "",
+      "body": "Una agencia pasó de 20–25 citas agendadas a mano por día a 70–80 diarias. Es el resultado de un cliente, no una garantía.",
+      "number": "70–80",
+      "numberLabel": "citas *diarias* con EVA",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "",
+      "image": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "textBack": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "zuyg0e5",
+      "layout": "lista",
+      "theme": "light",
+      "kicker": "Checklist",
+      "title": "Antes de contratar más gente, *revisa esto*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+        "¿Cuánto tarda tu equipo en responder el primer mensaje?",
+        "¿Quién da seguimiento después del tercer día?",
+        "¿Cuántas citas se pierden fuera de horario?",
+        "¿Ves en un solo lugar en qué etapa está cada lead?"
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "",
+      "image": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "textBack": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "jvwrhwo",
+      "layout": "cta",
+      "theme": "dark",
+      "kicker": "Agenda una demo",
+      "title": "Escribe *EVA* por DM",
+      "body": "Te mostramos cómo responde, califica y agenda por ti.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "Escribe EVA",
+      "photo": "",
+      "image": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "textBack": false,
+      "texture": false,
+      "ts": 1
+    }
+  ],
+  "updatedAt": "2026-09-24T16:33:18-04:00"
+}
