@@ -1,0 +1,216 @@
+{
+  "id": "p1790294333175",
+  "brand": "eva",
+  "name": "ACA 2026: la cartera que se te va",
+  "caption": "Este Open Enrollment no vas a perder clientes por mala suerte. Los vas a perder por los cambios en la ley ACA… y por no tener una estrategia para crecer en otros productos.\n\nLa mayoría de las agencias va a hacer lo mismo de siempre: esperar a que llamen, contestar tarde y ver cómo la cartera se adelgaza renovación tras renovación.\n\nLa otra ruta es distinta: mover tu base actual hacia Vida y suplementarios con un sistema que contacta en segundos, califica y agenda por ti. Una agencia pasó de 20-25 citas agendadas al día de forma manual a 70-80 diarias con EVA (ejemplo de un cliente, no una garantía universal).\n\nSi tu plan para esta temporada todavía es “vamos a ver qué pasa”, ese es el plan que te va a costar la cartera.\n\n👉 ESCRIBE EVA EN EL DM Y COMENZAMOS.\n\nEVA · by Nika Media — Software desarrollado y comercializado por Nika Media.",
+  "concept": "Ángulo de urgencia comercial: los cambios en la ley ACA no matan la agencia de golpe, la vacían en silencio durante las renovaciones del Open Enrollment. El carrusel pasa del miedo (cartera que se cae) a la salida concreta (diversificar hacia Vida y suplementarios con IA que contacta, califica y agenda). Estilo editorial tecnológico: fotografía hiperrealista a color natural, una lámina en blanco y negro para el momento de pérdida, tipografía gigante que se superpone a personas y objetos, acento verde amarillo de EVA solo en cifras y palabras clave. Tono elegante, directo, de asesor que ya vio el escenario. La secuencia convence porque muestra el problema con datos, luego el error estratégico, luego la ventaja operativa y cierra con una acción de un solo paso.",
+  "slides": [
+    {
+      "id": "3cjopxn",
+      "layout": "portada",
+      "theme": "dark",
+      "kicker": "OPEN ENROLLMENT · ACA",
+      "title": "AGENTE, Vas a *perder* MIEMBROS estE OPEN?\n\n\n",
+      "body": "Los cambios en la ley ACA ya están moviendo tu cartera. La pregunta es qué vas a vender después. YA ESTAS LIST@?",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Agente de seguros latino, 40s, sentado en su oficina al atardecer, mirando una lista impresa de pólizas con varias líneas tachadas en marcador; el teléfono en silencio junto a la taza fría. Queda a la derecha del encuadre y su hombro cruza el borde del bloque de titular.",
+      "photoPrompt": "A Latino insurance agency owner in his forties sitting at a cluttered office desk at dusk, staring down at a printed list of client policies with several lines crossed out in marker, silent phone and cold coffee beside him, quiet worry on his face, medium shot with the man on the right side of the frame and his shoulder crossing into the empty left area, warm low window light, real office with blinds and shelves in the background, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-195920-p1790294333175-01.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260924-195920-p1790294333175-01-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "qy1mc1g",
+      "layout": "cifra",
+      "theme": "dark",
+      "kicker": "EL TAMAÑO DEL GOLPE",
+      "title": "No es un rumor. Es *matemática*",
+      "body": "Promedio proyectado de 2026 a 2034 tras el fin de los subsidios ampliados del ACA, que vencieron a fines de 2025.",
+      "number": "3.8M",
+      "numberLabel": "personas más sin seguro *cada año*",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Cenital de un escritorio: manos de una asesora recorriendo con el dedo una hoja de cálculo impresa con renovaciones marcadas en rojo, calculadora y bolígrafo verde lima al lado. Las manos y el papel ocupan la mitad inferior y dejan aire arriba para la cifra.",
+      "photoPrompt": "Overhead shot of a woman's hands tracing a printed spreadsheet of policy renewals with red markings, a calculator, a pen and a coffee ring on a worn wooden desk, only hands and forearms visible, papers occupying the lower half of the frame leaving empty desk surface above for a headline, soft daylight from a window, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "CBO (Congressional Budget Office), junio 2024",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-195920-p1790294333175-02.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "kzszikb",
+      "layout": "frase",
+      "theme": "dark",
+      "kicker": "CÓMO SE CAE UNA CARTERA",
+      "title": "No se cae de golpe. Se cae en las *renovaciones*",
+      "body": "Uno por uno, sin llamada, sin aviso. Cuando lo notas, ya se fue el trimestre.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Silla vacía frente a un escritorio de agencia con dos pantallas encendidas y un tablero de citas casi en blanco; al fondo, desenfocado, un compañero recogiendo sus cosas. Ambiente de oficina real al final del día.",
+      "photoPrompt": "An empty office chair in front of an insurance agency desk with two glowing monitors and a nearly empty appointment board on the wall, a blurred colleague packing up in the background, end-of-day emptiness, wide shot with the chair and desk on the right leaving open space on the left, harsh overhead fluorescent light, black and white documentary treatment, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-195959-p1790294333175-03.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "smqzvuv",
+      "layout": "comparar",
+      "theme": "light",
+      "kicker": "DOS AGENCIAS, MISMA LEY",
+      "title": "La diferencia no es el mercado. Es la *estrategia*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "SOLO ACA",
+      "leftItems": [
+        "Depende de una sola temporada",
+        "Contacta cuando ya perdió al cliente",
+        "Cartera que se adelgaza cada renovación"
+      ],
+      "rightLabel": "ACA + VIDA Y SUPLEMENTARIOS",
+      "rightItems": [
+        "Ingresos todo el año, no un pico",
+        "Contacto inmediato a cada asegurado",
+        "Base actual convertida en nuevas pólizas"
+      ],
+      "cta": "",
+      "photo": "",
+      "photoPrompt": "",
+      "source": "",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "mzxhg37",
+      "layout": "lista",
+      "theme": "dark",
+      "kicker": "PLAN PARA ESTA TEMPORADA",
+      "title": "Lo que EVA hace *por ti*",
+      "body": "Una agencia pasó de 20-25 citas agendadas al día de forma manual a 70-80 diarias con EVA. Ejemplo de un cliente, no una garantía universal.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+        "Responde en segundos por WhatsApp, texto y llamada con IA",
+        "Reactiva tu base actual y la califica para Vida y suplementarios",
+        "Agenda solo a quien sí califica, directo en el calendario",
+        "Da seguimiento hasta que contesten, sin que tú lo recuerdes",
+        "Te muestra en un tablero qué agente cierra y qué lead se enfría"
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Equipo de agencia de seguros trabajando concentrado: una asesora cierra una cita por teléfono mientras señala en la pantalla un tablero con citas del día llenas; el monitor cruza el borde del bloque de texto.",
+      "photoPrompt": "An insurance agency team working focused in a modern office, a female agent confirming an appointment on a headset while pointing at a monitor showing a full daily appointment calendar, a colleague on the phone behind her, energetic and organized mood, medium shot with people and screen on the right side leaving clean space on the left for text, warm practical office lighting and glass partitions with reflections, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-195959-p1790294333175-05.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260924-195959-p1790294333175-05-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "w6u9zfe",
+      "layout": "cta",
+      "theme": "dark",
+      "kicker": "EVA · BY NIKA MEDIA",
+      "title": "Tu cartera no espera al *próximo* año",
+      "body": "Te muestro en una demo cómo mover tu base actual hacia Vida y suplementarios con IA.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "ESCRIBE EVA EN EL DM Y COMENZAMOS",
+      "photo": "Janica Merchant de pie junto a una pantalla grande con el tablero de EVA (citas y seguimientos), señalando una métrica mientras explica a un agente fuera de foco. Ella queda a la derecha y su brazo cruza el borde del titular.",
+      "photoPrompt": "Use the approved Janica Merchant reference for the face: Janica Merchant standing beside a large wall screen displaying a sales dashboard with appointments and follow-ups, pointing at a metric while explaining to an out-of-focus agent in the foreground, confident and warm expression, three-quarter medium shot with her on the right side of the frame and her arm crossing into the empty left area, soft directional light in a real office with textured concrete wall, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-200109-p1790294333175-06.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260924-200109-p1790294333175-06-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    }
+  ],
+  "updatedAt": "2026-09-24T21:13:22-04:00"
+}

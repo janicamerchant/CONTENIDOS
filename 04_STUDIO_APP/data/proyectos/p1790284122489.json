@@ -1,0 +1,240 @@
+{
+  "id": "p1790284122489",
+  "brand": "eva",
+  "name": "EVA · Velocidad de respuesta",
+  "caption": "Cada minuto que un lead espera, la conversación se enfría. EVA responde, califica y agenda por tu equipo, incluso fuera de horario.\n\nEscribe EVA por DM y te mostramos cómo funciona.",
+  "slides": [
+    {
+      "id": "9h609co",
+      "layout": "portada",
+      "theme": "dark",
+      "kicker": "Ventas · Seguimiento",
+      "title": "Tu lead no esperó.\n*Se fue con otro.*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Asesor de seguros de noche en su oficina, mirando el celular con 14 chats de WhatsApp sin responder. El último mensaje dice \"Gracias, ya contraté con otra agencia\". Frustración, luz fría del teléfono en la cara.",
+      "photoPrompt": "A 45-year-old Latino insurance agent alone in his office at night, staring at his smartphone full of unanswered chat notifications, the latest message reads like a customer saying they already hired another agency, frustrated expression, hand on forehead, cold phone light on his face, blurred desk with papers, medium close-up, lower two thirds of frame, empty dark space above for headline, black and white editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "qwxyuq0",
+      "layout": "escena",
+      "theme": "dark",
+      "kicker": "Mientras tanto",
+      "title": "*9:47 p.m.*\nNadie contestó.",
+      "body": "El prospecto escribió, esperó y siguió buscando.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Manos de una mujer en el sofá de su casa, de noche, sosteniendo el celular con un chat en \"visto\" y sin respuesta. Al lado, una póliza impresa y una taza de té.",
+      "photoPrompt": "Close-up of a woman's hands on a living room sofa at night holding a smartphone showing an unanswered chat, a printed insurance quote and a cup of tea beside her, shallow depth of field, warm lamp light, overhead three-quarter angle, black and white editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "5fpuy87",
+      "layout": "frase",
+      "theme": "light",
+      "kicker": "El problema",
+      "title": "Cada minuto sin respuesta *enfría* la conversación.",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Oficina de ventas vacía al final del día: reloj de pared marcando las 6:40, sillas vacías y un monitor encendido lleno de notificaciones sin atender.",
+      "photoPrompt": "Empty sales office at the end of the day, wall clock showing 6:40, empty office chairs, one monitor still on with a stack of unread notifications, wide shot, late afternoon light through blinds, black and white editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "t0b9gru",
+      "layout": "comparar",
+      "theme": "dark",
+      "kicker": "Antes y después",
+      "title": "Lo que cambia con *EVA*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "Hoy",
+      "leftItems": [
+        "Respuestas manuales cuando alguien se acuerda",
+        "Leads acumulados en WhatsApp",
+        "Sin visibilidad del pipeline"
+      ],
+      "rightLabel": "Con EVA",
+      "rightItems": [
+        "Respuesta inmediata, también de noche",
+        "Calificación y agenda automáticas",
+        "Cada cita visible en el dashboard"
+      ],
+      "cta": "",
+      "photo": "Equipo comercial saturado: tres asesores con teléfonos en la mano, pantallas llenas de mensajes, gesto de estrés contenido.",
+      "photoPrompt": "Three insurance sales agents in a busy modern office, each on the phone, screens full of chat messages, restrained stress on their faces, wide horizontal framing, subjects in the upper half, black and white editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "h12rqe6",
+      "layout": "cifra",
+      "theme": "dark",
+      "kicker": "Caso real de un cliente",
+      "title": "",
+      "body": "Una agencia pasó de 20–25 citas agendadas a mano por día a 70–80 diarias. Es el resultado de un cliente, no una garantía.",
+      "number": "70–80",
+      "numberLabel": "citas *diarias* con EVA",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Janica Merchant de pie junto a una pantalla grande con el dashboard de EVA y la agenda llena, explicándole los resultados a un dueño de agencia. Plano medio.",
+      "photoPrompt": "Janica Merchant (use the approved Janica Merchant reference for the face) standing next to a large wall screen showing a full appointment calendar dashboard, explaining results to an agency owner, confident and warm, medium shot, subject on the right side of the frame, modern glass office, black and white editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "s6mbmd6",
+      "layout": "lista",
+      "theme": "light",
+      "kicker": "Checklist",
+      "title": "Antes de contratar más gente, *revisa esto*",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+        "¿Cuánto tarda tu equipo en responder el primer mensaje?",
+        "¿Quién da seguimiento después del tercer día?",
+        "¿Cuántas citas se pierden fuera de horario?",
+        "¿Ves en un solo lugar en qué etapa está cada lead?"
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "",
+      "photoPrompt": "",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "7rwrdz8",
+      "layout": "cta",
+      "theme": "dark",
+      "kicker": "Agenda una demo",
+      "title": "Escribe *EVA* por DM",
+      "body": "Te mostramos cómo responde, califica y agenda por ti.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "Escribe EVA",
+      "photo": "Asesor tranquilo por la mañana, sonriendo al ver en su celular una cita confirmada automáticamente. Escritorio ordenado, café.",
+      "photoPrompt": "Relaxed insurance agent in the morning smiling at his phone showing a confirmed appointment, tidy desk with coffee, soft morning light, medium close-up, subject on the right side of the frame, black and white editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos",
+      "image": "",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1
+    }
+  ],
+  "updatedAt": "2026-09-24T17:08:42-04:00"
+}

@@ -128,8 +128,8 @@
 /* ---------------- Capas de fondo y marca ---------------- */
 
 .s-bg { position: absolute; inset: 0; z-index: 0; }
-.b-eva.tex.t-dark .s-bg { background: url('/files/02_ARCHIVOS_ORIGINALES/1.png') center / cover; opacity: .9; }
-.b-eva.tex.t-light .s-bg { background: url('/files/02_ARCHIVOS_ORIGINALES/2.png') center / cover; opacity: .85; }
+.b-eva.t-dark .s-bg { background: url('/files/02_ARCHIVOS_ORIGINALES/1.png') center / cover; opacity: .9; }
+.b-eva.t-light .s-bg { background: url('/files/02_ARCHIVOS_ORIGINALES/2.png') center / cover; opacity: .85; }
 .s-grain {
   position: absolute; inset: 0; z-index: 7; pointer-events: none; opacity: .16; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 -.2'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>");
@@ -233,7 +233,7 @@
   position: absolute; left: 64px; right: 64px; top: 250px; bottom: 290px; z-index: 3;
   background: var(--s-panel); color: var(--s-panel-ink); padding: 96px 80px 72px;
 }
-.l-frase.has-photo .s-panel { top: 440px; }
+.l-frase.has-photo .s-panel { top: 620px; bottom: 250px; left: 64px; right: 160px; padding: 72px 72px 60px; }
 .l-frase .s-panel .fitbox { height: 100%; display: flex; flex-direction: column; justify-content: center; }
 .l-frase .s-panel .s-title { color: var(--s-panel-ink); font-size: calc(112px * var(--ts) * var(--fit)); }
 .b-janica.l-frase .s-panel .s-title { font-size: calc(92px * var(--ts) * var(--fit)); }
@@ -241,15 +241,15 @@
 .l-frase .s-panel .s-kicker { color: var(--s-panel-ink); opacity: .7; }
 .l-frase .s-panel .s-kicker::before { background: var(--s-panel-acc); }
 .b-janica.l-frase .s-panel { border: 1.5px solid var(--s-line); }
-.l-frase .s-photo { right: 64px; top: 140px; width: 380px; height: 460px; z-index: 4; }
-.l-frase .s-photo.empty { padding: 28px; }
-.l-frase .s-photo.empty .ph-note { font-size: 20px; }
+.l-frase .s-photo { left: 0; right: 0; top: 0; height: 74%; z-index: 2; }
+.l-frase .s-photo:not(.empty) { -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, #000 70%, transparent 100%); }
+.l-frase .s-photo.empty { align-items: flex-start; padding-top: 170px; }
 .l-frase .quote {
   position: absolute; left: 110px; top: 150px; z-index: 4;
   font: 400 260px/1 var(--f-display); color: var(--s-mark);
 }
 .b-citykia.l-frase .quote { font-weight: 900; }
-.l-frase.has-photo .quote { top: 330px; }
+.l-frase.has-photo .quote { top: 520px; left: 96px; }
 
 /* ---------------- LISTA ---------------- */
 .l-lista .s-flow, .l-comparar .s-flow, .l-cta .s-flow {
@@ -329,3 +329,117 @@
 }
 .show-safe .s-safe::before { left: 34px; }
 .show-safe .s-safe::after { right: 34px; }
+
+/* ---------------- ESCENA: foto a sangre + titular gigante ---------------- */
+.l-escena .s-photo { inset: 0; }
+.l-escena .s-photo.empty { align-items: flex-start; padding-top: 170px; }
+.l-escena .s-shade {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(to top, var(--s-bg) 0%, color-mix(in srgb, var(--s-bg) 55%, transparent) 34%, transparent 62%);
+}
+.l-escena .s-flow {
+  position: absolute; left: 80px; right: 80px; bottom: 250px; top: 520px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.l-escena .s-title { font-size: calc(200px * var(--ts) * var(--fit)); }
+.b-janica.l-escena .s-title { font-size: calc(140px * var(--ts) * var(--fit)); }
+.l-escena .s-body { max-width: 720px; }
+
+/* ---------------- COMPARAR con foto ---------------- */
+.l-comparar .s-photo { left: 0; right: 0; top: 0; height: 46%; }
+.l-comparar .s-photo:not(.empty) { -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%); mask-image: linear-gradient(to bottom, #000 55%, transparent 100%); }
+.l-comparar .s-photo.empty { align-items: flex-start; padding-top: 170px; }
+.l-comparar.has-photo .s-flow { top: 380px; }
+
+/* ---------------- Recorte: la persona u objeto queda delante del texto ----------------
+   Es la misma foto sin fondo (PNG). Hereda el encuadre de .s-photo, así calza exacto. */
+.s-cut { z-index: 6 !important; pointer-events: none; }
+.s-cut img { filter: none; }
+.bw .s-cut img { filter: grayscale(1) contrast(1.08); }
+
+/* ---------------- Acabado EVA: nunca fondos planos, bordes con HUD ----------------
+   Ver "Regla de acabado" en eva-carousel-visual-guide.md */
+.b-eva { --paper: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='.018 .045' numOctaves='4' seed='7'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .55 0'/></filter><rect width='420' height='420' filter='url(%23p)'/></svg>"); }
+/* Papel en las zonas sólidas: franjas rasgadas, panel de frase, columna destacada y botón */
+.b-eva .s-torn, .b-eva .s-tab, .b-eva.l-frase .s-panel, .b-eva .s-col.b, .b-eva .s-chip {
+  background-image: var(--paper); background-size: 420px 420px; background-blend-mode: soft-light;
+}
+.b-eva .s-torn, .b-eva .s-tab { background-color: var(--s-deep); }
+
+/* Pestaña de papel rasgado en la esquina superior derecha */
+.s-tab, .s-tab-edge { display: none; }
+.b-eva .s-tab { display: block; position: absolute; top: -12px; right: -12px; width: 430px; height: 176px; z-index: 4; pointer-events: none; }
+.b-eva .s-tab-edge { display: block; position: absolute; top: -12px; right: -12px; width: 436px; height: 184px; z-index: 3; background: var(--s-edge); opacity: .5; pointer-events: none; }
+
+/* Bloques de color bajo el contador */
+.s-dots { display: none; }
+.b-eva .s-dots { display: flex; gap: 8px; position: absolute; right: 80px; top: 124px; z-index: 8; }
+.b-eva .s-dots i { width: 22px; height: 22px; display: block; background: var(--s-line); }
+.b-eva .s-dots i:nth-child(2) { background: var(--s-mark); }
+.b-eva .s-dots i:nth-child(3) { background: #7FD4C1; opacity: .85; }
+
+/* Ventana HUD fina en el borde derecho */
+.s-win { display: none; }
+.b-eva .s-win { display: block; position: absolute; right: 44px; top: 30%; width: 150px; height: 64px; border: 1.5px solid var(--s-line); z-index: 6; pointer-events: none; }
+.b-eva .s-win::before { content: ''; position: absolute; left: 12px; top: 12px; width: 58px; height: 12px; background: var(--s-line); }
+.b-eva .s-win::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 14px; height: 1.5px; background: var(--s-line); }
+
+/* Línea con flechas en el borde inferior derecho */
+.s-hudb { display: none; }
+.b-eva .s-hudb { display: flex; align-items: center; gap: 14px; position: absolute; right: 80px; bottom: 58px; width: 360px; z-index: 8; pointer-events: none; }
+.b-eva .s-hudb .ln { flex: 1; height: 1.5px; background: var(--s-line); }
+.b-eva .s-hudb .ar { font: 400 28px/1 var(--f-body); color: var(--s-muted); }
+.b-eva .s-hudb .bk { width: 34px; height: 10px; background: var(--s-mark); }
+
+/* Papel rasgado en los diseños que antes no lo tenían */
+.l-escena .s-torn { bottom: -10px; height: 170px; }
+.l-escena .s-torn-edge { bottom: -4px; height: 170px; }
+.l-frase .s-torn { top: -10px; height: 120px; }
+.l-frase .s-torn-edge { top: -4px; height: 120px; }
+.l-lista .s-torn { bottom: -10px; height: 210px; }
+.l-lista .s-torn-edge { bottom: -4px; height: 210px; }
+.l-comparar .s-torn { bottom: -10px; height: 210px; }
+.l-comparar .s-torn-edge { bottom: -4px; height: 210px; }
+
+/* Ajustes de acabado revisados en pantalla */
+/* El resaltado lima no debe subir sobre la línea de arriba (tapaba letras con interlineado .9) */
+.b-eva.t-light :not(.s-panel) > .fitbox > .s-title .acc, .b-eva.t-light .s-flow > .s-title .acc, .b-eva.t-light .s-numlabel .acc {
+  background: linear-gradient(transparent 16%, var(--s-acc-bg) 16%, var(--s-acc-bg) 94%, transparent 94%);
+}
+/* En Frase el panel llega al borde derecho: la ventana HUD y las marcas chocaban con él */
+.b-eva.l-frase .s-win, .b-eva.l-frase .s-ticks { display: none; }
+/* Contador legible sobre fotos claras */
+.has-photo .s-count, .has-photo .s-dots { text-shadow: 0 2px 10px rgba(0,0,0,.55); }
+.b-eva.has-photo .s-count { color: var(--s-ink); }
+
+/* El ajuste automático (fitSlide) solo detecta el texto que se desborda hacia abajo.
+   Con justify-content flex-end/center el exceso se iba hacia arriba y cortaba la primera línea
+   sin achicar la letra. Los márgenes automáticos alinean igual, pero el exceso siempre cae abajo. */
+.l-escena .s-flow, .l-cifra .s-flow, .l-cta .s-flow, .l-frase .s-panel .fitbox { justify-content: flex-start; }
+.l-escena .s-flow > :first-child { margin-top: auto; }
+.l-cifra .s-flow > :first-child, .l-cta .s-flow > :first-child, .l-frase .s-panel .fitbox > :first-child { margin-top: auto; }
+.l-cifra .s-flow > :last-child, .l-cta .s-flow > :last-child, .l-frase .s-panel .fitbox > :last-child { margin-bottom: auto; }
+
+/* Capa de texto sobre el recorte: todo menos el titular grande y la cifra (ver buildSlide) */
+.over { z-index: 7 !important; pointer-events: none; }
+.over .s-title, .over .s-number { visibility: hidden; }
+.s-panel.over { background: none !important; border-color: transparent !important; }
+
+/* El resaltado lima de los paneles tampoco debe subir sobre la línea de arriba */
+.b-eva .s-panel .s-title .acc {
+  background: linear-gradient(transparent 16%, var(--s-panel-acc-bg) 16%, var(--s-panel-acc-bg) 94%, transparent 94%);
+}
+
+/* Cifra con foto: el texto bajo la cifra no se mete debajo de la foto */
+.l-cifra .has-photo .s-numlabel { max-width: 560px; }
+
+/* Texto claro sobre fotos: sombra suave para que no se pierda en zonas claras */
+.b-eva.t-dark.has-photo .s-title, .b-eva.t-dark.has-photo .s-number, .b-eva.t-dark.has-photo .s-numlabel,
+.b-eva.t-dark.has-photo .s-body, .b-eva.t-dark.has-photo .s-kicker, .b-eva.t-dark.has-photo .s-items li {
+  text-shadow: 0 2px 20px rgba(0,0,0,.55), 0 0 2px rgba(0,0,0,.35);
+}
+
+/* Fuente del dato: visible, pequeña y discreta bajo el texto de apoyo */
+.s-source { margin: 22px 0 0; font: 500 calc(24px * var(--fit))/1.3 var(--f-body); color: var(--s-muted); letter-spacing: .02em; max-width: 820px; }
+.s-panel .s-source { color: var(--s-panel-ink); opacity: .65; }
+.b-eva.t-dark.has-photo .s-source { color: var(--s-ink); opacity: .8; text-shadow: 0 2px 12px rgba(0,0,0,.6); }

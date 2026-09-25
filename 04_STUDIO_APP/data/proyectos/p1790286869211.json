@@ -1,0 +1,174 @@
+{
+  "id": "p1790286869211",
+  "brand": "eva",
+  "name": "EVA · El cliente que no esperó",
+  "caption": "Tu prospecto no te dejó de escribir porque no quería comprar. Te dejó de escribir porque alguien le contestó primero.\n\nEn seguros y servicios, la venta casi nunca se pierde por precio: se pierde por silencio. El formulario llega a las 8:41 p.m., tú lo ves a las 10:15 a.m. del día siguiente, y para entonces ya firmó con otro.\n\nEVA responde de inmediato por WhatsApp, texto y llamada con IA, califica al prospecto, agenda la cita y te deja todo visible en el dashboard. Una agencia pasó de ~20-25 citas agendadas al día de forma manual a ~70-80 diarias con EVA, con una semana reportada de ~320 citas agendadas. Es el ejemplo de un cliente, no una garantía universal.\n\nSi hoy tienes chats sin responder, ahí está tu próximo mes de comisiones.\n\n👉 ESCRIBE EVA EN LOS COMENTARIOS y te mostramos una demo.\n\nEVA · by Nika Media",
+  "concept": "La idea central es una pérdida silenciosa: el prospecto no se enoja, simplemente compra en otro lado mientras tú respondes tarde. El ángulo es el costo real de cada minuto de silencio, no un regaño sino una cuenta pendiente. Visualmente es revista tecnológica premium: fotografía editorial hiperrealista, base carbón con paneles marfil, tipografía enorme que se superpone a personas y objetos, y acentos verde lima eléctrico dirigiendo la mirada a cifras y CTA. El tono es urgente pero elegante, de dueño a dueño. La secuencia convence porque primero muestra la escena que el dueño ya vivió, luego la prueba de un cliente real y termina con una acción de una sola palabra.",
+  "slides": [
+    {
+      "id": "90qlz24",
+      "layout": "portada",
+      "theme": "dark",
+      "kicker": "VELOCIDAD DE RESPUESTA",
+      "title": "Tu cliente *ya compró*. Con otro.",
+      "body": "No se quejó. Solo dejó de escribir.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Dueño de agencia de seguros, 45 años, solo en su oficina de noche, mirando su celular con la pantalla llena de chats de WhatsApp sin responder. Luz azulada del teléfono en la cara, gesto de darse cuenta tarde. Plano medio, fondo oscuro con la oficina desenfocada.",
+      "photoPrompt": "A 45-year-old insurance agency owner sitting alone in his modern office at night, staring at his phone screen filled with unanswered chat threads, blue screen light on his tired face, realizing he is too late, medium shot, shallow depth of field, dark office bokeh behind him, soft editorial lighting, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-175534-p1790286869211-01.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "2fjcpjg",
+      "layout": "escena",
+      "theme": "dark",
+      "kicker": "LA ESCENA REAL",
+      "title": "Alguien contestó *primero*",
+      "body": "Mientras tu formulario esperaba, el prospecto ya estaba firmando en otra oficina.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Una pareja sonriente firmando una póliza sobre el escritorio de otro agente, apretón de manos al fondo. Detalle de la pluma tocando el papel. Plano general cálido de una oficina competidora, ambiente de cierre logrado.",
+      "photoPrompt": "A smiling couple signing a policy document at a competitor's desk while the agent shakes hands with them, pen touching paper in sharp focus, warm daylight through office blinds, wide editorial shot, genuine happy expressions, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-175455-p1790286869211-02.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "y5xv4g9",
+      "layout": "comparar",
+      "theme": "dark",
+      "kicker": "ANTES Y DESPUÉS",
+      "title": "El minuto que *decide* la venta",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "Sin EVA",
+      "leftItems": [
+        "El lead entra a las 8:41 p.m.",
+        "Lo ves al día siguiente",
+        "Respondes a un cliente que ya firmó"
+      ],
+      "rightLabel": "Con EVA",
+      "rightItems": [
+        "Responde al instante por WhatsApp y texto",
+        "Califica y agenda sola la cita",
+        "Tú entras cuando ya hay interés real"
+      ],
+      "cta": "",
+      "photo": "Detalle de manos de una ejecutiva revisando el dashboard de EVA en una tablet, con la lista de conversaciones respondidas y citas agendadas; al lado, un teléfono viejo con notificaciones acumuladas apagándose.",
+      "photoPrompt": "Close-up of a businesswoman's hands holding a tablet showing a clean CRM dashboard with conversation threads and scheduled appointments, next to it a phone face-up with stacked notifications, dark charcoal desk, moody directional light with a lime-green screen glow, detail shot, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-175500-p1790286869211-04.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "7yvxnr8",
+      "layout": "cifra",
+      "theme": "dark",
+      "kicker": "CASO DE UN CLIENTE",
+      "title": "De 20-25 citas a *70-80* al día",
+      "body": "Una agencia pasó de agendar manualmente a agendar con EVA. Ejemplo de un cliente, no una garantía universal.",
+      "number": "320",
+      "numberLabel": "citas agendadas en una semana reportada",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Cenital de un escritorio claro con una laptop mostrando una agenda semanal completamente llena de bloques de citas, una taza de café y una libreta con marcas de check hechas a mano.",
+      "photoPrompt": "Overhead flat lay of a bright desk with a laptop screen showing a weekly calendar packed with back-to-back appointment blocks, a coffee cup, a notebook with handwritten checkmarks, a hand resting near the trackpad, soft natural window light, top-down framing, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-175538-p1790286869211-03.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "atu34fu",
+      "layout": "cta",
+      "theme": "dark",
+      "kicker": "EVA · BY NIKA MEDIA",
+      "title": "Deja de perder ventas por *silencio*",
+      "body": "Te mostramos cómo EVA responde, califica y agenda por ti.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "ESCRIBE EVA EN LOS COMENTARIOS",
+      "photo": "Janica Merchant de pie frente a una pantalla grande mostrando el dashboard de EVA, señalando las citas agendadas mientras explica a cámara. Plano medio, oficina oscura premium con acento verde lima.",
+      "photoPrompt": "Janica Merchant standing beside a large screen displaying a sales dashboard with scheduled appointments, pointing at the metrics while speaking confidently toward the camera, premium dark office, lime-green accent light from the screen, medium shot, soft editorial lighting, use the approved Janica Merchant reference for the face, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-175650-p1790286869211-05.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    }
+  ],
+  "updatedAt": "2026-09-24T19:41:04-04:00"
+}

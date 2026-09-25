@@ -19,6 +19,7 @@
     <span class="wm-sub">Carruseles · Nika Media</span>
   </div>
   <nav class="tabs" role="tablist">
+    <button class="tab" data-view="create" role="tab">Crear</button>
     <button class="tab" data-view="editor" role="tab">Editor</button>
     <button class="tab" data-view="requests" role="tab">Solicitudes <span class="count" id="req-count"></span></button>
     <button class="tab" data-view="deliveries" role="tab">Entregas</button>
@@ -28,6 +29,77 @@
     <button class="btn ghost" id="btn-settings" title="Ajustes">Ajustes</button>
   </div>
 </header>
+
+<!-- ============ CREAR: idea → propuesta → costo → aprobación ============ -->
+<main class="view" id="view-create" hidden>
+  <ol class="steps" id="steps" aria-label="Pasos">
+    <li data-step="idea"><b>1</b> Idea</li>
+    <li data-step="prop"><b>2</b> Propuesta</li>
+    <li data-step="cost"><b>3</b> Costo y aprobación</li>
+  </ol>
+
+  <section class="step" id="st-idea">
+    <h1 class="h1">¿Qué carrusel quieres hacer?</h1>
+    <p class="lede">Describe la idea con tus palabras. Claude arma el guion y la dirección creativa con la guía de la marca, y tú lo editas antes de gastar créditos en fotos.</p>
+    <p class="banner" id="idea-nokey" hidden>Falta la API key de Anthropic para escribir la propuesta. <button type="button" class="btn sm" data-settings>Abrir Ajustes</button></p>
+    <form id="idea-form" class="req-form" autocomplete="off">
+      <div class="field full">
+        <span class="lbl">Marca</span>
+        <div class="brand-pick lg" id="i-brand" role="radiogroup" aria-label="Marca"></div>
+      </div>
+      <div class="field full">
+        <label class="lbl" for="i-idea">Tu idea</label>
+        <textarea id="i-idea" class="inp" rows="6" required placeholder="Ej. Un carrusel para dueños de agencias de seguros sobre cuánto dinero pierden cuando un lead espera más de 5 minutos. Quiero que Janica aparezca al final invitando a la demo."></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl" for="i-laminas">Láminas</label>
+        <select id="i-laminas" class="inp"><option>5</option><option>6</option><option selected>7</option><option>8</option><option>10</option></select>
+      </div>
+      <div class="field">
+        <label class="lbl" for="i-cta">CTA</label>
+        <input id="i-cta" class="inp" type="text">
+      </div>
+      <div class="field full">
+        <label class="lbl" for="i-notas">Notas (opcional)</label>
+        <input id="i-notas" class="inp" type="text" placeholder="Tono, datos a usar, qué evitar…">
+      </div>
+      <div class="form-actions full">
+        <button type="submit" class="btn accent" id="btn-propose">Crear propuesta</button>
+        <span class="hint" id="idea-hint"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="step prop-layout" id="st-prop" hidden>
+    <div class="prop-main">
+      <div class="prop-head">
+        <div>
+          <label class="lbl" for="d-name">Proyecto</label>
+          <input id="d-name" class="inp title-inp" type="text">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn ghost sm" id="btn-back-idea">← Cambiar idea</button>
+          <button type="button" class="btn ghost sm" id="btn-repropose">Rehacer propuesta</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="d-concept">Dirección creativa</label>
+        <textarea id="d-concept" class="inp" rows="4"></textarea>
+      </div>
+      <details class="research" id="d-research-box" hidden>
+        <summary>Investigación y fuentes (búsqueda web de Claude)</summary>
+        <div class="research-body" id="d-research"></div>
+      </details>
+      <h2 class="h2 prop-sub">Guion por lámina</h2>
+      <ol class="prop-slides" id="prop-slides"></ol>
+      <div class="field">
+        <label class="lbl" for="d-caption">Caption del post</label>
+        <textarea id="d-caption" class="inp" rows="5"></textarea>
+      </div>
+    </div>
+    <aside class="cost" id="cost-panel" aria-live="polite"></aside>
+  </section>
+</main>
 
 <!-- ============ EDITOR ============ -->
 <main class="view" id="view-editor">
@@ -63,6 +135,16 @@
       </div>
     </div>
     <div class="stage" id="stage"><div class="stage-inner" id="stage-inner"></div></div>
+    <details class="editor-help" id="editor-help" open>
+      <summary>Cómo corregir detalles</summary>
+      <ol>
+        <li><b>Elige la lámina</b> en la columna izquierda.</li>
+        <li><b>Texto</b> (panel derecho): Antetítulo, Titular y Texto de apoyo se editan directo y la lámina se actualiza mientras escribes. En el Titular, la palabra entre <code>*asteriscos*</code> va en verde lima y Enter hace un salto de línea para decidir dónde se corta cada renglón. El control <b>Titular</b> agranda o achica la letra.</li>
+        <li><b>Foto</b>: Horizontal, Vertical y Zoom para encuadrar. Si la persona tapa demasiado el texto, pulsa <b>Quitar</b> en el Recorte (o <b>Recorte automático</b> para ponerlo). <b>Regenerar foto con Higgsfield</b> crea otra y <b>Volver a la foto anterior</b> la recupera.</li>
+        <li>Arriba del panel derecho cambias el <b>Diseño</b> (Portada, Escena, Cifra…) y el fondo <b>Oscuro / Claro</b>.</li>
+        <li>Todo se guarda solo. Al terminar, pulsa <b>Exportar carrusel</b>.</li>
+      </ol>
+    </details>
   </section>
 
   <aside class="inspector" id="inspector"></aside>
@@ -182,7 +264,9 @@
     <label class="lbl" for="api-key">API key de Anthropic</label>
     <input id="api-key" class="inp" type="password" placeholder="sk-ant-…" autocomplete="off">
     <p class="hint" id="key-state"></p>
-    <p class="hint">Se guarda solo en esta computadora, en <span class="mono">04_STUDIO_APP/data/config.json</span>. Se usa para los borradores con IA (modelo Claude Opus 5).</p>
+    <p class="hint">Se guarda solo en esta computadora, en <span class="mono">04_STUDIO_APP/data/config.json</span>. Se usa para las propuestas y borradores con IA (modelo Claude Opus 5).</p>
+    <span class="lbl" style="margin-top:8px">Higgsfield (fotos)</span>
+    <p class="hint" id="hf-state"></p>
     <div class="form-actions"><button class="btn accent" type="submit">Guardar</button></div>
   </form>
 </dialog>
