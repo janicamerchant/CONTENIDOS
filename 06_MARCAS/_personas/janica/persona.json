@@ -1,0 +1,43 @@
+{
+  "name": "Janica Merchant",
+  "aliases": [
+    "Janica"
+  ],
+  "descripcion": "Fundadora; figura principal de su marca personal, de EVA y de City Kia. Reglas de rostro y vestuario en el perfil de Janica Merchant.",
+  "identidad": "IDENTITY LOCK: the woman is Janica Merchant, the same real person shown in every reference image. Reproduce her face exactly from the references: oval face with defined cheekbones, dark arched defined eyebrows, almond-shaped brown eyes with soft smoky makeup, slim straight nose, full nude-pink lips (do not enlarge them), long wavy blonde hair with darker roots, light golden skin. Same age as the references. Both eyes aligned and looking at the same point, symmetrical natural gaze, equal pupils and eyelids, no strabismus, no lazy eye. Do not blend her with other people, do not beautify or change facial geometry. Frame her as a medium or medium-close shot so her face is large and sharp; natural hands with five fingers.",
+  "orden": [
+    "janica-real-10-traje-blanco.jpg",
+    "janica-real-11-blazer-azul-sonrisa.jpg",
+    "janica-real-seria-hd.jpg",
+    "janica-real-01.jpg",
+    "janica-real-09.jpg",
+    "janica-real-02.jpg",
+    "janica-real-sonrisa-1.jpg",
+    "janica-real-sonrisa-2.jpg",
+    "janica-real-03.jpg",
+    "janica-real-04.jpg",
+    "janica-real-05.jpg",
+    "janica-real-06.jpg",
+    "janica-real-07.jpg",
+    "janica-real-08.jpg",
+    "janica-serious-face.png",
+    "janica-aprobada-editorial-1.png",
+    "janica-aprobada-editorial-2.png",
+    "janica-face-sheet-1.jpeg",
+    "janica-face-sheet-2.jpeg"
+  ],
+  "inactivas": [
+    "janica-serious-face.png",
+    "janica-aprobada-editorial-1.png",
+    "janica-aprobada-editorial-2.png",
+    "janica-face-sheet-1.jpeg",
+    "janica-face-sheet-2.jpeg"
+  ],
+  "soul_id": "6a87d146-0e6f-4dc4-898f-9d2816c64f45",
+  "soul_look": "Long, voluminous, wavy blonde hair well past the shoulders with darker roots, full dark defined eyebrows, brown almond eyes, natural nude-pink lips, gold hoop earrings.",
+  "fotos_base": {
+    "portada": "janica-real-seria-hd.jpg",
+    "cta": "janica-real-11-blazer-azul-sonrisa.jpg",
+    "otras": "janica-real-10-traje-blanco.jpg"
+  }
+}

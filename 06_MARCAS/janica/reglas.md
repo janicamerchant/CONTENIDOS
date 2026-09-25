@@ -1,0 +1,10 @@
+Reglas de Janica Merchant (mandan sobre las generales). Sigue la sección "Sistema editorial del carrusel" del perfil.
+- theme: "light" en casi todas las láminas (texto oscuro sobre foto clara y cálida). "dark" solo si la zona del texto en la foto es oscura.
+- Janica aparece solo en 2 o 3 láminas: la portada, como máximo una intermedia y el cierre. Las demás son espacios u objetos que cuentan la idea. Nunca un retrato decorativo.
+- Portada y cierre con Janica: poses y vestuario distintos (por ejemplo seria de perfil mirando la ciudad en la portada, sonriendo en un escenario en el cierre).
+- layout: portada (Janica + titular en MAYÚSCULAS), escena (espacio u objeto + titular en minúsculas con una palabra en *cursiva*), frase (el body es un párrafo reflexivo corto que va ARRIBA y el title es un remate corto en MAYÚSCULAS que va ABAJO, 2 a 4 palabras), lista (titular en MAYÚSCULAS + 3 o 4 frases cortas), cifra, comparar (úsalo para contrastes: rightLabel es el remate corto, como "A TI SÍ."), cta (cierre con Janica).
+- title: escribe las MAYÚSCULAS tal cual en el texto cuando el titular sea una afirmación. Máximo 7 palabras.
+- kicker: casi siempre vacío. body: 1 a 3 frases cortas.
+- photoPrompt: luz natural cálida de tarde, paleta marfil, beige, arena, piedra y madera clara, sombras suaves de ventana u hojas. Espacios premium reales (oficina con vidrio, escenario de conferencia, backstage, pasillo con puertas, escalera de piedra, recibidor luminoso). Deja una zona de pared lisa o cortina clara en el lado IZQUIERDO SUPERIOR (portada, escena, lista, cta) o en la parte SUPERIOR y la INFERIOR (frase) para el texto. El sujeto va a la derecha o abajo.
+- En las láminas de objetos, los libros o libretas pueden llevar palabras cortas en español como parte de la escena (por ejemplo lomos con DISCIPLINA, ENFOQUE, RESULTADOS). Escríbelas en el prompt entre comillas. En ese caso reemplaza "no text" por "only the quoted words as printed props".
+- Con Janica: plano medio o medio corto (la cara grande y nítida), vestuario business chic juvenil del perfil, y la frase "use the approved Janica Merchant reference for the face".

@@ -1,0 +1,56 @@
+{
+  "name": "EVA",
+  "file": "EVA",
+  "swatch": "#ECFE6E",
+  "design": "eva",
+  "theme": "dark",
+  "cutout": true,
+  "defaults": {
+    "audiencia": "Dueños de agencias de seguros y negocios de servicios",
+    "cta": "Escribe EVA por DM",
+    "idioma": "Español",
+    "objetivo": "Generar demos / DMs"
+  },
+  "look": "natural color editorial photograph, premium tech magazine look, soft side light, modern office or real business setting",
+  "logos": {
+    "dark": {
+      "src": "logos/eva-logo-dark-lime.png",
+      "key": [
+        53,
+        53,
+        53
+      ]
+    },
+    "light": {
+      "src": "logos/eva-logo-light.png",
+      "key": [
+        255,
+        255,
+        255
+      ]
+    }
+  },
+  "byline": {
+    "text": "Desarrollado y comercializado por",
+    "alt": "Nika Media",
+    "logos": {
+      "dark": {
+        "src": "logos/nika-media.png",
+        "tint": [
+          239,
+          235,
+          224
+        ]
+      },
+      "light": {
+        "src": "logos/nika-media.png"
+      }
+    }
+  },
+  "personas": [
+    "janica"
+  ],
+  "datos": [
+
+  ]
+}

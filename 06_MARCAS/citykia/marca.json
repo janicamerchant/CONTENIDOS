@@ -1,0 +1,36 @@
+{
+  "name": "City Kia",
+  "file": "CITYKIA",
+  "swatch": "#D7141A",
+  "design": "citykia",
+  "theme": "dark",
+  "cutout": false,
+  "defaults": {
+    "audiencia": "Compradores de auto en Greater Orlando",
+    "cta": "Visit City Kia of Greater Orlando",
+    "idioma": "English",
+    "objetivo": "Venta / oferta"
+  },
+  "look": "clean commercial photograph, white, black and metallic silver tones, bright natural light, Orlando car dealership setting",
+  "logos": {
+    "dark": {
+      "src": "logos/city-kia-logo-white.png",
+      "key": [
+        0,
+        0,
+        0
+      ]
+    },
+    "light": {
+      "src": "logos/city-kia-logo-dark.png"
+    }
+  },
+  "personas": [
+    "janica",
+    "raul-gomila",
+    "andrea"
+  ],
+  "datos": [
+
+  ]
+}

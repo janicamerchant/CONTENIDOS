@@ -1,0 +1,104 @@
+{
+  "referencias/culpa-01-portada-janica.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/culpa-02-algo-para-ti-objetos.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/culpa-03-a-ti-si-puertas.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/culpa-04-sin-destruirse-sillon.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/culpa-05-no-le-estas-fallando.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/culpa-06-cierre-janica-hija.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ],
+    "active": false
+  },
+  "referencias/lowprofile-01-portada-janica.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/lowprofile-02-fuera-de-camara-objetos.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/lowprofile-03-lista-puerta-vidrio.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/lowprofile-04-menos-ruido-janica.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/lowprofile-05-trabajar-en-silencio-escenario.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/lowprofile-06-escalera-privado.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/lowprofile-07-cierre-janica.jpg": {
+    "tags": [
+      "carrusel aprobado"
+    ]
+  },
+  "referencias/rojo-esto-es-ia-01.jpg": {
+    "tags": [
+      "solo estilo tipográfico",
+      "no es Janica"
+    ]
+  },
+  "referencias/rojo-esto-es-ia-02.jpg": {
+    "tags": [
+      "solo estilo tipográfico",
+      "no es Janica"
+    ]
+  },
+  "referencias/rojo-esto-es-ia-03.jpg": {
+    "tags": [
+      "solo estilo tipográfico",
+      "no es Janica"
+    ]
+  },
+  "referencias/rojo-esto-es-ia-04.jpg": {
+    "tags": [
+      "solo estilo tipográfico",
+      "no es Janica"
+    ]
+  },
+  "referencias/rojo-esto-es-ia-05.jpg": {
+    "tags": [
+      "solo estilo tipográfico",
+      "no es Janica"
+    ]
+  },
+  "referencias/rojo-esto-es-ia-06.jpg": {
+    "tags": [
+      "solo estilo tipográfico",
+      "no es Janica"
+    ]
+  }
+}

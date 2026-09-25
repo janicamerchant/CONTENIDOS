@@ -1,0 +1,62 @@
+{
+  "name": "Janica Merchant",
+  "file": "JANICA",
+  "swatch": "#e6dccd",
+  "design": "janica",
+  "theme": "light",
+  "cutout": true,
+  "defaults": {
+    "audiencia": "Mujeres emprendedoras y profesionales ambiciosas, madres empresarias",
+    "cta": "Guárdalo y compártelo con alguien que lo necesite",
+    "idioma": "Español",
+    "objetivo": "Autoridad"
+  },
+  "look": "warm quiet-luxury editorial magazine photograph, warm late-afternoon side light with soft window or leaf shadows, ivory, beige, sand, stone and light wood palette, premium real space, clean plain wall area at the upper left for a large headline",
+  "logos": {
+  },
+  "personas": [
+    "janica"
+  ],
+  "datos": [
+
+  ],
+  "modo": "completa",
+  "plantillas": {
+    "portada": [
+      "referencias/lowprofile-01-portada-janica.jpg",
+      "referencias/culpa-01-portada-janica.jpg",
+      "referencias/lowprofile-04-menos-ruido-janica.jpg"
+    ],
+    "escena": [
+      "referencias/lowprofile-05-trabajar-en-silencio-escenario.jpg",
+      "referencias/lowprofile-06-escalera-privado.jpg",
+      "referencias/culpa-04-sin-destruirse-sillon.jpg"
+    ],
+    "frase": [
+      "referencias/lowprofile-02-fuera-de-camara-objetos.jpg",
+      "referencias/culpa-04-sin-destruirse-sillon.jpg",
+      "referencias/lowprofile-04-menos-ruido-janica.jpg"
+    ],
+    "lista": [
+      "referencias/lowprofile-03-lista-puerta-vidrio.jpg",
+      "referencias/culpa-02-algo-para-ti-objetos.jpg",
+      "referencias/lowprofile-06-escalera-privado.jpg"
+    ],
+    "cifra": [
+      "referencias/lowprofile-05-trabajar-en-silencio-escenario.jpg",
+      "referencias/lowprofile-06-escalera-privado.jpg",
+      "referencias/culpa-05-no-le-estas-fallando.jpg"
+    ],
+    "comparar": [
+      "referencias/culpa-03-a-ti-si-puertas.jpg",
+      "referencias/lowprofile-04-menos-ruido-janica.jpg",
+      "referencias/culpa-05-no-le-estas-fallando.jpg"
+    ],
+    "cta": [
+      "referencias/lowprofile-07-cierre-janica.jpg",
+      "referencias/culpa-05-no-le-estas-fallando.jpg",
+      "referencias/lowprofile-01-portada-janica.jpg"
+    ]
+  },
+  "motor_persona": "foto_real"
+}
