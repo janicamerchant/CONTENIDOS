@@ -34,31 +34,104 @@ function toast(msg, err = false) {
 }
 
 // ---------------------------------------------------------------- marcas
-const BRANDS = {
-  eva: {
-    name: 'EVA', file: 'EVA', swatch: '#ECFE6E', bw: false, texture: true,
-    defaults: { audiencia: 'Dueños de agencias de seguros y negocios de servicios', cta: 'Escribe EVA por DM', idioma: 'Español', objetivo: 'Generar demos / DMs' },
-  },
-  janica: {
-    name: 'Janica Merchant', file: 'JANICA', swatch: '#E6DCCD', bw: false,
-    defaults: { audiencia: 'Mujeres emprendedoras y profesionales ambiciosas', cta: 'Guárdalo y compártelo con alguien que lo necesite', idioma: 'Español', objetivo: 'Autoridad' },
-  },
-  citykia: {
-    name: 'City Kia', file: 'CITYKIA', swatch: '#D7141A', bw: false,
-    defaults: { audiencia: 'Compradores de auto en Greater Orlando', cta: 'Visit City Kia of Greater Orlando', idioma: 'English', objetivo: 'Venta / oferta' },
-  },
-};
-
-// Logos oficiales. EVA viene sobre fondo gris: se quita el fondo en canvas sin tocar el trazo.
-const LOGO_DEFS = {
-  evaDark: { src: '01_SKILL_OPERATIVO/assets/eva-logo-dark-lime.png', key: [53, 53, 53] },
-  evaLight: { src: '02_ARCHIVOS_ORIGINALES/Asset 1xxxhdpi.png', key: [255, 255, 255] },
-  nikaDark: { src: '02_ARCHIVOS_ORIGINALES/Asset 6@4x (3).png', tint: [239, 235, 224] },
-  nikaLight: { src: '02_ARCHIVOS_ORIGINALES/Asset 6@4x (3).png' },
-  kiaDark: { src: '01_SKILL_OPERATIVO/assets/city-kia-logo-white.png', key: [0, 0, 0] },
-  kiaLight: { src: '01_SKILL_OPERATIVO/assets/city-kia-logo-dark.png' },
-};
+// Vienen de 06_MARCAS/ (GET /api/brands). design = familia de estilos en slides.css:
+// eva, janica y citykia tienen diseño propio; las marcas nuevas usan "base" con sus colores y tipografías.
+let BRANDS = {};
 const LOGOS = {};
+const FALLBACK_BRAND = { id: 'sin-marca', name: 'Sin marca', file: 'CARRUSEL', swatch: '#888', design: 'base', theme: 'dark', defaults: { audiencia: '', cta: '', idioma: 'Español', objetivo: 'Autoridad' }, look: '', people: [], logos: {} };
+const brandIds = () => Object.keys(BRANDS);
+const brandOf = (id) => BRANDS[id] || BRANDS[brandIds()[0]] || FALLBACK_BRAND;
+const brandFor = (p) => p.brandData || brandOf(p.brand);
+const designOf = (p) => brandFor(p).design || 'base';
+// Marcas en modo "lámina completa": Higgsfield genera foto + tipografía juntas (ver lamina_completa.rb)
+const fullMode = (id) => brandOf(id).modo === 'completa';
+// La lámina nombra a una persona con Soul ID entrenado: la foto sale con Soul 2.0 (ver soul.rb)
+const soulFace = (id, s) => brandOf(id).motor_persona === 'soul'
+  && peopleIn(id, `${s.photo} ${s.photoPrompt}`).some((pid) => (brandOf(id).people || []).find((x) => x.id === pid)?.soul);
+// Textos de la lámina que el servidor manda a Higgsfield y luego revisa letra por letra
+const slidePayload = (s) => ({
+  layout: s.layout, kicker: s.kicker, title: s.title, body: s.body, number: s.number, numberLabel: s.numberLabel,
+  items: s.items, leftLabel: s.leftLabel, leftItems: s.leftItems, rightLabel: s.rightLabel, rightItems: s.rightItems,
+  cta: s.cta, source: s.source, photo: s.photo, photoPrompt: s.photoPrompt, basePhoto: s.basePhoto || '',
+});
+// La lámina nombra a una persona aprobada y la marca usa "foto real + escena" (ver foto_real.rb):
+// devuelve esa persona con su lista de fotos reales, o null.
+const realPerson = (id, s) => {
+  if (brandOf(id).motor_persona !== 'foto_real') return null;
+  const pid = peopleIn(id, `${s.photo} ${s.photoPrompt}`)[0];
+  return pid ? (brandOf(id).people || []).find((x) => x.id === pid) || null : null;
+};
+// Selector de la foto real que Grok usa como base (vacío = la de "fotos_base" de persona.json según el diseño)
+function basePhotoPicker(p, s) {
+  const rp = realPerson(p.brand, s);
+  if (!rp?.photos?.length) return '';
+  const val = s.basePhoto || '';
+  const o = (v, label) => `<option value="${esc(v)}" ${v === val ? 'selected' : ''}>${esc(label)}</option>`;
+  const thumb = rp.photos.find((f) => f.name === val)?.url;
+  return `<label class="lbl" for="base-photo">Tu foto real (la IA solo cambia el lugar)</label>
+    <select id="base-photo" class="inp">${o('', 'Automática según el diseño')}${rp.photos.map((f) => o(f.name, f.name.replace(/\.\w+$/, ''))).join('')}</select>
+    ${thumb ? `<img class="base-thumb" src="${esc(thumb)}" alt="">` : ''}
+    <p class="help">Grok Imagine toma esta foto tuya y cambia solo el fondo, la luz y el lugar. Tu cara no se genera.</p>`;
+}
+const firstBrand = (pref) => (BRANDS[pref] ? pref : brandIds()[0] || 'sin-marca');
+
+async function loadBrands() {
+  const r = await api('/api/brands');
+  BRANDS = Object.fromEntries(r.brands.map((b) => [b.id, b]));
+  state.archived = r.archived || [];
+  Object.values(BRANDS).forEach((b) => { if (b.design === 'base') [b.fonts?.display, b.fonts?.body].forEach(loadFont); });
+  await loadLogos();
+}
+
+// Tipografías de Google Fonts de las marcas nuevas. Si la familia no tiene todos los pesos, se pide la básica.
+const loadedFonts = new Set(['Anton', 'Archivo', 'Barlow', 'Bodoni Moda', 'IBM Plex Mono', 'Instrument Serif', 'Jost', 'Montserrat']);
+function loadFont(family) {
+  const f = String(family || '').trim();
+  if (!f || loadedFonts.has(f)) return;
+  loadedFonts.add(f);
+  const fam = encodeURIComponent(f).replace(/%20/g, '+');
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.crossOrigin = 'anonymous';
+  link.href = `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap`;
+  link.onerror = () => { link.onerror = null; link.href = `https://fonts.googleapis.com/css2?family=${fam}&display=swap`; };
+  link.onload = () => document.fonts.ready.then(() => { if (state.p && state.view === 'editor') renderEditor(); });
+  document.head.appendChild(link);
+}
+
+// Personas aprobadas que aparecen en un texto (por nombre o alias, sin importar tildes)
+const plain = (t) => String(t || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function peopleIn(brandId, text) {
+  const t = plain(text);
+  return (brandOf(brandId).people || []).filter((p) => [p.name, ...(p.aliases || [])].map(plain).filter(Boolean)
+    .some((w) => new RegExp(`(^|[^a-z0-9])${reEsc(w)}($|[^a-z0-9])`).test(t))).map((p) => p.id);
+}
+const personName = (brandId, id) => (brandOf(brandId).people || []).find((p) => p.id === id)?.name || id;
+
+// Colores de una marca con diseño base. El acento va como texto si contrasta con el fondo; si no, como resaltado.
+function hexRgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '').trim()); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function lum(h) { const c = hexRgb(h); if (!c) return 0; const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+function contrast(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+function baseVars(br, theme) {
+  const c = br.colors || {}, dark = theme === 'dark', f = br.fonts || {};
+  const bg = (dark ? c.darkBg : c.lightBg) || (dark ? '#1E1E20' : '#F4F2EC');
+  const ink = (dark ? c.darkInk : c.lightInk) || (dark ? '#F2F0EA' : '#1E1E20');
+  const acc = hexRgb(c.accent) ? c.accent : ink;
+  const accText = contrast(acc, bg) >= 3;
+  const onAcc = contrast('#FFFFFF', acc) >= contrast('#141414', acc) ? '#FFFFFF' : '#141414';
+  const body = `'${f.body || 'Inter'}', 'Helvetica Neue', Arial, sans-serif`;
+  return {
+    '--s-bg': bg, '--s-ink': ink, '--s-deep': `color-mix(in srgb, ${bg} 86%, ${dark ? '#000' : ink})`,
+    '--s-muted': `color-mix(in srgb, ${ink} 64%, ${bg})`, '--s-line': `color-mix(in srgb, ${ink} 24%, transparent)`,
+    '--s-mark': contrast(acc, bg) >= 1.6 ? acc : ink, '--s-num': accText ? acc : ink,
+    '--s-acc-ink': accText ? acc : (contrast(onAcc, acc) >= 4.5 ? onAcc : ink), '--s-acc-bg': accText ? 'transparent' : acc,
+    '--s-panel': ink, '--s-panel-ink': bg, '--s-panel-acc': contrast(acc, ink) >= 3 ? acc : bg, '--s-panel-acc-bg': 'transparent',
+    '--s-chip': acc, '--s-chip-ink': onAcc, '--s-edge': 'transparent', '--lime': acc,
+    '--f-display': `'${f.display || 'Archivo'}', 'Helvetica Neue', Arial, sans-serif`, '--f-body': body, '--f-kicker': body,
+    '--t-case': br.titleCase === 'upper' ? 'uppercase' : 'none',
+  };
+}
 
 function loadImage(src) {
   return new Promise((ok, fail) => {
@@ -70,7 +143,7 @@ function loadImage(src) {
 }
 
 async function prepareLogo(def) {
-  const img = await loadImage(fileUrl(def.src));
+  const img = await loadImage(def.url);
   const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
   const c = document.createElement('canvas');
@@ -100,11 +173,19 @@ async function prepareLogo(def) {
   return out.toDataURL('image/png');
 }
 
+// Logos de cada marca, con el fondo quitado (key) o teñidos (tint) según marca.json
 async function loadLogos() {
-  await Promise.all(Object.entries(LOGO_DEFS).map(async ([k, def]) => {
-    try { LOGOS[k] = await prepareLogo(def); } catch (e) { console.warn(e); }
+  const defs = [];
+  Object.values(BRANDS).forEach((b) => {
+    Object.entries(b.logos || {}).forEach(([k, d]) => defs.push([`${b.id}:${k}`, d]));
+    ['dark', 'light'].forEach((k) => { if (b.byline?.[k]) defs.push([`${b.id}:by-${k}`, b.byline[k]]); });
+  });
+  await Promise.all(defs.map(async ([k, def]) => {
+    if (LOGOS[k]?.url === def.url && LOGOS[k]?.key === String(def.key) && LOGOS[k]?.tint === String(def.tint)) return;
+    try { LOGOS[k] = { url: def.url, key: String(def.key), tint: String(def.tint), data: await prepareLogo(def) }; } catch (e) { console.warn(e); }
   }));
 }
+const logo = (brandId, k) => LOGOS[`${brandId}:${k}`]?.data || null;
 
 // ---------------------------------------------------------------- modelo
 const LAYOUTS = {
@@ -119,17 +200,17 @@ const LAYOUTS = {
 
 function blankSlide(layout = 'frase', brand = 'eva', over = {}) {
   return {
-    id: uid(), layout, theme: 'dark',
+    id: uid(), layout, theme: brandOf(brand).theme || 'dark',
     kicker: '', title: '', body: '', number: '', numberLabel: '', items: [],
     leftLabel: '', leftItems: [], rightLabel: '', rightItems: [], cta: '',
     photo: '', photoPrompt: '', source: '', image: '', cutout: '', ix: 50, iy: 30, iz: 1,
-    bw: !!BRANDS[brand]?.bw, texture: false, ts: 1,
+    bw: false, texture: false, ts: 1,
     ...over,
   };
 }
 
 function sampleProject() {
-  const b = 'eva';
+  const b = firstBrand('eva');
   const look = 'natural color editorial photograph, premium tech magazine look, hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos';
   return {
     id: 'p' + Date.now(), brand: b, name: 'EVA · Velocidad de respuesta',
@@ -240,23 +321,22 @@ function torn(s, edge) {
           <div class="s-torn" style="clip-path:${clip};-webkit-clip-path:${clip}"></div>`;
 }
 
+// Logo según el fondo; si la marca solo tiene uno, se usa ese.
 function logoFor(p, s) {
-  const dark = s.theme === 'dark';
-  if (p.brand === 'eva') return LOGOS[dark ? 'evaDark' : 'evaLight'];
-  if (p.brand === 'citykia') return LOGOS[dark ? 'kiaDark' : 'kiaLight'];
-  return null;
+  const id = brandFor(p).id, dark = s.theme === 'dark';
+  return logo(id, dark ? 'dark' : 'light') || logo(id, dark ? 'light' : 'dark');
 }
 
 function signature(p, s, big = false) {
-  if (p.brand === 'janica') return `<div class="s-sign"><span class="wordmark">Janica Merchant</span></div>`;
+  const br = brandFor(p);
   const src = logoFor(p, s);
-  const logo = src ? `<img class="logo" src="${src}" alt="">` : '';
+  const mark = src ? `<img class="logo" src="${src}" alt="">` : `<span class="wordmark">${esc(br.name)}</span>`;
   let by = '';
-  if (big && p.brand === 'eva') {
-    const nk = LOGOS[s.theme === 'dark' ? 'nikaDark' : 'nikaLight'];
-    by = `<div class="by">Desarrollado y comercializado por ${nk ? `<img src="${nk}" alt="Nika Media">` : '<b>NIKA MEDIA</b>'}</div>`;
+  if (big && br.byline) {
+    const bl = logo(br.id, s.theme === 'dark' ? 'by-dark' : 'by-light');
+    by = `<div class="by">${esc(br.byline.text || '')} ${bl ? `<img src="${bl}" alt="${esc(br.byline.alt || '')}">` : `<b>${esc(br.byline.alt || '')}</b>`}</div>`;
   }
-  return `<div class="s-sign${big ? ' big' : ''}">${logo}${by}</div>`;
+  return `<div class="s-sign${big ? ' big' : ''}">${mark}${by}</div>`;
 }
 
 // Foto de la lámina. Sin imagen, muestra la dirección de arte como marcador.
@@ -272,8 +352,55 @@ const kicker = (s) => (s.kicker ? `<div class="s-kicker">${esc(s.kicker)}</div>`
 const body = (s) => (s.body ? `<p class="s-body">${fmt(s.body)}</p>` : '')
   + (s.source ? `<p class="s-source">Fuente: ${esc(s.source.replace(/^fuente:\s*/i, ''))}</p>` : '');
 
+// Janica Merchant v2: foto a sangre, texto sobre la zona limpia de la foto, un solo gesto lima.
+// Ver "Sistema editorial del carrusel" en 01_SKILL_OPERATIVO/references/janica-merchant.md
+const lime = (kind = 'rule') => `<i class="j-lime j-${kind}" aria-hidden="true"></i>`;
+const jSign = (p) => `<div class="s-sign"><span class="jm">${esc(brandFor(p).name)}</span></div>`;
+const jSave = (t) => (t ? `<div class="j-save"><span class="j-bm" aria-hidden="true"></span><span>${fmt(t)}</span></div>` : '');
+
+function janicaInner(p, s) {
+  const head = (extra = '') => `${kicker(s)}<h2 class="s-title">${fmt(s.title)}</h2>${extra}`;
+  switch (s.layout) {
+    case 'portada':
+      return `${photo(s, true)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">${head(lime('rule'))}${body(s)}</div>${cut(s)}${jSign(p)}`;
+    case 'escena':
+      return `${photo(s, true)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">${head()}${body(s)}</div>${cut(s)}`;
+    case 'frase':
+      return `${photo(s, false)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">
+          <div class="j-top">${kicker(s)}${s.body ? `<p class="j-lede">${fmt(s.body)}</p>` : ''}</div>
+          <div class="j-bottom"><h2 class="s-title">${fmt(s.title)}</h2>${lime('brush')}
+            ${s.source ? `<p class="s-source">Fuente: ${esc(s.source.replace(/^fuente:\s*/i, ''))}</p>` : ''}</div>
+        </div>${cut(s)}`;
+    case 'lista':
+      return `${photo(s, false)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">${head(lime('square'))}
+          <ul class="s-items">${s.items.filter(Boolean).map((t) => `<li>${fmt(t)}</li>`).join('')}</ul>${body(s)}</div>${cut(s)}`;
+    case 'cifra':
+      return `${photo(s, false)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">${kicker(s)}
+          <div class="s-number">${esc(s.number)}</div>${lime('rule')}
+          <div class="s-numlabel">${fmt(s.numberLabel)}</div>${body(s)}</div>${cut(s)}`;
+    case 'comparar':
+      return `${photo(s, false)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">${s.title ? `<h2 class="s-title">${fmt(s.title)}</h2>` : ''}
+          ${s.leftLabel ? `<p class="j-line j-lab">${fmt(s.leftLabel)}</p>` : ''}
+          ${s.leftItems.filter(Boolean).map((t) => `<p class="j-line">${fmt(t)}</p>`).join('')}
+          ${s.rightLabel ? `<div class="j-punch"><span>${fmt(s.rightLabel)}</span></div>` : ''}
+          ${s.rightItems.filter(Boolean).map((t) => `<p class="j-line sm">${fmt(t)}</p>`).join('')}
+          ${body(s)}</div>${cut(s)}`;
+    case 'cta':
+    default:
+      return `${photo(s, false)}<div class="j-wash"></div>
+        <div class="s-flow fitbox front">${head(lime('rule'))}${body(s)}${jSave(s.cta)}</div>${cut(s)}${jSign(p)}`;
+  }
+}
+
 function slideInner(p, s, i, n) {
-  const eva = p.brand === 'eva';
+  if (designOf(p) === 'janica') return janicaInner(p, s);
+  const eva = designOf(p) === 'eva';
   const hasImg = !!(s.image || s.photo);
   switch (s.layout) {
     case 'portada':
@@ -316,20 +443,28 @@ function slideInner(p, s, i, n) {
 }
 
 function counter(p, i, n) {
-  return p.brand === 'janica' ? `${pad(i + 1)} — ${pad(n)}` : `${i + 1}/${n}`;
+  return `${i + 1}/${n}`;
 }
 
 function buildSlide(p, s, i, n) {
   const el = document.createElement('div');
   const hasImg = !!(s.image || s.photo);
+  const br = brandFor(p);
   el.className = [
-    'slide', `b-${p.brand}`, `t-${s.theme}`, `l-${s.layout}`,
+    'slide', `b-${br.design || 'base'}`, `t-${s.theme}`, `l-${s.layout}`,
     s.bw ? 'bw' : '', s.texture ? 'tex' : '', hasImg ? 'has-photo' : '',
   ].filter(Boolean).join(' ');
+  if ((br.design || 'base') === 'base') Object.entries(baseVars(br, s.theme)).forEach(([k, v]) => el.style.setProperty(k, v));
   el.style.setProperty('--ts', s.ts);
   el.style.setProperty('--ix', s.ix + '%');
   el.style.setProperty('--iy', s.iy + '%');
   el.style.setProperty('--iz', s.iz);
+  // Lámina completa: la imagen ya trae la tipografía; no se dibuja nada encima.
+  if (s.full && s.image) {
+    el.classList.add('full');
+    el.innerHTML = `<div class="s-photo s-full"><img src="${esc(s.image)}" alt=""></div><div class="s-safe"></div>`;
+    return el;
+  }
   const tab = tabClip(hash(s.id + 'tab')), tabEdge = tabClip(hash(s.id + 'tabe'));
   el.innerHTML = `<div class="s-bg"></div>
     <div class="s-tab-edge" style="clip-path:${tabEdge};-webkit-clip-path:${tabEdge}"></div>
@@ -442,8 +577,9 @@ function renderStrip() {
 }
 
 function renderBrandPick(container, value, onPick) {
-  container.innerHTML = Object.entries(BRANDS).map(([k, b]) =>
-    `<button type="button" role="radio" aria-checked="${k === value}" data-brand="${k}"><span class="sw" style="background:${b.swatch}"></span>${b.name}</button>`).join('');
+  container.innerHTML = Object.entries(BRANDS).sort((x, y) => x[1].name.localeCompare(y[1].name, 'es')).map(([k, b]) =>
+    `<button type="button" role="radio" aria-checked="${k === value}" data-brand="${k}"><span class="sw" style="background:${esc(b.swatch)}"></span>${esc(b.name)}</button>`).join('')
+    || '<p class="hint">No hay marcas. Crea una en la pestaña Marcas.</p>';
   container.onclick = (e) => {
     const b = e.target.closest('[data-brand]');
     if (b) onPick(b.dataset.brand);
@@ -514,11 +650,12 @@ function renderInspector() {
         <button type="button" data-theme="dark" aria-pressed="${s.theme === 'dark'}">Oscuro</button>
         <button type="button" data-theme="light" aria-pressed="${s.theme === 'light'}">Claro</button>
       </div>
-      ${p.brand === 'eva' ? '<p class="help">Fondo geométrico con textura, papel rasgado y adornos de borde: siempre activos en EVA (regla de acabado).</p>' : ''}
+      ${designOf(p) === 'eva' ? '<p class="help">Fondo geométrico con textura, papel rasgado y adornos de borde: siempre activos en EVA (regla de acabado).</p>' : ''}
     </section>
 
     <section class="sec">
       <h3 class="sec-title">Texto</h3>
+      ${s.full && s.image ? `<div class="photo-status ${s.qa ? 'low' : 'ok'}"><b>Lámina completa</b> · el texto está dentro de la imagen. Si cambias algo aquí, pulsa <b>Regenerar lámina completa</b>.${s.qa ? `<div class="missing">Revisión: ${esc(s.qa)}</div>` : ''}</div>` : ''}
       ${field('Antetítulo', 'kicker')}
       ${titled ? field('Titular', 'title', 'textarea', 3, 'Marca en color de acento con <code>*asteriscos*</code>. Enter = salto de línea.') : ''}
       ${specific}
@@ -530,20 +667,22 @@ function renderInspector() {
     <section class="sec">
       <h3 class="sec-title">Foto</h3>
       ${photoStatus()}
-      ${field('Escena de la foto', 'photo', 'textarea', 3, 'Qué pasa en la foto y por qué cuenta el titular: quién hace qué, dónde, con qué objeto. Janica solo si su acción explica la idea.')}
+      ${field('Escena de la foto', 'photo', 'textarea', 3, 'Qué pasa en la foto y por qué cuenta el titular: quién hace qué, dónde, con qué objeto. Una persona aprobada de la marca solo si su acción explica la idea.')}
       ${field('Prompt para generar (inglés)', 'photoPrompt', 'textarea', 4, 'Es lo que se envía a Higgsfield al generar o regenerar. Si lo dejas vacío, se arma desde la escena.')}
       <div class="form-actions">
         <button type="button" class="btn sm ghost" id="copy-prompt">Copiar prompt</button>
-        ${state.cfg?.hasHF && (s.photo || s.photoPrompt) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? 'Generando…' : s.image ? 'Regenerar foto con Higgsfield' : 'Generar foto con Higgsfield'}</button>` : ''}
+        ${state.cfg?.hasHF && (s.photo || s.photoPrompt || fullMode(p.brand)) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? (state.egen.status || 'Generando…') : realPerson(p.brand, s) ? (s.image ? 'Regenerar escena con tu foto real' : 'Crear escena con tu foto real') : soulFace(p.brand, s) ? (s.image ? 'Regenerar foto con Soul (tu cara)' : 'Generar foto con Soul (tu cara)') : fullMode(p.brand) ? (s.image ? 'Regenerar lámina completa' : 'Generar lámina completa') : s.image ? 'Regenerar foto con Higgsfield' : 'Generar foto con Higgsfield'}</button>` : ''}
       </div>
-      ${state.cfg?.hasHF && (s.photo || s.photoPrompt) ? `<p class="help">~${state.cfg.hfCredits?.high ?? 2.75} créditos. Usa el prompt de arriba${/janica/i.test(`${s.photo} ${s.photoPrompt}`) ? ' y la cara oficial de Janica' : ''}; la foto actual queda guardada.</p>` : ''}
+      ${state.cfg?.hasHF && (s.photo || s.photoPrompt) ? `<p class="help">~${state.cfg.hfCredits?.high ?? 2.75} créditos. Usa el prompt de arriba${peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`).map((id) => ` y la cara de ${esc(personName(p.brand, id))}`).join('')}; la foto actual queda guardada.</p>` : ''}
       ${s.prevImage ? `<button type="button" class="btn sm ghost" id="undo-photo">Volver a la foto anterior</button>` : ''}
       ${imgSlot('image', 'Foto', s.image)}
       ${s.image ? range('Horizontal', 'ix', 0, 100, 1, '%') + range('Vertical', 'iy', 0, 100, 1, '%') + range('Zoom', 'iz', 1, 2.5, 0.02, '×') : ''}
       ${s.image ? imgSlot('cutout', 'Recorte', s.cutout, 'La misma foto sin fondo (PNG). Se pone encima del titular para que las letras queden detrás de la persona u objeto. Revisa que la palabra clave se siga leyendo.') : ''}
       ${s.image && !s.cutout ? '<button type="button" class="btn sm" id="auto-cut">Recorte automático</button>' : ''}
+      ${basePhotoPicker(p, s)}
       <div class="checks">
         <label><input type="checkbox" data-c="bw" ${s.bw ? 'checked' : ''}> Blanco y negro</label>
+        ${s.image && !s.soul && (s.full || fullMode(p.brand)) ? `<label title="Apagado: muestra la foto con la plantilla y el texto editable encima"><input type="checkbox" data-c="full" ${s.full ? 'checked' : ''}> Lámina completa (texto dentro de la imagen)</label>` : ''}
       </div>
     </section>
 
@@ -575,6 +714,7 @@ function bindInspector() {
   ins.addEventListener('change', (e) => {
     const t = e.target;
     if (t.dataset.c) { cur()[t.dataset.c] = t.checked; refreshSlide(); }
+    if (t.id === 'base-photo') { cur().basePhoto = t.value; scheduleSave(); renderInspector(); }
     if (t.dataset.upload && t.files[0]) {
       const slot = t.dataset.upload;
       uploadFile(t.files[0]).then((url) => setImage(url, slot)).catch(() => {});
@@ -638,15 +778,10 @@ function photoStatus() {
   </div>`;
 }
 
-const BRAND_LOOK = {
-  eva: 'natural color editorial photograph, premium tech magazine look, soft side light, modern office or real business setting',
-  janica: 'warm editorial magazine photograph, ivory and beige tones, soft natural light, sophisticated executive setting',
-  citykia: 'clean commercial photograph, white, black and metallic silver tones, bright natural light, Orlando car dealership setting',
-};
 function promptFor(s, brand = state.p.brand) {
   if (s.photoPrompt?.trim()) return s.photoPrompt.trim();
   const scene = s.photo?.trim() || `A scene that shows this idea: ${String(s.title || s.numberLabel || '').replace(/\*/g, '')}`;
-  return `${scene}. ${BRAND_LOOK[brand]}. Vertical 4:5 composition with empty space for a large headline. Hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos, no watermark.`;
+  return `${scene}. ${brandOf(brand).look || ''}. Vertical 4:5 composition with empty space for a large headline. Hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos, no watermark.`;
 }
 
 // Regenera la foto de una lámina desde el Editor con la API de Higgsfield
@@ -657,7 +792,8 @@ async function regenerateInEditor(i) {
   try {
     const r = await api('/api/generate', {
       projectId: p.id, quality: 'high',
-      items: [{ index: i, prompt: promptFor(s, p.brand), janica: /janica/i.test(`${s.photo} ${s.photoPrompt}`), photo: s.photo, photoPrompt: s.photoPrompt }],
+      items: [{ index: i, prompt: promptFor(s, p.brand), people: peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`), photo: s.photo, photoPrompt: s.photoPrompt,
+        slide: slidePayload(s), count: `${i + 1}/${p.slides.length}` }],
     });
     state.egen = { id: r.id, index: i, projectId: p.id };
     renderInspector();
@@ -671,13 +807,21 @@ async function pollEditorGen() {
   if (!g) return;
   try {
     const job = await api('/api/generate?id=' + encodeURIComponent(g.id));
-    if (!job.done) { setTimeout(pollEditorGen, 3000); return; }
+    if (!job.done) {
+      // Muestra en el botón si está generando, revisando o corrigiendo (lámina completa)
+      const st = job.items[0]?.status;
+      g.status = /revisando/.test(st) ? 'Claude revisando…' : /corrigiendo/.test(st) ? 'Corrigiendo errores…' : 'Generando…';
+      const btn = $('#regen-one');
+      if (btn && state.sel === g.index) btn.textContent = g.status;
+      setTimeout(pollEditorGen, 3000);
+      return;
+    }
     const x = job.items[0] || {};
     state.egen = null;
     if (x.status === 'completed' && state.p?.id === g.projectId) {
       const s = state.p.slides[g.index];
       if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
-      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: 30, iz: 1 });
+      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, full: !!x.full, soul: !!x.soul, qa: x.qa || '' });
       renderThumb(g.index);
       if (state.sel === g.index) renderStage();
       scheduleSave();
@@ -747,7 +891,7 @@ function renderAssets() {
 }
 
 // ---------------------------------------------------------------- exportar
-let fontCSS = null;
+const fontCSS = {};                       // por marca: cada una tiene sus tipografías
 async function renderForExport(i) {
   const host = $('#export-stage');
   const el = buildSlide(state.p, state.p.slides[i], i, state.p.slides.length);
@@ -755,16 +899,17 @@ async function renderForExport(i) {
   await Promise.all($$('img', el).map((img) => (img.complete ? Promise.resolve() : new Promise((r) => { img.onload = img.onerror = r; }))));
   await document.fonts.ready;
   fitSlide(el);
-  if (fontCSS === null) {
-    try { fontCSS = await htmlToImage.getFontEmbedCSS(el); } catch (e) { console.warn('Fuentes sin incrustar', e); fontCSS = ''; }
+  const fk = state.p.brand;
+  if (fontCSS[fk] === undefined) {
+    try { fontCSS[fk] = await htmlToImage.getFontEmbedCSS(el); } catch (e) { console.warn('Fuentes sin incrustar', e); fontCSS[fk] = ''; }
   }
-  const opts = { width: 1080, height: 1350, pixelRatio: parseFloat($('#exp-scale').value) || 1, fontEmbedCSS: fontCSS || undefined, cacheBust: false };
+  const opts = { width: 1080, height: 1350, pixelRatio: parseFloat($('#exp-scale').value) || 1, fontEmbedCSS: fontCSS[fk] || undefined, cacheBust: false };
   // Safari a veces pinta el primer render sin imágenes: se descarta una pasada de calentamiento.
   if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) await htmlToImage.toPng(el, opts);
   return htmlToImage.toPng(el, opts);
 }
 
-const exportFolder = () => `${BRANDS[state.p.brand].file}_${slugify(state.p.name)}`;
+const exportFolder = () => `${brandOf(state.p.brand).file}_${slugify(state.p.name)}`;
 let lastExportDir = '';
 
 async function exportSlides(indices) {
@@ -784,7 +929,7 @@ async function exportSlides(indices) {
       if (!s.image && (s.layout === 'portada' || s.photo)) missing.push(i + 1);
       $('#exp-msg').textContent = `Lámina ${i + 1} de ${state.p.slides.length}`;
       const dataUrl = await renderForExport(i);
-      const r = await api('/api/export', { folder, filename: `${BRANDS[state.p.brand].file}_${pad(i + 1)}`, dataUrl });
+      const r = await api('/api/export', { folder, filename: `${brandOf(state.p.brand).file}_${pad(i + 1)}`, dataUrl });
       lastExportDir = r.path.split('/').slice(0, -1).join('/');
       $('#exp-bar').style.width = `${((n + 1) / indices.length) * 100}%`;
     }
@@ -825,13 +970,13 @@ async function openProjectsDialog() {
   dlg.showModal();
 }
 
-function newProject(brand = state.p?.brand || 'eva', over = {}) {
+function newProject(brand = firstBrand(state.p?.brand), over = {}) {
   const p = normalizeProject({
     id: 'p' + Date.now(), brand, name: 'Nuevo carrusel', caption: '',
     slides: [
       blankSlide('portada', brand, { title: 'Titular con *gancho*' }),
       blankSlide('frase', brand, { theme: 'light', title: 'Una idea por lámina' }),
-      blankSlide('cta', brand, { title: 'Llamado a la acción', cta: BRANDS[brand].defaults.cta }),
+      blankSlide('cta', brand, { title: 'Llamado a la acción', cta: brandOf(brand).defaults?.cta || '' }),
     ],
     ...over,
   });
@@ -847,24 +992,24 @@ function skeletonFromBrief(b) {
   const n = parseInt(b.laminas, 10) || 7;
   const middle = ['frase', 'cifra', 'comparar', 'lista', 'frase', 'cifra', 'lista', 'frase'];
   const slides = [blankSlide('portada', b.marca, { title: b.tema, photo: 'Cara humana relacionada con el tema' })];
-  for (let i = 0; i < n - 2; i++) slides.push(blankSlide(middle[i % middle.length], b.marca, { theme: i % 2 ? 'dark' : 'light', title: 'Idea ' + (i + 1) }));
-  slides.push(blankSlide('cta', b.marca, { title: b.cta || BRANDS[b.marca].defaults.cta, cta: b.cta }));
+  for (let i = 0; i < n - 2; i++) slides.push(blankSlide(middle[i % middle.length], b.marca, { theme: brandOf(b.marca).theme === 'light' || i % 2 === 0 ? 'light' : 'dark', title: 'Idea ' + (i + 1) }));
+  slides.push(blankSlide('cta', b.marca, { title: b.cta || brandOf(b.marca).defaults?.cta || '', cta: b.cta }));
   return slides;
 }
 
 // ---------------------------------------------------------------- solicitudes
 const STATUS = { pendiente: 'Pendiente', produccion: 'En producción', entregado: 'Entregado' };
 const NEXT = { pendiente: 'produccion', produccion: 'entregado', entregado: 'pendiente' };
-let reqBrand = 'eva';
+let reqBrand = 'eva';                     // se corrige a una marca existente al cargar
 
 function fillBriefDefaults(brand, prev) {
-  const d = BRANDS[brand].defaults, old = prev ? BRANDS[prev].defaults : {};
+  const d = brandOf(brand).defaults || {}, old = prev ? brandOf(prev).defaults || {} : {};
   [['r-audiencia', 'audiencia'], ['r-cta', 'cta']].forEach(([id, k]) => {
     const el = $('#' + id);
     if (!el.value || el.value === old[k]) el.value = d[k];
   });
-  $('#r-idioma').value = d.idioma;
-  $('#r-objetivo').value = d.objetivo;
+  if (d.idioma) $('#r-idioma').value = d.idioma;
+  if (d.objetivo) $('#r-objetivo').value = d.objetivo;
 }
 
 function readBrief() {
@@ -957,7 +1102,7 @@ async function openFolder(path) {
 
 // ---------------------------------------------------------------- crear: idea → propuesta → costo → aprobación
 // El borrador vive en state.draft y se recuerda en este navegador hasta aprobarlo.
-let ideaBrand = 'eva';
+let ideaBrand = 'eva';                    // se corrige a una marca existente al cargar
 const saveDraft = () => store.set('draft', JSON.stringify(state.draft || null));
 
 function loadDraft() {
@@ -987,7 +1132,7 @@ function renderCreate() {
 }
 
 function readIdea() {
-  const d = BRANDS[ideaBrand].defaults;
+  const d = brandOf(ideaBrand).defaults || {};
   return {
     marca: ideaBrand, idea: $('#i-idea').value.trim(), laminas: $('#i-laminas').value,
     cta: $('#i-cta').value.trim() || d.cta, notas: $('#i-notas').value.trim(),
@@ -1005,7 +1150,7 @@ async function propose(brief, btn) {
     const spent = (state.draft?.claudeUsd || 0) + (d.usage?.usd || 0);
     state.draft = {
       brief, brand: brief.marca, name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '',
-      slides: (d.slides || []).map((s) => ({ ...s, gen: !!(s.photoPrompt || s.photo), janica: /janica/i.test(`${s.photo} ${s.photoPrompt}`) })),
+      slides: (d.slides || []).map((s) => ({ ...s, gen: fullMode(brief.marca) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
       research: d.research || '', usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
     };
     saveDraft();
@@ -1034,6 +1179,9 @@ function pfield(i, label, key, rows = 0, full = false) {
     : `<input id="${id}" class="inp" type="text" data-i="${i}" data-k="${key}" value="${esc(val)}" ${ro}>`;
   return `<div class="${full ? 'full' : ''}"><label class="lbl" for="${id}">${label}</label>${ctl}</div>`;
 }
+
+// Personas de una lámina de la propuesta (las propuestas guardadas antes de 06_MARCAS traían janica: true)
+const slidePeople = (s) => s.people || (s.janica ? ['janica'] : []);
 
 function propCard(s, i) {
   const g = state.draft.gen;
@@ -1068,7 +1216,7 @@ function propCard(s, i) {
       <div class="pc-photo">
         <div class="checks">
           <label><input type="checkbox" data-i="${i}" data-c="gen" ${s.gen ? 'checked' : ''} ${busy ? 'disabled' : ''}> Generar foto con Higgsfield</label>
-          ${s.gen ? `<label><input type="checkbox" data-i="${i}" data-c="janica" ${s.janica ? 'checked' : ''} ${busy ? 'disabled' : ''}> Usar la cara oficial de Janica</label>` : ''}
+          ${s.gen ? (brandOf(state.draft.brand).people || []).map((pp) => `<label><input type="checkbox" data-i="${i}" data-person="${esc(pp.id)}" ${slidePeople(s).includes(pp.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}> Usar la cara de ${esc(pp.name)}</label>`).join('') : ''}
           ${s.gen && !locked ? `<label title="Color real por defecto; blanco y negro solo en 1 o 2 láminas"><input type="checkbox" data-i="${i}" data-c="bw" ${s.bw ? 'checked' : ''}> Blanco y negro</label>` : ''}
         </div>
         ${s.gen ? pfield(i, 'Escena de la foto', 'photo', 2, true) + `<details ${locked ? 'open' : ''}><summary>Prompt en inglés para Higgsfield</summary>
@@ -1104,8 +1252,8 @@ const credits = (n) => (Math.round(n * 100) / 100).toLocaleString('es');
 function renderCost() {
   const d = state.draft, c = state.cfg || {};
   const per = c.hfCredits?.high ?? 2.75, usdPer = c.hfCreditUsd ?? 0.0625;
-  const photos = d.slides.filter((s) => s.gen && (s.photoPrompt || s.photo)).length;
-  const withJanica = d.slides.filter((s) => s.gen && s.janica).length;
+  const photos = d.slides.filter((s) => s.gen && (s.photoPrompt || s.photo || fullMode(d.brand))).length;
+  const withPeople = d.slides.filter((s) => s.gen && slidePeople(s).length).length;
   const hfCr = photos * per, hfUsd = hfCr * usdPer;
   const u = d.usage || {};
   const g = d.gen;
@@ -1127,7 +1275,7 @@ function renderCost() {
   $('#cost-panel').innerHTML = `
     <h2>Costo aproximado</h2>
     <div class="line"><b>Higgsfield · fotos</b><span class="v">${credits(hfCr)} créditos</span>
-      <small>${photos} foto${photos === 1 ? '' : 's'} × ~${per} créditos (${esc(c.hfModel || 'GPT Image 2.5')}, calidad alta 2K) ≈ ${money(hfUsd)} USD.${withJanica ? ` ${withJanica} con la cara de Janica como referencia (suma muy poco).` : ''} Se cobra por tokens, el total real puede variar un poco. Si una foto falla o se rechaza, no se cobra.</small></div>
+      <small>${photos} foto${photos === 1 ? '' : 's'} × ~${per} créditos (${esc(c.hfModel || 'GPT Image 2.5')}, calidad alta 2K) ≈ ${money(hfUsd)} USD.${withPeople ? ` ${withPeople} con la cara de una persona aprobada como referencia (suma muy poco).` : ''} Se cobra por tokens, el total real puede variar un poco. Si una foto falla o se rechaza, no se cobra.</small></div>
     <div class="line"><b>Claude · propuesta</b><span class="v">${money(d.claudeUsd || 0)}</span>
       <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Opus 5${u.input_tokens ? ` (última: investigación con ${u.web_searches || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
     <div class="line"><b>OpenAI</b><span class="v">$0</span>
@@ -1143,7 +1291,7 @@ function draftToProject() {
   const d = state.draft;
   return normalizeProject({
     id: d.projectId || 'p' + Date.now(), brand: d.brand, name: d.name, caption: d.caption, concept: d.concept,
-    slides: d.slides.map(({ gen, janica, ...s }) => ({ ...s, image: '', bw: !!s.bw })),
+    slides: d.slides.map(({ gen, janica, people, ...s }) => ({ ...s, image: '', bw: !!s.bw })),
   });
 }
 
@@ -1157,8 +1305,9 @@ async function approve(indices = null) {
     d.projectId = state.p.id;
   }
   const want = indices && new Set(indices);
-  const items = d.slides.map((s, i) => (s.gen && (s.photoPrompt || s.photo) && (!want || want.has(i))
-    ? { index: i, prompt: promptFor(s, d.brand), janica: !!s.janica, photo: s.photo, photoPrompt: s.photoPrompt } : null)).filter(Boolean);
+  const items = d.slides.map((s, i) => (s.gen && (s.photoPrompt || s.photo || fullMode(d.brand)) && (!want || want.has(i))
+    ? { index: i, prompt: promptFor(s, d.brand), people: slidePeople(s), photo: s.photo, photoPrompt: s.photoPrompt,
+      slide: slidePayload(s), count: `${i + 1}/${d.slides.length}` } : null)).filter(Boolean);
   if (!items.length) { d.gen = d.gen || { done: true, items: [] }; saveDraft(); renderCreate(); return; }
   try {
     const r = await api('/api/generate', { projectId: d.projectId, quality: 'high', items });
@@ -1185,7 +1334,7 @@ async function pollGeneration() {
         if (x.url && s && s.image !== x.url) {
           if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
           const ds = d.slides[x.index] || {};
-          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: 30, iz: 1, photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
+          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, full: !!x.full, soul: !!x.soul, qa: x.qa || '', photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
         }
       });
     }
@@ -1207,7 +1356,7 @@ async function pollGeneration() {
 function pickIdeaBrand(b) {
   ideaBrand = b;
   renderBrandPick($('#i-brand'), ideaBrand, pickIdeaBrand);
-  $('#i-cta').placeholder = BRANDS[b].defaults.cta;
+  $('#i-cta').placeholder = brandOf(b).defaults?.cta || '';
 }
 
 function bindCreate() {
@@ -1253,6 +1402,12 @@ function bindCreate() {
     if (!s) return;
     if (t.tagName === 'SELECT') s[t.dataset.k] = t.value;
     else if (t.dataset.c) s[t.dataset.c] = t.checked;
+    else if (t.dataset.person) {
+      const set = new Set(slidePeople(s));
+      if (t.checked) set.add(t.dataset.person); else set.delete(t.dataset.person);
+      s.people = [...set];
+      delete s.janica;
+    }
     else return;
     saveDraft();
     list.children[i].outerHTML = propCard(s, i);
@@ -1287,6 +1442,7 @@ function showView(v) {
   if (v === 'create' && state.draft !== undefined) renderCreate();
   if (v === 'requests') loadRequests();
   if (v === 'deliveries') loadDeliveries();
+  if (v === 'brands') showBrandsView();
 }
 
 async function loadConfig() {
@@ -1378,6 +1534,7 @@ function bindGlobal() {
     renderBrandPick($('#r-brand'), reqBrand, pickReqBrand);
     fillBriefDefaults(b, prev);
   };
+  state.pickReqBrand = pickReqBrand;
   renderBrandPick($('#r-brand'), reqBrand, pickReqBrand);
   fillBriefDefaults(reqBrand);
 
@@ -1442,11 +1599,24 @@ function bindGlobal() {
   new ResizeObserver(() => fitStage()).observe($('#stage'));
 }
 
+// Tras crear o cambiar una marca: vuelve a pintar todos los selectores y la lámina abierta
+function refreshBrandPickers() {
+  ideaBrand = firstBrand(ideaBrand);
+  reqBrand = firstBrand(reqBrand);
+  pickIdeaBrand(ideaBrand);
+  renderBrandPick($('#r-brand'), reqBrand, state.pickReqBrand);
+  if (state.p) renderEditor();
+}
+
 async function init() {
+  try { await loadBrands(); } catch (e) { toast('No se pudieron cargar las marcas: ' + e.message, true); }
+  ideaBrand = firstBrand(ideaBrand);
+  reqBrand = firstBrand(reqBrand);
   bindGlobal();
   bindInspector();
   bindCreate();
-  await Promise.all([loadLogos(), document.fonts.ready, loadConfig()]);
+  bindBrands();
+  await Promise.all([document.fonts.ready, loadConfig()]);
   loadDraft();
   let p = null;
   // ?p=<id>&view=editor abre un proyecto directo (útil para revisar o compartir el enlace local)
@@ -1463,9 +1633,63 @@ async function init() {
   if (!p) saveProject();
   renderEditor();
   // El Estudio siempre abre en Crear, para empezar describiendo la idea.
-  showView(['editor', 'requests', 'deliveries'].includes(q.get('view')) ? q.get('view') : 'create');
+  showView(['editor', 'requests', 'deliveries', 'brands'].includes(q.get('view')) ? q.get('view') : 'create');
   if (q.get('s')) select(parseInt(q.get('s'), 10) - 1);
   api('/api/requests').then((r) => { state.requests = r; renderRequests(); }).catch(() => {});
 }
 
+// Dictado por voz (Web Speech API del navegador: Chrome, Edge o Safari). box contiene un <select> de idioma y un botón.
+// es-US entiende español, inglés mezclado (spanglish) y términos en inglés; en-US para dictar solo en inglés.
+// Devuelve una función para detenerlo.
+function attachDictation(box, ta) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR || !box) return () => {};
+  box.hidden = false;
+  const btn = $('button', box), lang = $('select', box);
+  lang.value = store.get('dictateLang') || 'es-US';
+  let rec = null, base = '';
+  const join = (a, b) => (a && b && !/\s$/.test(a) ? a + ' ' + b : a + b);
+  const stop = () => { if (rec) { const r = rec; rec = null; r.stop(); } btn.setAttribute('aria-pressed', 'false'); btn.textContent = '🎙 Hablar'; };
+  const start = () => {
+    rec = new SR();
+    rec.lang = lang.value;
+    rec.continuous = true;
+    rec.interimResults = true;
+    base = ta.value;
+    rec.onresult = (e) => {
+      let fin = '', tmp = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) fin += t; else tmp += t;
+      }
+      if (fin) base = join(base, fin.trim());
+      ta.value = join(base, tmp.trim());
+      ta.scrollTop = ta.scrollHeight;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      toast(e.error === 'not-allowed' ? 'Permite el micrófono en el navegador para dictar.' : 'Dictado: ' + e.error, true);
+      stop();
+    };
+    // El navegador corta el dictado tras un silencio; lo reanudamos mientras el botón siga activo.
+    rec.onend = () => { if (rec) { ta.value = base; try { rec.start(); } catch { stop(); } } };
+    rec.start();
+    btn.setAttribute('aria-pressed', 'true');
+    btn.textContent = '■ Detener';
+  };
+  lang.addEventListener('change', () => { store.set('dictateLang', lang.value); if (rec) { stop(); start(); } });
+  btn.addEventListener('click', () => (rec ? stop() : start()));
+  return stop;
+}
+const dictateBox = () => `<div class="dictate" hidden>
+  <select class="inp sm" aria-label="Idioma del dictado" title="Idioma del dictado"><option value="es-US">Español / Spanglish</option><option value="en-US">English</option></select>
+  <button type="button" class="btn sm dictate-btn" aria-pressed="false">🎙 Hablar</button></div>`;
+
+function setupDictation() {
+  const stop = attachDictation($('#dictate'), $('#i-idea'));
+  $('#idea-form').addEventListener('submit', stop);
+}
+
+setupDictation();
 init();

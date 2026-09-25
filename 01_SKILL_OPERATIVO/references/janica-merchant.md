@@ -1,37 +1,87 @@
-# Janica Merchant personal brand
+# Marca personal Janica Merchant
 
-## Audience and themes
+Versión 2 (24 de septiembre de 2026). Reemplaza la dirección anterior de fondo oscuro con marco. Las referencias aprobadas están en `02_ARCHIVOS_ORIGINALES/janica merchant/referencias-carrusel-editorial/`.
 
-- Audience: women entrepreneurs and ambitious professional women.
-- Themes: business, AI, marketing, leadership, motherhood, discipline, habits, ambition, vulnerability, and personal growth.
-- Objectives may include authority, community, saves/shares, speaking, consulting, education, or connection.
+## Audiencia y temas
 
-## Brand impression
+- Audiencia: mujeres emprendedoras y profesionales ambiciosas.
+- Temas: negocios, IA, marketing, liderazgo, maternidad, disciplina, hábitos, ambición, vulnerabilidad y crecimiento personal.
+- Objetivos: autoridad, comunidad, guardados y compartidos, conferencias, consultoría, educación o conexión.
 
-Sophisticated closeness, entrepreneurial innovation, and aspirational femininity. Use only small visual echoes of Nika Media or EVA.
+## Impresión de marca
 
-## Visual system
+Cercanía sofisticada, innovación emprendedora y feminidad aspiracional. Una revista de lujo silenciosa, no un anuncio. Solo ecos pequeños de Nika Media o EVA.
 
-- Warm ivory, white, beige, taupe, gray, and dark-gray typography.
-- Vibrant Nika yellow only as a small accent.
-- Editorial magazine, editorial technology, luxury minimalism, or sophisticated collage.
-- Large typography may pass behind and in front of the subject.
-- Avoid excessive gradients, rainbow text, clutter, and placing Janica in every slide.
+## Voz
 
-## Identity and photography
+Reflexiva, elegante, honesta, directa, motivadora y con inteligencia emocional. Frases cortas que se sienten dichas en voz baja. Evitar clichés vacíos.
 
-- Preserve Janica's exact approved face. Highest-priority serious-face reference: `assets/janica-serious-face.png`.
-- Supporting identity references: `assets/janica-face-sheet-1.jpeg` and `assets/janica-face-sheet-2.jpeg`.
-- Do not enlarge lips, change facial structure, age her, or produce a generic blonde woman.
-- Vary poses between opening and closing slides.
-- Show believable work moments: conferences, seminars, meetings, interviews, backstage, studio, or executive environments.
+## Sistema editorial del carrusel (basamentos)
 
-## Wardrobe
+### 1. La foto es la lámina
 
-- Modern business chic, contemporary Zara-like styling, sophisticated and youthful.
-- Casual executive pieces, modern dresses, shorter tailored silhouettes, tasteful cut-outs when appropriate.
-- Avoid repetitive blazers and conservative outfits that look too mature.
+- Cada lámina es una fotografía a sangre completa. No hay marco, ni caja de color, ni degradado oscuro encima de la foto.
+- La luz es cálida y natural: sol de tarde que entra de lado, sombras suaves de hojas o ventanas sobre paredes claras.
+- Paleta de la foto: marfil, blanco roto, beige, arena, piedra, taupe, madera clara, negro solo en detalles (marcos de puertas, pluma, pantalón).
+- Espacios reales y premium: oficina con vidrio, escenario de conferencia, backstage, pasillo con puertas, escalera de piedra, recibidor de casa, sala de reuniones.
+- Cada foto deja una zona limpia (pared lisa, cortina, cielo claro, piso) exactamente donde va el texto. El texto se apoya sobre esa zona sin cajas.
 
-## Voice
+### 2. Janica aparece poco y bien
 
-Reflective, elegant, honest, direct, motivational, and emotionally intelligent. Avoid empty clichés.
+- Janica sale en 2 o 3 láminas de 7: portada, una intermedia y el cierre. Nunca en todas.
+- Las demás láminas cuentan la idea con objetos y espacios (una libreta, un teléfono boca abajo, una silla vacía en un escenario, dos puertas, una escalera, una mochila infantil junto a la laptop).
+- Los objetos pueden llevar palabras cortas en español como parte del escenario: lomos de libros (DISCIPLINA, ENFOQUE, RESULTADOS), portada de libreta, una frase pequeña impresa en la pared. Máximo 3 palabras por objeto.
+
+### 3. Tipografía
+
+- Titular: serif editorial condensada de alto contraste (en el Estudio: Instrument Serif). Muy grande, interlineado apretado (0.9), sin negrita falsa.
+- Dos voces del titular:
+  - Mayúsculas monumentales para afirmaciones (LOW PROFILE. SIEMPRE. / MENOS RUIDO y MÁS PROTECCIÓN.).
+  - Minúsculas con una palabra en *cursiva* para frases reflexivas (No todas las personas celebran tu *crecimiento*.).
+- La palabra en cursiva se marca con *asteriscos*. Una sola por titular.
+- Texto de apoyo: sans geométrica limpia (Montserrat), gris oscuro, 3 a 4 líneas cortas máximo.
+- Firma: JANICA MERCHANT en mayúsculas pequeñas muy espaciadas, abajo a la izquierda, con una línea fina encima en el cierre.
+- Número de lámina: línea fina y "4/7" en serif cursiva, abajo a la derecha. Discreto.
+- Referencia secundaria (carpeta `referencias-estilo-tipografico-otra-persona/`, solo estilo, nunca esa cara): el titular puede mezclar serif gigante con una segunda línea en sans bold, y pasar por detrás de la persona.
+
+### 4. Color de acento
+
+- Tinta: casi negro cálido `#1F1D1B` sobre fotos claras; marfil `#F6F1E9` solo sobre zonas oscuras de la foto.
+- Amarillo Nika / lima `#ECFE6E` como un solo gesto pequeño por lámina: un trazo de pincel bajo una palabra, una línea corta, un punto final, un cuadrito o un resaltado detrás de una palabra. Nunca en bloques grandes ni en el texto.
+
+### 5. Composiciones aprobadas
+
+1. **Portada**: Janica a un lado (derecha), titular en mayúsculas arriba a la izquierda que puede rozar su cabello, línea lima, apoyo en sans, firma abajo.
+2. **Escena**: foto de espacio u objeto, titular en minúsculas grande arriba a la izquierda con cursiva, apoyo debajo.
+3. **Frase partida**: párrafo serif pequeño arriba, remate gigante en mayúsculas abajo con trazo lima (Las redes sociales… / FUERA DE CÁMARA.).
+4. **Lista**: titular en mayúsculas, cuadrito lima, 3 o 4 líneas en sans sin viñetas.
+5. **Cifra**: número gigante en serif cursiva con su fuente pequeña.
+6. **Contraste**: frases centradas arriba y remate con resaltado lima (…A TI SÍ.), foto simétrica debajo (dos puertas).
+7. **Cierre**: Janica con otra pose y sonrisa, titular reflexivo, línea lima, frase final, "Guarda este carrusel…" con ícono de guardar, firma.
+
+### 6. Prohibido
+
+- Fondos oscuros con degradado negro sobre la foto, marcos finos alrededor, paneles de color, texto con sombra fuerte.
+- Estudio gris plano, retratos decorativos sin relación con la idea, gradientes arcoíris, saturación.
+- Repetir la misma pose o el mismo vestuario entre portada y cierre.
+
+## Identidad y fotografía de Janica
+
+- Conserva el rostro aprobado exacto. Referencias que se envían al generador, en este orden:
+  1. `assets/janica-serious-face.png` (cara seria, prioridad máxima)
+  2. `assets/janica-real-sonrisa-1.jpg` y `assets/janica-real-sonrisa-2.jpg` (fotos reales)
+  3. `assets/janica-aprobada-editorial-1.png` y `assets/janica-aprobada-editorial-2.png` (carruseles aprobados)
+- Las hojas `janica-face-sheet-1/2.jpeg` quedan solo como apoyo de perfil y cuerpo; no se envían por defecto porque suavizan los rasgos.
+- Rasgos a respetar: cara ovalada con pómulos marcados, cejas oscuras definidas y arqueadas, ojos café almendrados con maquillaje ahumado suave, nariz fina y recta, labios llenos en tono nude rosado, cabello rubio largo con ondas y raíz más oscura, piel dorada clara.
+- La mirada va alineada: los dos ojos miran al mismo punto. Nada de ojos desviados ("virola"), párpados distintos ni pupilas de distinto tamaño.
+- La cara debe ocupar suficiente espacio en la foto (plano medio o americano). En planos muy abiertos la cara sale pequeña y se deforma.
+- No agrandar labios, cambiar la estructura facial, envejecerla ni producir una rubia genérica.
+- Variar poses entre portada y cierre. Momentos de trabajo creíbles: conferencias, escenario, backstage, reuniones, oficina con vista a la ciudad, estudio, casa luminosa.
+- Toda foto con Janica pasa el control del estándar global de calidad humana antes de entregarse. Si la cara no coincide, se regenera.
+
+## Vestuario
+
+- Business chic moderno, tipo Zara contemporáneo: sofisticado y juvenil.
+- Tops de un hombro, vestidos cortos con corte asimétrico, tops sin mangas, pantalón sastre negro de tiro alto, tonos marfil, beige, arena y negro.
+- Aretes dorados tipo argolla gruesa, anillo dorado.
+- Evitar blazers repetidos y outfits conservadores que la hagan ver mayor.

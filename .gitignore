@@ -4,3 +4,6 @@
 
 # Sistema
 .DS_Store
+
+# Caché de imágenes convertidas para Claude
+04_STUDIO_APP/data/cache/

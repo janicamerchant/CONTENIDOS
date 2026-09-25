@@ -1,0 +1,220 @@
+{
+  "id": "pjanicaprueba",
+  "brand": "janica",
+  "name": "PRUEBA lámina completa (se puede borrar)",
+  "caption": "Durante años confundí productividad con resistencia física: levantarme más temprano, responder más rápido, cerrar el día vacía.\n\nLa IA no me dio más horas. Me dio criterio sobre dónde poner las mías.\n\nHoy tengo automatizaciones que:\n· Clasifican y redactan borradores de mi bandeja de entrada antes de que yo la abra.\n· Convierten un podcast largo en guiones de reels y estructuras de carrusel.\n· Preparan mi agenda y mis reuniones sin que yo mueva un dedo.\n· Dejan listo el contenido de la semana en un solo bloque de trabajo.\n\nEl dato que más me marcó: el 92% de las empresas planea invertir más en IA, pero solo el 1% de los líderes dice tenerla realmente integrada en sus flujos (McKinsey, enero 2025). El problema nunca fue comprar herramientas. Fue integrarlas.\n\nSi quieres el mapa de automatizaciones que uso, comenta IA y te envío los recursos.\n\n#IAparaEmprendedoras #AutomatizacionDeNegocios #ProductividadConIA #MujeresEmprendedoras #LiderazgoFemenino",
+  "concept": "Ángulo: la IA no es una herramienta más que comprar, es un sistema que se integra al flujo de trabajo de una emprendedora. Abrimos con la tensión del día interrumpido y cerramos con el stack de automatizaciones que Janica usa. Estilo editorial de lujo: marfil cálido, gris oscuro, tipografía grande que pasa por detrás del sujeto y amarillo Nika solo como acento puntual. Tono reflexivo, directo y de mentoría, sin clichés motivacionales. La secuencia convence porque nombra el dolor con datos verificados, muestra la brecha real (solo el 1% integra) y termina con acciones concretas que la audiencia puede replicar hoy.",
+  "slides": [
+    {
+      "id": "w6gtzz0",
+      "layout": "portada",
+      "theme": "light",
+      "kicker": "",
+      "title": "LA IA NO ME DIO MÁS HORAS. ME DIO *CRITERIO*.",
+      "body": "Cómo automaticé las tareas que me estaban robando el negocio.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Janica Merchant de pie junto a una mesa de trabajo de madera clara en una oficina con ventanal, revisando en su laptop un panel de automatizaciones mientras el teléfono descansa boca abajo. Ocupa el lado derecho del encuadre y deja aire a la izquierda para el titular.",
+      "photoPrompt": "Janica Merchant seated at a light wood desk beside a tall window with soft afternoon light, closed laptop and a coffee cup, looking calmly toward the window, modern ivory one-shoulder top, gold hoop earrings, she sits on the right half of the frame, clean plain ivory wall on the upper left",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260925-011039-pjanicaprueba-01.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 50,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1,
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260924-233833-pjanicaprueba-01.png",
+      "prevCutout": "",
+      "full": true,
+      "qa": ""
+    },
+    {
+      "id": "soul2test",
+      "layout": "portada",
+      "theme": "light",
+      "kicker": "",
+      "title": "LA IA NO ME DIO MÁS HORAS. ME DIO *CRITERIO*.",
+      "body": "Cómo automaticé las tareas que me estaban robando el negocio.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Janica Merchant de pie junto a una mesa de trabajo de madera clara en una oficina con ventanal, revisando en su laptop un panel de automatizaciones mientras el teléfono descansa boca abajo. Ocupa el lado derecho del encuadre y deja aire a la izquierda para el titular.",
+      "photoPrompt": "Janica Merchant seated at a light wood desk beside a tall window with soft afternoon light, closed laptop and a coffee cup, looking calmly toward the window, modern ivory one-shoulder top, gold hoop earrings, she sits on the right half of the frame, clean plain ivory wall on the upper left",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260925-114526-pjanicaprueba-02.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260925-114526-pjanicaprueba-02-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1,
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260925-soul2-prueba-portada.png",
+      "prevCutout": "/files/04_STUDIO_APP/data/uploads/20260925-soul2-prueba-portada-recorte.png",
+      "full": false,
+      "qa": "",
+      "soul": true
+    },
+    {
+      "id": "50n59eb",
+      "layout": "escena",
+      "theme": "dark",
+      "kicker": "La bandeja de entrada",
+      "title": "8,8 horas a la semana en *correos*",
+      "body": "Es lo que dedica al email el 25% de usuarios más intensivos. Yo dejé de abrir la bandeja en frío: la IA clasifica, resume y redacta el borrador antes de que yo llegue.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Plano medio de una emprendedora sentada de noche frente a una pantalla con una bandeja de correo interminable, la luz azul sobre su rostro cansado y una agenda cerrada al lado. El sujeto a la derecha, cruzando levemente el área del titular.",
+      "photoPrompt": "A hyperrealistic woman entrepreneur in her late thirties sits at night in a home office desk facing a laptop screen filled with an endless scrolling email inbox, blue screen light on her tired face, a closed leather planner beside her, exhausted but determined expression, medium shot, subject positioned on the right side crossing slightly into the left headline area, warm lamp light mixing with cool screen glow, real room with bookshelves and textured wall, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "Microsoft Work Trend Index, 2025",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-214339-p1790300554116-03.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 0.9
+    },
+    {
+      "id": "zpchur3",
+      "layout": "frase",
+      "theme": "light",
+      "kicker": "La verdad incómoda",
+      "title": "El 92% invierte en IA. Solo el *1%* la integra.",
+      "body": "El problema nunca fue comprar herramientas. Fue meterlas dentro del flujo de trabajo.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Detalle de manos femeninas sobre una mesa de reunión conectando con marcador un diagrama de flujo dibujado a mano donde varias apps sueltas terminan en una sola línea. Composición hacia la derecha, espacio libre arriba a la izquierda.",
+      "photoPrompt": "Close-up of a woman's hands at a meeting table drawing with a marker on paper, connecting scattered app icons sketched by hand into one continuous workflow line, a laptop and coffee blurred in the background of a real meeting room with concrete and wood textures, deliberate focused gesture, tight detail shot composed toward the right so the upper left stays open for headline type, soft diffused daylight, warm neutral palette, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "McKinsey, enero 2025",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-214301-p1790300554116-04.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "te6bm0z",
+      "layout": "lista",
+      "theme": "dark",
+      "kicker": "Mi stack",
+      "title": "Cuatro automatizaciones que *sí* uso",
+      "body": "",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+        "Bandeja de entrada: la IA clasifica, resume y redacta borradores por prioridad",
+        "Podcasts largos: se convierten en guiones de reels y estructuras de carrusel",
+        "Contenido semanal: carruseles y videos producidos en un solo bloque de trabajo",
+        "Agenda: preparación de reuniones, notas y seguimientos sin intervención mía"
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Janica Merchant frente a una pantalla grande en una sala de mentoría, señalando un flujo de automatización mientras dos mujeres toman notas. Ella al lado izquierdo del encuadre, dejando aire a la derecha para la lista.",
+      "photoPrompt": "Use the approved Janica Merchant reference for the face. A woman leader in modern business-chic clothing stands in front of a large wall screen in a warm mentoring room, pointing at a workflow diagram while two women seated at a table take notes, engaged teaching energy, wide shot with the subject on the left third crossing slightly into the right area so list type can sit beside and partially behind her, soft warm interior lighting, plants and textured walls in the background, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-214349-p1790300554116-05.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260924-214349-p1790300554116-05-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    },
+    {
+      "id": "xr57vh8",
+      "layout": "cta",
+      "theme": "light",
+      "kicker": "Nika Media",
+      "title": "Te paso mi *mapa* de automatizaciones",
+      "body": "No necesitas más apps. Necesitas un sistema que trabaje mientras tú diriges.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "Comenta IA y te envío los recursos",
+      "photo": "Janica Merchant sonriendo con calma en un espacio luminoso tipo estudio-oficina, cerrando su laptop con una mano mientras sostiene una taza. Ubicada a la derecha, con aire a la izquierda para el titular y el CTA.",
+      "photoPrompt": "Use the approved Janica Merchant reference for the face. A woman entrepreneur in elegant contemporary business-casual clothing stands in a bright studio-office with textured ivory walls and a large window, calmly closing her laptop with one hand while holding a ceramic cup in the other, relaxed confident smile, medium shot with the subject on the right side crossing slightly into the left headline area, golden late afternoon natural light, warm ivory and taupe palette, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260924-214449-p1790300554116-06.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260924-214449-p1790300554116-06-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "bw": false,
+      "texture": false,
+      "ts": 1
+    }
+  ],
+  "updatedAt": "2026-09-25T11:45:29-04:00"
+}

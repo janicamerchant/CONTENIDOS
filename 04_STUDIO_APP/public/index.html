@@ -7,7 +7,7 @@
 <link rel="icon" href="/files/01_SKILL_OPERATIVO/assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wdth,wght@62..125,400..900&family=Barlow:wght@400;500;600;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,700;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=Jost:wght@400;500;600&display=swap">
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wdth,wght@62..125,400..900&family=Barlow:wght@400;500;600;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,700;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Jost:wght@400;500;600&family=Montserrat:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="slides.css">
 <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
@@ -23,6 +23,7 @@
     <button class="tab" data-view="editor" role="tab">Editor</button>
     <button class="tab" data-view="requests" role="tab">Solicitudes <span class="count" id="req-count"></span></button>
     <button class="tab" data-view="deliveries" role="tab">Entregas</button>
+    <button class="tab" data-view="brands" role="tab">Marcas</button>
   </nav>
   <div class="top-actions">
     <span class="save-state" id="save-state"></span>
@@ -48,7 +49,16 @@
         <div class="brand-pick lg" id="i-brand" role="radiogroup" aria-label="Marca"></div>
       </div>
       <div class="field full">
-        <label class="lbl" for="i-idea">Tu idea</label>
+        <div class="lbl-row">
+          <label class="lbl" for="i-idea">Tu idea</label>
+          <div class="dictate" id="dictate" hidden>
+            <select id="dictate-lang" class="inp sm" aria-label="Idioma del dictado" title="Idioma del dictado">
+              <option value="es-US">Español / Spanglish</option>
+              <option value="en-US">English</option>
+            </select>
+            <button type="button" class="btn sm" id="btn-dictate" aria-pressed="false">🎙 Hablar</button>
+          </div>
+        </div>
         <textarea id="i-idea" class="inp" rows="6" required placeholder="Ej. Un carrusel para dueños de agencias de seguros sobre cuánto dinero pierden cuando un lead espera más de 5 minutos. Quiero que Janica aparezca al final invitando a la demo."></textarea>
       </div>
       <div class="field">
@@ -234,7 +244,44 @@
   <div id="deliv-list" class="deliv-list"></div>
 </main>
 
+<!-- ============ MARCAS: identidad y base de conocimiento (06_MARCAS/) ============ -->
+<main class="view" id="view-brands" hidden>
+  <aside class="mk-rail">
+    <div class="list-head">
+      <h2 class="h2">Marcas</h2>
+      <button class="btn sm accent" id="mk-new">+ Nueva marca</button>
+    </div>
+    <nav class="mk-list" id="mk-list" aria-label="Marcas"></nav>
+    <span class="lbl mk-sub">Para todas las marcas</span>
+    <nav class="mk-list" id="mk-list-extra" aria-label="Recursos compartidos"></nav>
+    <details class="mk-archived" id="mk-archived-box">
+      <summary>Archivadas</summary>
+      <div id="mk-archived"></div>
+    </details>
+  </aside>
+  <section class="mk-main" id="mk-main"></section>
+</main>
+
 <!-- ============ MODALES ============ -->
+<dialog id="dlg-doc" class="dlg wide">
+  <form id="doc-form" method="dialog">
+    <div class="dlg-head">
+      <h2 class="h2" id="doc-title">Documento</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Cerrar">×</button>
+    </div>
+    <div class="doc-body">
+      <label class="lbl" for="doc-name" id="doc-name-lbl">Título</label>
+      <input id="doc-name" class="inp" type="text" placeholder="Ej. Ofertas de octubre">
+      <textarea id="doc-text" class="inp mono-area" rows="22" aria-label="Contenido"></textarea>
+      <div class="form-actions">
+        <button type="submit" class="btn accent" id="doc-save">Guardar</button>
+        <span class="hint">Markdown o texto plano. Claude lo lee completo en cada propuesta de esta marca.</span>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+
 <dialog id="dlg-assets" class="dlg wide">
   <div class="dlg-head">
     <h2 class="h2">Elegir imagen</h2>
@@ -286,6 +333,8 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="export-stage" aria-hidden="true"></div>
 
+<!-- marcas.js solo declara funciones; app.js arranca la app y las usa -->
+<script src="marcas.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

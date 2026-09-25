@@ -2,6 +2,9 @@
 # Estudio de Carruseles · Nika Media — servidor local (Ruby del sistema, sin dependencias).
 # Uso: ruby server.rb   →   http://localhost:4321
 
+# Nombres de archivo con tildes: sin esto, Ruby los lee como binario cuando la Terminal no define UTF-8.
+Encoding.default_external = Encoding::UTF_8
+
 require 'webrick'
 require 'json'
 require 'net/http'
@@ -10,6 +13,7 @@ require 'base64'
 require 'fileutils'
 require 'time'
 require 'erb'
+require 'date'
 
 APP      = File.expand_path(__dir__)
 ROOT     = File.expand_path('..', APP)                 # CONTENIDOS
@@ -21,8 +25,10 @@ CONFIG   = File.join(DATA, 'config.json')
 REQUESTS = File.join(ROOT, '05_SOLICITUDES')
 DELIVER  = File.join(ROOT, '03_ENTREGAS')
 PORT     = (ENV['PORT'] || 4321).to_i
+MARCAS   = File.join(ROOT, '06_MARCAS')            # una carpeta por marca: ver LEEME.md
+CACHE    = File.join(DATA, 'cache')
 
-[UPLOADS, PROJECTS, REQUESTS, DELIVER].each { |d| FileUtils.mkdir_p(d) }
+[UPLOADS, PROJECTS, REQUESTS, DELIVER, CACHE].each { |d| FileUtils.mkdir_p(d) }
 
 # Credenciales locales en 04_STUDIO_APP/.env (KEY=valor). Las variables del sistema tienen prioridad.
 ENV_FILE = File.join(APP, '.env')
@@ -36,19 +42,6 @@ if File.exist?(ENV_FILE)
 end
 
 IMAGE_EXT = %w[.png .jpg .jpeg .webp .gif].freeze
-
-SHARED_REFS = [
-  '01_SKILL_OPERATIVO/SKILL.md',
-  '01_SKILL_OPERATIVO/references/production-workflow.md',
-  '02_ARCHIVOS_ORIGINALES/brand-standards/global-human-image-quality.md'
-].freeze
-
-BRANDS = {
-  'eva'     => { name: 'EVA', refs: ['01_SKILL_OPERATIVO/references/eva.md',
-                                     '02_ARCHIVOS_ORIGINALES/brand-standards/eva-carousel-visual-guide.md'] },
-  'janica'  => { name: 'Janica Merchant', refs: ['01_SKILL_OPERATIVO/references/janica-merchant.md'] },
-  'citykia' => { name: 'City Kia', refs: ['01_SKILL_OPERATIVO/references/city-kia.md'] }
-}.freeze
 
 # ---------- helpers ----------
 
@@ -115,7 +108,7 @@ def request_markdown(r)
     - Entrega: #{b['entrega']}
 
     ```text
-    Marca: #{BRANDS.dig(b['marca'], :name) || b['marca']}
+    Marca: #{brand_name(b['marca'])}
     Formato: #{b['formato']} (#{b['laminas']} láminas)
     Tema/oferta: #{b['tema']}
     Objetivo: #{b['objetivo']}
@@ -130,6 +123,11 @@ def request_markdown(r)
     #{b['notas']}
   MD
 end
+
+require_relative 'marcas'
+require_relative 'lamina_completa'
+require_relative 'soul'
+require_relative 'foto_real'
 
 # ---------- Claude: borrador de carrusel ----------
 
@@ -182,16 +180,16 @@ DRAFT_RULES = <<~TXT
   - title: pocas palabras. Marca con *asteriscos* la palabra o frase que va en color de acento (máximo una por titular).
   - body: una o dos frases cortas, o vacío.
   - number y numberLabel solo en layout cifra. items solo en lista (3 a 5). leftLabel/leftItems/rightLabel/rightItems solo en comparar (3 ítems por lado). cta solo en la última.
-  - photo: dirección de arte en el idioma del brief. Describe una ESCENA que cuente la idea de esa lámina sin leer el texto: quién hace qué, dónde, con qué objeto o momento que lo prueba. Tienes libertad creativa para elegir protagonista: Janica Merchant haciendo algo relacionado (solo si su acción explica la idea), la figura pública de la noticia (foto real) u otra persona hiperrealista viviendo la situación. Objetos y lugares también pueden ser protagonistas. Nunca un retrato decorativo sin relación con el titular.
-  - photoPrompt: el prompt en inglés para generar esa foto: sujeto, acción, lugar, emoción, encuadre, luz, y al final "hyperrealistic editorial photograph, natural skin texture, no text, no logos". Si la persona es Janica Merchant, di "use the approved Janica Merchant reference for the face". Compón la foto para que la persona u objeto quede de un lado y deje aire para el titular: el sujeto solo debe cruzar el borde del área del texto (así las letras pasan parcialmente por detrás de él sin perder la lectura). Fondo con textura o ambiente real, nunca un fondo plano de estudio.
+  - photo: dirección de arte en el idioma del brief. Describe una ESCENA que cuente la idea de esa lámina sin leer el texto: quién hace qué, dónde, con qué objeto o momento que lo prueba. Tienes libertad creativa para elegir protagonista: una de las personas aprobadas de la marca (lista abajo) haciendo algo relacionado (solo si su acción explica la idea), la figura pública de la noticia (foto real) u otra persona hiperrealista viviendo la situación. Objetos y lugares también pueden ser protagonistas. Nunca un retrato decorativo sin relación con el titular.
+  - photoPrompt: el prompt en inglés para generar esa foto: sujeto, acción, lugar, emoción, encuadre, luz, y al final "hyperrealistic editorial photograph, natural skin texture, no text, no logos". Si la persona es una de las personas aprobadas, escribe su nombre completo y "use the approved <nombre> reference for the face". Compón la foto para que la persona u objeto quede de un lado y deje aire para el titular: el sujeto solo debe cruzar el borde del área del texto (así las letras pasan parcialmente por detrás de él sin perder la lectura). Fondo con textura o ambiente real, nunca un fondo plano de estudio.
   - Al menos 5 de cada 7 láminas llevan foto (photo y photoPrompt llenos). Como máximo una o dos pueden ser solo tipográficas, nunca dos seguidas. Varía encuadres: plano general, detalle de manos u objetos, primer plano, cenital.
-  - bw: false por defecto (foto a color real). true solo en 1 o 2 láminas del carrusel, nunca dos seguidas, cuando el blanco y negro refuerce la idea (pérdida, tensión, "antes"). Janica y la lámina de CTA siempre a color. Los photoPrompt piden color natural salvo en esas láminas.
+  - bw: false por defecto (foto a color real). true solo en 1 o 2 láminas del carrusel, nunca dos seguidas, cuando el blanco y negro refuerce la idea (pérdida, tensión, "antes"). Las personas aprobadas y la lámina de CTA siempre a color. Los photoPrompt piden color natural salvo en esas láminas.
   - Deja vacíos ("" o []) los campos que no apliquen al layout.
   - caption: el texto del post para Instagram, con el CTA.
   - concept: la dirección creativa en 3 a 5 frases cortas: la idea central y el ángulo, el estilo visual (fotografía, paleta, tipografía), el tono y por qué la secuencia convence a la audiencia.
 
   Datos y fuentes:
-  - Nunca inventes estadísticas, precios, fechas ni resultados. Usa solo (a) las cifras de la "Investigación verificada" que viene en el mensaje, o (b) los proof points aprobados del perfil de marca.
+  - Nunca inventes estadísticas, precios, fechas ni resultados. Usa solo (a) las cifras de la "Investigación verificada" que viene en el mensaje, (b) los proof points aprobados del perfil de marca, o (c) los "Datos verificados de la marca" que vienen en el mensaje, siempre con su fuente.
   - source: toda lámina con una cifra externa lleva su fuente corta y visible, por ejemplo "CBO, junio 2024" o "KFF, 2026". Los proof points de EVA llevan "Caso real anonimizado de un cliente de EVA". Si la lámina no tiene cifras, deja "".
   - Redacta la cifra con el mismo alcance que la fuente (promedio, proyección, año, país) y en el tiempo verbal correcto según la fecha de hoy: si algo ya ocurrió, no lo escribas como posibilidad.
   - Nunca escribas marcadores como [VERIFICAR], [FUENTE], "XX" ni cifras pendientes. Si una cifra no está en la investigación verificada, no la uses: reescribe la lámina sin ese número.
@@ -256,19 +254,34 @@ def strip_markers!(obj)
   obj
 end
 
+# Personas con cara de referencia que Claude puede poner en las fotos de esta marca
+def people_rules(brand)
+  people = brand_people(brand)
+  return 'Esta marca no tiene personas aprobadas con foto de referencia: usa personas hiperrealistas genéricas, la figura pública real de la noticia, objetos o lugares.' if people.empty?
+  list = people.map { |p| "- #{p['name']}#{p['descripcion'].to_s.empty? ? '' : ": #{p['descripcion']}"}" }.join("\n")
+  "Personas aprobadas de #{brand['name']} (tienen foto de referencia de cara; si aparecen, escribe su nombre completo en photo y photoPrompt):\n#{list}"
+end
+
+def brand_facts(brand)
+  facts = (brand['datos'] || []).map { |d| "- #{d['dato']} (Fuente: #{d['fuente']}#{d['url'].to_s.empty? ? '' : ", #{d['url']}"})" }
+  facts.empty? ? '' : "Datos verificados de la marca (puedes usarlos citando la fuente tal cual):\n#{facts.join("\n")}"
+end
+
 def claude_draft(brief)
   key = api_key
   raise 'Falta la API key de Anthropic. Agrégala en Ajustes.' if key.empty?
 
-  brand = BRANDS[brief['marca']] || BRANDS['eva']
-  notes, usages = claude_research(brief, brand[:name])
-  docs = (SHARED_REFS + brand[:refs]).map do |rel|
-    path = File.join(ROOT, rel)
-    File.exist?(path) ? "<documento ruta=\"#{rel}\">\n#{File.read(path)}\n</documento>" : ''
-  end.join("\n\n")
+  brand = (load_brand(brief['marca']) rescue nil) || all_brands.first or raise 'No hay marcas en 06_MARCAS.'
+  notes, usages = claude_research(brief, brand['name'])
+  kb = brand_knowledge(brand['id'])
+  docs = kb[:texts].map { |d| "<documento ruta=\"#{d[:rel]}\">\n#{d[:text]}\n</documento>" }.join("\n\n")
+  rules = brand_rules(brand['id'])
+  system_text = [DRAFT_RULES, people_rules(brand),
+                 rules.empty? ? nil : "Reglas propias de #{brand['name']} (mandan sobre las generales cuando chocan):\n#{rules}",
+                 docs].compact.join("\n\n")
 
   user = <<~TXT
-    Marca: #{brand[:name]}
+    Marca: #{brand['name']}
     Formato: carrusel de #{brief['laminas'] || 7} láminas
     Tema/oferta: #{brief['tema']}
     Objetivo: #{brief['objetivo']}
@@ -279,9 +292,24 @@ def claude_draft(brief)
     Notas: #{brief['notas']}
     Fecha de hoy: #{Date.today.iso8601}
 
-    Investigación verificada (única fuente permitida para cifras externas):
-    #{notes.empty? ? 'Sin datos externos verificados: usa solo los proof points del perfil o escribe sin cifras.' : notes}
+    #{brand_facts(brand)}
+
+    Investigación verificada (única fuente permitida para cifras externas, además de los datos de la marca):
+    #{notes.empty? ? 'Sin datos externos verificados: usa solo los proof points del perfil, los datos de la marca o escribe sin cifras.' : notes}
   TXT
+
+  # PDF y referencias visuales de la marca van antes del brief; con caché, la segunda propuesta de la misma marca sale más barata.
+  kb_blocks = kb[:pdfs].map do |d|
+    { type: 'document', title: File.basename(d[:rel]), source: { type: 'base64', media_type: 'application/pdf', data: Base64.strict_encode64(File.binread(d[:path])) } }
+  end
+  unless kb[:images].empty?
+    kb_blocks << { type: 'text', text: "Referencias visuales aprobadas de #{brand['name']}. Úsalas para el estilo, la composición, la paleta y el tono; no copies sus textos ni sus caras." }
+    kb[:images].each do |im|
+      kb_blocks << { type: 'text', text: File.basename(im[:rel]) + (im[:tags].empty? ? '' : " · #{im[:tags].join(', ')}") }
+      kb_blocks << claude_image(im[:path])
+    end
+  end
+  kb_blocks.last[:cache_control] = { type: 'ephemeral' } unless kb_blocks.empty?
 
   # Paso 2: propuesta con formato fijo (el formato estructurado no admite búsqueda web en la misma llamada)
   spanish = brief['idioma'].to_s !~ /english|ingl/i
@@ -290,8 +318,8 @@ def claude_draft(brief)
     extra = attempt.zero? ? '' : "\n\nIMPORTANTE: la versión anterior salió sin tildes. Escribe todo con ortografía española completa: tildes, ñ, ¿ y ¡."
     data = anthropic_post(model: 'claude-opus-5', max_tokens: 16_000, fallbacks: 'default',
                           output_config: { effort: 'medium', format: { type: 'json_schema', schema: SLIDE_SCHEMA } },
-                          system: "#{DRAFT_RULES}\n\n#{docs}",
-                          messages: [{ role: 'user', content: user + extra }])
+                          system: [{ type: 'text', text: system_text, cache_control: { type: 'ephemeral' } }],
+                          messages: [{ role: 'user', content: kb_blocks + [{ type: 'text', text: user + extra }] }])
     raise 'La respuesta se cortó antes de terminar. Intenta con menos láminas.' if data['stop_reason'] == 'max_tokens'
     usages << data['usage']
     text = (data['content'] || []).select { |b| b['type'] == 'text' }.map { |b| b['text'] }.join
@@ -301,22 +329,22 @@ def claude_draft(brief)
     break unless spanish && copy.length > 200 && copy !~ /[áéíóúñÁÉÍÓÚÑ¿¡]/
   end
   out = strip_markers!(out)
-  enforce_color_rule!(out['slides'] || [])
+  enforce_color_rule!(out['slides'] || [], brand)
   out['research'] = notes
   out['usage'] = claude_usage(usages, data['model'])
   out
 end
 
 # Regla de color (guía visual de EVA): fotos a color real; blanco y negro en máximo 2 láminas,
-# nunca seguidas, nunca en la de Janica ni en la última (CTA). Se aplica aunque Claude marque más.
+# nunca seguidas, nunca con una persona aprobada ni en la última (CTA). Se aplica aunque Claude marque más.
 BW_WORDS = /black[- ]and[- ]white|monochrome|grayscale|greyscale|b&w/i
 
-def enforce_color_rule!(slides)
+def enforce_color_rule!(slides, brand)
   kept = 0
   prev = false
   slides.each_with_index do |s, i|
-    janica = "#{s['photo']} #{s['photoPrompt']}" =~ /janica/i
-    ok = s['bw'] == true && kept < 2 && !prev && s['layout'] != 'cta' && !janica && i != slides.size - 1
+    person = !people_in(brand, "#{s['photo']} #{s['photoPrompt']}").empty?
+    ok = s['bw'] == true && kept < 2 && !prev && s['layout'] != 'cta' && !person && i != slides.size - 1
     s['bw'] = ok
     kept += 1 if ok
     prev = ok
@@ -356,9 +384,6 @@ HF_ASPECT = '3:4'                            # el modelo no acepta 4:5; el edito
 # Créditos por imagen medidos en la cuenta (calidad alta, 2K). El cobro real es por tokens.
 HF_CREDITS = { 'high' => 2.75 }.freeze
 HF_CREDIT_USD = 0.0625
-JANICA_REFS = ['01_SKILL_OPERATIVO/assets/janica-serious-face.png',
-               '01_SKILL_OPERATIVO/assets/janica-face-sheet-1.jpeg'].freeze
-
 def hf_http(method, url, body = nil)
   uri = URI(url)
   http = Net::HTTP.new(uri.host, uri.port)
@@ -411,7 +436,6 @@ end
 
 # Recorte de la persona u objeto principal con Vision de macOS (tools/recorte.js). Gratis y local.
 CUTOUT_SCRIPT = File.join(APP, 'tools', 'recorte.js')
-CUTOUT_BRANDS = %w[eva janica].freeze
 
 # people_only: el recorte automático solo se hace si hay una cara clara (no recorta papeles, manos ni objetos).
 def make_cutout(src, people_only = false)
@@ -440,42 +464,85 @@ def attach_image(project_id, index, url, cutout = '', extra = {})
       s['prevCutout'] = s['cutout'].to_s
     end
     s.merge!(extra)
-    s.merge!('image' => url, 'cutout' => cutout.to_s, 'ix' => 50, 'iy' => 30, 'iz' => 1)
+    # Lámina completa: la imagen ya trae el texto; se centra para recortar parejo arriba y abajo.
+    s.merge!('image' => url, 'cutout' => cutout.to_s, 'ix' => 50, 'iy' => s['full'] ? 50 : 30, 'iz' => 1)
     p['updatedAt'] = Time.now.iso8601
     File.write(path, JSON.pretty_generate(p))
   end
 end
 
 def run_generation(job_id, project_id, items, quality)
-  refs = nil
+  refs = {}
   refs_lock = Mutex.new
+  brand = (load_brand(project_brand(project_id)) rescue nil)
   threads = items.map do |it|
     Thread.new do
       begin
         body = { prompt: it['prompt'], aspect_ratio: HF_ASPECT, quality: quality, resolution: '2k' }
-        if it['janica']
-          refs_lock.synchronize { refs ||= JANICA_REFS.map { |r| hf_upload(r) } }
-          body[:image_urls] = refs
+        # Personas aprobadas: bloqueo de identidad + sus fotos de cara (en orden de prioridad) como referencia
+        ids = Array(it['people']).map(&:to_s)
+        ids |= ['janica'] if it['janica']              # proyectos guardados antes de 06_MARCAS
+        persons = ids.map { |pid| load_person(pid) rescue nil }.compact
+        # Persona con Soul ID entrenado: foto de cámara real con Soul 2.0; el texto lo pone el Editor
+        # Foto real de la persona + escena con Grok: la cara no se genera (ver foto_real.rb)
+        real = edit_mode?(brand, persons)
+        soul = !real && soul_mode?(brand, persons)
+        full = !real && !soul && full_mode?(brand) && it['slide'].is_a?(Hash)
+        model = HF_MODEL
+        upload = ->(rel) { refs_lock.synchronize { refs[rel] ||= hf_upload(rel) } }
+        if real
+          model = EDIT_MODEL
+          body = edit_body(it, persons.first, brand, upload)
+        elsif soul
+          model = SOUL_MODEL
+          body = soul_body(it, soul_person(persons), brand)
+        elsif full
+          # Lámina completa: caras aprobadas + referencias de diagramación del mismo diseño
+          slide = it['slide']
+          faces = persons.flat_map { |p| person_refs(p, [FULL_FACE_REFS / persons.size, 1].max) }.first(FULL_FACE_REFS)
+          lays = layout_refs(brand, slide['layout'])
+          base_prompt = full_prompt(slide, brand, faces.size, lays.size, it['count'], persons)
+          body[:prompt] = base_prompt
+          body[:image_urls] = (faces + lays).map(&upload)
+          body.delete(:image_urls) if body[:image_urls].empty?
+        elsif !persons.empty?
+          per = [MAX_FACE_REFS / persons.size, 1].max
+          body[:prompt] = "#{persons.map { |p| person_lock(p) }.join(' ')} #{body[:prompt]}"
+          body[:image_urls] = persons.flat_map { |p| person_refs(p, per) }.first(MAX_FACE_REFS).map(&upload)
         end
-        sub = hf_http(:post, "#{HF_API}/#{HF_MODEL}", body)
-        gen_update(job_id, it['index'], status: sub['status'], request_id: sub['request_id'])
-        deadline = Time.now + 600
-        st = sub
-        until %w[completed failed nsfw canceled].include?(st['status'])
-          raise 'Tardó más de 10 minutos' if Time.now > deadline
-          sleep 4
-          st = hf_http(:get, sub['status_url'])
-          gen_update(job_id, it['index'], status: st['status'])
+        attempt = 0
+        note = ''
+        dest = nil
+        loop do
+          sub = hf_http(:post, "#{HF_API}/#{model}", body)
+          gen_update(job_id, it['index'], status: sub['status'], request_id: sub['request_id'])
+          deadline = Time.now + 600
+          st = sub
+          until %w[completed failed nsfw canceled].include?(st['status'])
+            raise 'Tardó más de 10 minutos' if Time.now > deadline
+            sleep 4
+            st = hf_http(:get, sub['status_url'])
+            gen_update(job_id, it['index'], status: st['status'])
+          end
+          raise(st['status'] == 'nsfw' ? 'Higgsfield rechazó el contenido (no se cobra)' : "Falló (#{st['status']}, no se cobra)") unless st['status'] == 'completed'
+          src = st.dig('images', 0, 'url') or raise 'Respuesta sin imagen'
+          name = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{slug(project_id, 24)}-#{format('%02d', it['index'] + 1)}.png"
+          dest = File.join(UPLOADS, name)
+          download(src, dest)
+          break unless full
+          # Revisión de Claude: ortografía exacta, rostro y legibilidad. Si falla, se corrige sola.
+          gen_update(job_id, it['index'], status: 'revisando')
+          ok, note = qa_slide(dest, slide, brand, it['count'], faces)
+          break if ok || attempt >= QA_RETRIES
+          attempt += 1
+          gen_update(job_id, it['index'], status: "corrigiendo (intento #{attempt + 1})", qa: note)
+          body[:prompt] = "#{base_prompt}\nTHE PREVIOUS ATTEMPT WAS REJECTED FOR THESE PROBLEMS, FIX ALL OF THEM: #{note}"
         end
-        raise(st['status'] == 'nsfw' ? 'Higgsfield rechazó el contenido (no se cobra)' : "Falló (#{st['status']}, no se cobra)") unless st['status'] == 'completed'
-        src = st.dig('images', 0, 'url') or raise 'Respuesta sin imagen'
-        name = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{slug(project_id, 24)}-#{format('%02d', it['index'] + 1)}.png"
-        dest = File.join(UPLOADS, name)
-        download(src, dest)
-        cut = CUTOUT_BRANDS.include?(project_brand(project_id)) ? make_cutout(dest, true) : nil
+        cut = !full && brand && brand['cutout'] ? make_cutout(dest, true) : nil
         cut_url = cut ? file_url(cut) : ''
-        attach_image(project_id, it['index'], file_url(dest), cut_url, it.slice('photo', 'photoPrompt').compact)
-        gen_update(job_id, it['index'], status: 'completed', url: file_url(dest), cutout: cut_url)
+        extra = it.slice('photo', 'photoPrompt').compact.merge('full' => full, 'soul' => soul, 'qa' => full ? note : '')
+        attach_image(project_id, it['index'], file_url(dest), cut_url, extra)
+        gen_update(job_id, it['index'], status: 'completed', url: file_url(dest), cutout: cut_url, full: full, soul: soul, qa: full ? note : '')
       rescue StandardError => e
         gen_update(job_id, it['index'], status: 'failed', error: e.message)
       end
@@ -508,12 +575,13 @@ server.mount('/files', WEBrick::HTTPServlet::FileHandler, ROOT)
 # Biblioteca de imágenes: assets de marca, originales y subidas
 server.mount_proc('/api/assets') do |_req, res|
   groups = [
+    ['Marcas', MARCAS],
     ['Marca y referencias', File.join(ROOT, '01_SKILL_OPERATIVO/assets')],
     ['Archivos originales', File.join(ROOT, '02_ARCHIVOS_ORIGINALES')],
     ['Subidas', UPLOADS]
   ]
   out = groups.flat_map do |label, dir|
-    Dir.glob(File.join(dir, '**', '*')).sort.select { |f| IMAGE_EXT.include?(File.extname(f).downcase) }.map do |f|
+    Dir.glob(File.join(dir, '**', '*')).sort.select { |f| IMAGE_EXT.include?(File.extname(f).downcase) && f !~ %r{/(papelera|_papelera)/} }.map do |f|
       { group: label, name: File.basename(f), folder: File.dirname(f).sub(ROOT + '/', ''), url: file_url(f) }
     end
   end
@@ -557,7 +625,7 @@ server.mount_proc('/api/requests') do |req, res|
   if req.request_method == 'POST'
     r = body_json(req)
     b = r['brief'] || {}
-    r['id'] = r['id'].to_s.empty? ? "#{Time.now.strftime('%Y-%m-%d_%H%M')}_#{slug(BRANDS.dig(b['marca'], :name) || 'marca', 16)}_#{slug(b['tema'], 32)}" : slug(r['id'], 96)
+    r['id'] = r['id'].to_s.empty? ? "#{Time.now.strftime('%Y-%m-%d_%H%M')}_#{slug(brand_name(b['marca']), 16)}_#{slug(b['tema'], 32)}" : slug(r['id'], 96)
     r['createdAt'] ||= Time.now.iso8601
     r['status'] ||= 'pendiente'
     r['updatedAt'] = Time.now.iso8601
@@ -671,6 +739,64 @@ end
 server.mount_proc('/api/draft') do |req, res|
   b = body_json(req)
   json(res, claude_draft(b['brief'] || {}))
+rescue StandardError => e
+  json(res, { error: e.message }, 400)
+end
+
+# ---------- marcas y base de conocimiento (ver marcas.rb) ----------
+
+# GET /api/brands                    marcas para dibujar y crear + archivadas
+# GET /api/brands/<id>               ficha completa: recursos, datos, reglas, papelera, medidor (<id> puede ser _comun)
+# POST /api/brands                   crear marca
+# POST /api/brands/_draft            Claude arma el perfil de una marca nueva
+# POST /api/brands/_restore          recuperar una marca o persona archivada
+# POST /api/brands/<id>              guardar identidad, datos, personas y reglas
+# POST /api/brands/<id>/<acción>     add | update | delete | restore | purge | archive
+server.mount_proc('/api/brands') do |req, res|
+  id, action = req.path.sub(%r{\A/api/brands/?}, '').split('/').map { |x| URI.decode_www_form_component(x) }
+  if req.request_method == 'GET'
+    json(res, id ? brand_detail(id) : { brands: all_brands.map { |b| brand_public(b) }, archived: archived_list })
+  else
+    b = body_json(req)
+    case [id, action]
+    when [nil, nil] then json(res, { id: create_brand(b) })
+    when ['_draft', nil] then json(res, claude_brand_draft(b))
+    when ['_restore', nil] then json(res, { id: restore_archived(b['name']) })
+    else
+      case action
+      when nil then update_brand(id, b)
+      when 'add' then b['added'] = add_resource(id, b)
+      when 'update' then update_resource(id, b)
+      when 'delete' then delete_resource(id, b['path'])
+      when 'restore' then restore_resource(id, b['name'])
+      when 'purge' then purge_resource(id, b['name'])
+      when 'archive' then archive_brand(id)
+      else raise 'Acción desconocida.'
+      end
+      json(res, action == 'archive' ? { ok: true } : brand_detail(id).merge('added' => b['added']))
+    end
+  end
+rescue StandardError => e
+  json(res, { error: e.message }, 400)
+end
+
+# GET /api/people                    personas aprobadas con fotos y marcas que las usan
+# POST /api/people                   crear o guardar persona
+# POST /api/people/<id>/photo        op: add | update (active, move) | delete
+# POST /api/people/<id>/archive
+server.mount_proc('/api/people') do |req, res|
+  id, action = req.path.sub(%r{\A/api/people/?}, '').split('/')
+  if req.request_method == 'GET'
+    json(res, people_detail)
+  else
+    b = body_json(req)
+    case action
+    when nil then json(res, { id: save_person(b) })
+    when 'photo' then person_photo(id, b); json(res, { ok: true })
+    when 'archive' then archive_person(id); json(res, { ok: true })
+    else raise 'Acción desconocida.'
+    end
+  end
 rescue StandardError => e
   json(res, { error: e.message }, 400)
 end
