@@ -17,7 +17,8 @@ ARCHIVO  = File.join(MARCAS, '_papelera')
 [MARCAS, File.join(COMUN, 'conocimiento'), PERSONAS, ARCHIVO].each { |d| FileUtils.mkdir_p(d) }
 
 DOC_EXT = %w[.md .txt .pdf].freeze
-KINDS = { 'conocimiento' => DOC_EXT, 'referencias' => IMAGE_EXT, 'logos' => IMAGE_EXT }.freeze
+# vestuario/: outfits aprobados para las personas de la marca (ver nano_banana.rb)
+KINDS = { 'conocimiento' => DOC_EXT, 'referencias' => IMAGE_EXT, 'logos' => IMAGE_EXT, 'vestuario' => IMAGE_EXT }.freeze
 MAX_REF_IMAGES = 20     # referencias visuales activas que ve Claude en cada propuesta (van en caché)
 MAX_FACE_REFS = 8       # fotos de cara que se mandan a Higgsfield por foto
 BRAND_FIELDS = %w[name file swatch design theme colors fonts titleCase defaults look cutout personas datos logos byline modo plantillas motor_persona motor_imagen].freeze
@@ -153,7 +154,8 @@ def brand_public(b)
   byline = b['byline'] && b['byline'].merge((b['byline']['logos'] || {}).map { |k, l| [k, logo_public(dir, l)] }.to_h.compact)
   people = brand_people(b).map { |p| { 'id' => p['id'], 'name' => p['name'], 'aliases' => p['aliases'] || [], 'soul' => p['soul_id'].to_s != '',
                                      'photos' => (p['photos'] || []).select { |f| f['active'] }.map { |f| f.slice('name', 'url') } } }
-  b.reject { |k, _| %w[datos byline].include?(k) }.merge('logos' => logos, 'byline' => byline, 'people' => people)
+  outfits = (resources(dir)['vestuario'] || []).select { |r| r['active'] }.map { |r| r.slice('name', 'url', 'path') }
+  b.reject { |k, _| %w[datos byline].include?(k) }.merge('logos' => logos, 'byline' => byline, 'people' => people, 'outfits' => outfits)
 end
 
 # ---------- personas aprobadas ----------
@@ -362,8 +364,8 @@ def add_resource(id, f)
     _, bytes = decode_data_url(f['dataUrl'])
     ext = File.extname(f['name'].to_s).downcase
     raise "Formato no admitido (#{ext.empty? ? 'sin extensión' : ext})." unless KINDS[kind].include?(ext)
-    if kind == 'referencias'
-      # Las referencias solo las ve Claude: se guardan como JPEG de 1600 px para no inflar el repositorio.
+    if %w[referencias vestuario].include?(kind)
+      # Las referencias y los outfits solo sirven de guía: se guardan como JPEG de 1600 px para no inflar el repositorio.
       tmp = File.join(CACHE, "subida-#{stamp}#{ext}")
       File.binwrite(tmp, bytes)
       name = free_name(folder, safe_file_name(f['name'], '.jpg'))

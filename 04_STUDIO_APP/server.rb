@@ -521,7 +521,7 @@ def run_generation(job_id, project_id, items, quality)
         loop do
           if nbp
             gen_update(job_id, it['index'], status: 'generando (Nano Banana Pro 4K)')
-            prompt, images = nbp_request(it, persons, brand)
+            prompt, images = nbp_request(it.merge('project' => project_id), persons, brand)
             name = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{slug(project_id, 24)}-#{format('%02d', it['index'] + 1)}.png"
             dest = nbp_generate(prompt, images, File.join(UPLOADS, name))
             break

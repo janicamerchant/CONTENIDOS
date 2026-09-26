@@ -52,7 +52,7 @@ const soulFace = (id, s) => brandOf(id).motor_persona === 'soul'
 const slidePayload = (s) => ({
   layout: s.layout, kicker: s.kicker, title: s.title, body: s.body, number: s.number, numberLabel: s.numberLabel,
   items: s.items, leftLabel: s.leftLabel, leftItems: s.leftItems, rightLabel: s.rightLabel, rightItems: s.rightItems,
-  cta: s.cta, source: s.source, photo: s.photo, photoPrompt: s.photoPrompt, basePhoto: s.basePhoto || '',
+  cta: s.cta, source: s.source, photo: s.photo, photoPrompt: s.photoPrompt, basePhoto: s.basePhoto || '', outfit: s.outfit || '',
 });
 // La lámina nombra a una persona aprobada y la marca usa "foto real + escena" (ver foto_real.rb):
 // devuelve esa persona con su lista de fotos reales, o null.
@@ -71,7 +71,20 @@ function basePhotoPicker(p, s) {
   return `<label class="lbl" for="base-photo">Tu foto real (la IA solo cambia el lugar)</label>
     <select id="base-photo" class="inp">${o('', 'Automática según el diseño')}${rp.photos.map((f) => o(f.name, f.name.replace(/\.\w+$/, ''))).join('')}</select>
     ${thumb ? `<img class="base-thumb" src="${esc(thumb)}" alt="">` : ''}
-    <p class="help">Grok Imagine toma esta foto tuya y cambia solo el fondo, la luz y el lugar. Tu cara no se genera.</p>`;
+    <p class="help">La IA toma esta foto tuya y cambia el fondo, la luz y el lugar. Tu cara no se genera.</p>
+    ${outfitPicker(p, s)}`;
+}
+
+// Outfit de la lámina (06_MARCAS/<marca>/vestuario): automático = uno distinto por lámina
+function outfitPicker(p, s) {
+  const list = brandOf(p.brand).outfits || [];
+  if (!list.length) return '';
+  const val = s.outfit || '';
+  const o = (v, label) => `<option value="${esc(v)}" ${v === val ? 'selected' : ''}>${esc(label)}</option>`;
+  const thumb = list.find((f) => f.name === val)?.url;
+  return `<label class="lbl" for="outfit">Vestuario</label>
+    <select id="outfit" class="inp">${o('', 'Automático (uno distinto por lámina)')}${o('original', 'El de la foto real')}${list.map((f) => o(f.name, f.name.replace(/\.\w+$/, '').replace(/-/g, ' '))).join('')}</select>
+    ${thumb ? `<img class="base-thumb" src="${esc(thumb)}" alt="">` : ''}`;
 }
 const firstBrand = (pref) => (BRANDS[pref] ? pref : brandIds()[0] || 'sin-marca');
 
@@ -715,6 +728,7 @@ function bindInspector() {
     const t = e.target;
     if (t.dataset.c) { cur()[t.dataset.c] = t.checked; refreshSlide(); }
     if (t.id === 'base-photo') { cur().basePhoto = t.value; scheduleSave(); renderInspector(); }
+    if (t.id === 'outfit') { cur().outfit = t.value; scheduleSave(); renderInspector(); }
     if (t.dataset.upload && t.files[0]) {
       const slot = t.dataset.upload;
       uploadFile(t.files[0]).then((url) => setImage(url, slot)).catch(() => {});
@@ -1357,9 +1371,52 @@ function pickIdeaBrand(b) {
   ideaBrand = b;
   renderBrandPick($('#i-brand'), ideaBrand, pickIdeaBrand);
   $('#i-cta').placeholder = brandOf(b).defaults?.cta || '';
+  renderOutfits();
+}
+
+// Vestuario de la marca en Crear: outfits que la IA usa en las fotos de sus personas (06_MARCAS/<marca>/vestuario)
+function renderOutfits() {
+  const box = $('#i-outfits');
+  if (!box) return;
+  const br = brandOf(ideaBrand);
+  const show = br.motor_imagen === 'nano_banana_pro' && (br.people || []).length > 0;
+  box.hidden = !show;
+  if (!show) return;
+  const list = br.outfits || [];
+  const who = br.people.map((x) => x.name).join(', ');
+  box.innerHTML = `<label class="lbl">Vestuario de ${esc(who)}</label>
+    <p class="help">La IA viste a ${esc(who)} con uno de estos outfits en cada lámina (uno distinto por lámina). En el Editor puedes elegir otro. Sube fotos de outfits que te gusten: mejor si la ropa se ve completa.</p>
+    <div class="outfits">${list.map((f) => `<figure><img src="${esc(f.url)}" alt="${esc(f.name)}" title="${esc(f.name.replace(/\.\w+$/, '').replace(/-/g, ' '))}"><button type="button" class="x" data-outfit-del="${esc(f.path)}" aria-label="Quitar ${esc(f.name)}">×</button></figure>`).join('') || '<p class="empty">Todavía no hay outfits.</p>'}</div>
+    <label class="btn sm">Agregar outfits<input type="file" id="outfit-upload" accept="image/*" multiple hidden></label>`;
+}
+
+async function outfitRequest(action, body) {
+  const r = await api(`/api/brands/${encodeURIComponent(ideaBrand)}/${action}`, body);
+  BRANDS[ideaBrand] = { ...BRANDS[ideaBrand], outfits: r.outfits || [] };
+  renderOutfits();
+}
+
+function bindOutfits() {
+  const box = $('#i-outfits');
+  if (!box) return;
+  box.addEventListener('change', async (e) => {
+    if (e.target.id !== 'outfit-upload' || !e.target.files.length) return;
+    const files = [...e.target.files];
+    toast(`Subiendo ${files.length} outfit${files.length > 1 ? 's' : ''}…`);
+    try {
+      for (const f of files) await outfitRequest('add', { kind: 'vestuario', name: f.name, dataUrl: await readAsDataUrl(f) });
+      toast('Outfits agregados al vestuario.');
+    } catch (err) { toast(err.message, true); }
+  });
+  box.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-outfit-del]');
+    if (!b) return;
+    try { await outfitRequest('delete', { path: b.dataset.outfitDel }); toast('Outfit quitado (queda en la papelera de la marca).'); } catch (err) { toast(err.message, true); }
+  });
 }
 
 function bindCreate() {
+  bindOutfits();
   pickIdeaBrand(ideaBrand);
 
   $('#idea-form').addEventListener('submit', (e) => {

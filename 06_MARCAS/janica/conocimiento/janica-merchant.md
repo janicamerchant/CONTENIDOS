@@ -81,7 +81,16 @@ Reflexiva, elegante, honesta, directa, motivadora y con inteligencia emocional. 
 
 ## Vestuario
 
-- Business chic moderno, tipo Zara contemporáneo: sofisticado y juvenil.
-- Tops de un hombro, vestidos cortos con corte asimétrico, tops sin mangas, pantalón sastre negro de tiro alto, tonos marfil, beige, arena y negro.
-- Aretes dorados tipo argolla gruesa, anillo dorado.
-- Evitar blazers repetidos y outfits conservadores que la hagan ver mayor.
+Referencias aprobadas el 26-09-2026 en `06_MARCAS/janica/vestuario/` (25 outfits). En cada foto con Janica, la IA la viste con uno de ellos (uno distinto por lámina) y su cara sale de su foto real.
+
+- **Estilo:** quiet luxury, business chic moderno y femenino, sofisticado y juvenil. Siluetas ajustadas y limpias, cintura marcada, piernas o hombros al descubierto con elegancia.
+- **Paleta:** blanco, marfil, crema, beige, arena, taupe, camel, café, gris perla y gris a rayas. Toques puntuales de verde oliva y azul polvo. Nada de estampados llamativos.
+- **Prendas clave:**
+  - Vestidos midi blancos ajustados (un hombro con cinturón dorado, halter con cut-out, cuello alto con abertura).
+  - Vestidos blazer cortos (gris, marfil cruzado, café, verde oliva con un hombro).
+  - Blazers crop con falda plisada o minifalda; blazer blanco con cut-out.
+  - Tops blancos o beige (sin mangas, halter, un hombro, corset) con pantalón sastre de tiro alto y pierna ancha (beige, taupe, blanco, lino).
+  - Faldas midi con abertura o cruzadas (beige, café); sets de dos piezas (blanco con falda midi, gris a rayas, azul transparente).
+  - Jumpsuit blanco de satín con escote en V; blusa blanca de mangas globo con culotte gris; short beige con blazer marfil.
+- **Accesorios:** tacones nude, blancos o de tiras doradas; bolsos estructurados en crema, beige o camel; cinturones con hebilla dorada; argollas y cadenas doradas; lentes de sol oscuros en exteriores.
+- **Evitar:** blazers repetidos en el mismo carrusel, looks conservadores o de señora mayor, colores fuertes, logos visibles, el mismo outfit en portada y cierre.
