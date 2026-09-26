@@ -29,16 +29,16 @@
       "photo": "Janica Merchant de pie junto a una mesa de trabajo de madera clara en una oficina con ventanal, revisando en su laptop un panel de automatizaciones mientras el teléfono descansa boca abajo. Ocupa el lado derecho del encuadre y deja aire a la izquierda para el titular.",
       "photoPrompt": "Use the approved Janica Merchant reference for the face. A confident woman entrepreneur in modern business-chic attire stands beside a light wood worktable in a warm sunlit office with large windows and textured plaster walls, reviewing an automation dashboard on her laptop while her phone rests face down on the table, calm focused expression, medium wide shot, subject placed on the right third crossing slightly into the left empty space so headline type can pass partially behind her, soft natural window light, warm ivory and taupe palette, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
       "source": "",
-      "image": "/files/04_STUDIO_APP/data/uploads/20260925-123412-p1790300554116-01.png",
-      "cutout": "/files/04_STUDIO_APP/data/uploads/20260925-123412-p1790300554116-01-recorte.png",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260926-125136-p1790300554116-01.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260926-125136-p1790300554116-01-recorte.png",
       "ix": 50,
       "iy": 30,
       "iz": 1,
       "bw": false,
       "texture": false,
-      "ts": 1,
-      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260924-234953-p1790300554116-01.png",
-      "prevCutout": "",
+      "ts": 0.9,
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260925-123412-p1790300554116-01.png",
+      "prevCutout": "/files/04_STUDIO_APP/data/uploads/20260925-123412-p1790300554116-01-recorte.png",
       "full": false,
       "qa": "",
       "soul": false
@@ -237,5 +237,5 @@
       "soul": false
     }
   ],
-  "updatedAt": "2026-09-25T13:58:19-04:00"
+  "updatedAt": "2026-09-26T12:58:27-04:00"
 }
