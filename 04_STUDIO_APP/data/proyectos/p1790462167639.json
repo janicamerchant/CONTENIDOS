@@ -1,0 +1,69 @@
+{
+  "id": "p1790462167639",
+  "brand": "janica",
+  "name": "Post único — La presencia no se anuncia",
+  "caption": "Hay una diferencia entre ser visible y ser memorable.\n\nLo visible depende del algoritmo. Lo memorable depende de ti: de cómo trabajas cuando nadie mira, de cómo tratas a la gente cuando no hay cámara, de la calidad de lo que entregas cuando pudiste entregar menos.\n\nNo necesitas recordarle al mundo que existes todos los días. Necesitas construir algo tan sólido que, cuando desaparezcas unos días, tu nombre siga apareciendo en conversaciones donde tú no estás.\n\nEsa es la presencia que nadie te puede quitar.\n\nGuárdalo y compártelo con alguien que lo necesite.\n\n— Janica Merchant",
+  "concept": "Un solo post filosófico que recuerda que la presencia real no depende de la frecuencia con que publicas, sino de la marca que dejas cuando no estás. Fotografía editorial cálida: Janica de pie en un pasillo de vidrio con luz de tarde, plano medio, vestuario quiet luxury marfil. Paleta marfil, beige y piedra, tipografía serif monumental con un solo gesto lima. Tono reflexivo y de autoridad silenciosa: la afirmación es opinión de Janica, sin cifras. Funciona porque le da a la audiencia una frase que quiere guardar y repetir.",
+  "slides": [
+    {
+      "id": "3qkom30",
+      "layout": "portada",
+      "theme": "dark",
+      "kicker": "",
+      "title": "NO ESTAR NO ES DESAPARECER*",
+      "body": "Lo visible depende del algoritmo. Lo memorable depende de ti.",
+      "number": "",
+      "numberLabel": "",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Janica Merchant de pie en un pasillo de oficina con paredes de vidrio y piedra clara, seria, de tres cuartos, sosteniendo unos lentes de sol en la mano mientras mira hacia la ventana. Luz de tarde entrando de lado, sombras suaves de marcos sobre la pared. Ella ocupa el lado derecho; el lado izquierdo superior queda como pared marfil lisa para el titular, que roza su cabello.",
+      "photoPrompt": "Janica Merchant standing in a premium office corridor with glass partitions and pale stone walls, three-quarter medium shot, serious composed expression, holding dark sunglasses in one hand, looking toward the window; she wears a fitted ivory one-shoulder midi dress with a thin gold belt and gold hoop earrings; use the approved Janica Merchant reference for the face; warm natural late-afternoon sunlight from the side, soft window-frame shadows, ivory, beige, sand and light wood palette; subject placed on the right side of the frame crossing slightly into the left text area, clean smooth ivory wall left and upper-left for headline space; 4:5 vertical, hyperrealistic editorial photograph, natural skin texture, natural color, no text, no logos",
+      "source": "",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260926-193607-p1790462167639-01.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260926-193607-p1790462167639-01-recorte.png",
+      "ix": 0,
+      "iy": 69,
+      "iz": 1.18,
+      "dx": 16,
+      "dy": 16,
+      "bw": false,
+      "texture": false,
+      "ts": 0.72,
+      "full": false,
+      "soul": true,
+      "qa": "",
+      "motor": "hf_soul",
+      "tamano": "1k",
+      "outfit": "blazer-cafe-crop-falda-plisada.jpg",
+      "move": {
+        "title": [
+          -41,
+          -26
+        ],
+        "body": [
+          -33,
+          22
+        ],
+        "accent": [
+          -26,
+          48
+        ],
+        "sign": [
+          -34,
+          -24
+        ]
+      }
+    }
+  ],
+  "updatedAt": "2026-09-26T19:44:25-03:00"
+}
