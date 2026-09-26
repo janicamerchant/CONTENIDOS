@@ -96,6 +96,7 @@ function renderBrandPage() {
     ${common ? '' : factsHtml(d.datos || [])}
     ${refsHtml(res.referencias)}
     ${common ? '' : logosHtml(d, res.logos)}
+    ${common ? '' : outfitsHtml(d, res.vestuario || [])}
     ${common ? '' : brandPeopleHtml(d)}
     ${trashHtml(d.trash)}`;
   if (!common) updatePreview();
@@ -127,7 +128,8 @@ function identityFields(b, isNew = false) {
       <div class="field"><label class="lbl" for="mk-objetivo">Objetivo por defecto</label><select id="mk-objetivo" class="inp" name="objetivo">${OBJETIVOS.map((o) => opt(o, d.objetivo || 'Autoridad')).join('')}</select></div>
       <div class="field"><label class="lbl" for="mk-theme">Fondo por defecto de las láminas</label><select id="mk-theme" class="inp" name="theme">${opt('dark', b.theme || 'dark', 'Oscuro')}${opt('light', b.theme, 'Claro')}</select></div>
       <div class="field checks"><span class="lbl">Recorte automático</span><label><input type="checkbox" name="cutout" ${b.cutout ? 'checked' : ''}> Recortar a la persona de cada foto generada para que el titular pase detrás</label></div>
-      <div class="field full"><label class="lbl" for="mk-look">Estilo de foto (inglés, para Higgsfield)</label><textarea id="mk-look" class="inp" name="look" rows="2" placeholder="warm editorial photograph, soft natural light, real premium setting">${esc(b.look || '')}</textarea></div>
+      ${imageEngineFields(b)}
+      <div class="field full"><label class="lbl" for="mk-look">Estilo de foto (inglés, para el motor de imagen)</label><textarea id="mk-look" class="inp" name="look" rows="2" placeholder="warm editorial photograph, soft natural light, real premium setting">${esc(b.look || '')}</textarea></div>
       ${base ? `
       <div class="field full"><span class="lbl">Colores</span><div class="mk-colors">
         ${color('Acento', 'accent', c.accent)}${color('Fondo oscuro', 'darkBg', c.darkBg)}${color('Texto sobre oscuro', 'darkInk', c.darkInk)}${color('Fondo claro', 'lightBg', c.lightBg)}${color('Texto sobre claro', 'lightInk', c.lightInk)}
@@ -141,6 +143,19 @@ function identityFields(b, isNew = false) {
       <p class="hint full">Esta marca tiene diseño propio (<span class="mono">${esc(b.design)}</span>): sus colores, tipografías y composiciones están en <span class="mono">public/slides.css</span>.</p>`}
     </div>
     ${isNew ? '' : '<div class="form-actions"><button type="submit" class="btn accent">Guardar identidad</button><span class="hint" id="mk-id-hint"></span></div>'}`;
+}
+
+// Motor de imagen por defecto de la marca (Crear y el Editor lo pueden cambiar en cada carrusel o lámina)
+function imageEngineFields(b) {
+  const list = motores();
+  if (!list.length) return '';
+  const motor = motorInfo(b.motor_imagen) ? b.motor_imagen : state.cfg?.motorDefecto || list[0].id;
+  const cur = { motor, tamano: sizeFor(motor, b.tamano) };
+  const sizes = [...new Set(list.flatMap((m) => Object.keys(m.tamanos)))];
+  return `
+      <div class="field"><label class="lbl" for="mk-motor">Motor de imagen por defecto</label><select id="mk-motor" class="inp" name="motor_imagen">${list.map((m) => `<option value="${esc(m.id)}" ${m.id === motor ? 'selected' : ''}>${esc(m.nombre)} · ${esc(m.proveedor)}${m.disponible ? '' : ` (falta ${esc(m.env)})`}</option>`).join('')}</select></div>
+      <div class="field"><label class="lbl" for="mk-tamano">Tamaño por defecto</label><select id="mk-tamano" class="inp" name="tamano">${sizes.map((t) => opt(t, b.tamano || cur.tamano, t.toUpperCase())).join('')}</select></div>
+      <div class="field full"><label class="lbl" for="mk-mpersona">Fotos con personas aprobadas</label><select id="mk-mpersona" class="inp" name="motor_persona">${opt('foto_real', b.motor_persona || 'referencia', 'Partir de su foto real (la cara no se genera; solo cambia lugar, luz y vestuario)')}${opt('referencia', b.motor_persona === 'foto_real' ? '' : 'referencia', 'Generar la foto usando sus fotos de cara como referencia')}</select></div>`;
 }
 
 function identityHtml(d) {
@@ -161,6 +176,7 @@ function readIdentity(form, prev = {}) {
     out.titleCase = form.elements.titleCase.checked ? 'upper' : 'none';
   }
   if (form.elements.swatch) out.swatch = v('swatch');
+  if (form.elements.motor_imagen) Object.assign(out, { motor_imagen: v('motor_imagen'), tamano: v('tamano'), motor_persona: v('motor_persona') });
   return { ...prev, ...out };
 }
 
@@ -249,6 +265,23 @@ function refsHtml(list) {
     <div class="form-actions"><label class="btn sm">Subir imágenes<input type="file" data-upload-kind="referencias" accept="image/*" multiple hidden></label></div></section>`;
 }
 
+// Vestuario: outfits con los que la IA viste a las personas aprobadas (uno distinto por lámina, o el que se elija en el Editor)
+function outfitsHtml(d, list) {
+  const on = list.filter((r) => r.active).length;
+  const people = (d.personas || []).length;
+  return `<section class="mk-sec"><h2 class="sec-title">Vestuario · ${on} activos de ${list.length}</h2>
+    <p class="hint">Outfits aprobados para las personas de la marca. Cuando una lámina parte de la foto real de la persona, la IA la viste con uno de los activos (uno distinto por lámina; en el Editor puedes elegir otro). Sube fotos donde la ropa se vea completa; se guardan como JPEG de 1600 px en <span class="mono">vestuario/</span>.${people ? '' : ' <b>Esta marca no tiene personas aprobadas todavía</b>, así que el vestuario no se usa.'}</p>
+    <div class="mk-refs">${list.map((r) => `<figure class="mk-ref ${r.active ? '' : 'off'}" data-path="${esc(r.path)}">
+      <a href="${esc(r.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(r.url)}" alt="${esc(r.name)}"></a>
+      <figcaption>
+        <label class="mk-on"><input type="checkbox" data-res-active ${r.active ? 'checked' : ''}><span>${r.active ? 'Activo' : 'Inactivo'}</span></label>
+        <input class="inp sm mk-tags" data-res-tags value="${esc(r.tags.join(', '))}" placeholder="Etiquetas (ej. formal, verano)" aria-label="Etiquetas de ${esc(r.name)}">
+        <span class="mk-ref-name" title="${esc(r.name)}">${esc(r.name.replace(/\.\w+$/, '').replace(/-/g, ' '))}</span>
+        <button type="button" class="btn sm ghost danger" data-res-delete>Eliminar</button>
+      </figcaption></figure>`).join('') || '<p class="empty">Todavía no hay outfits.</p>'}</div>
+    <div class="form-actions"><label class="btn sm">Subir outfits<input type="file" data-upload-kind="vestuario" accept="image/*" multiple hidden></label></div></section>`;
+}
+
 function logosHtml(d, files) {
   const logos = d.logos || {};
   const used = new Set(Object.values(logos).map((l) => l.src));
@@ -278,14 +311,14 @@ function logosHtml(d, files) {
 function brandPeopleHtml(d) {
   const on = new Set(d.personas || []);
   return `<section class="mk-sec"><h2 class="sec-title">Personas aprobadas</h2>
-    <p class="hint">Si el guion pone a una de estas personas en una foto, se mandan sus fotos de cara a Higgsfield para conservar su rostro. <button type="button" class="btn sm ghost" data-goto-people>Gestionar personas</button></p>
+    <p class="hint">Si el guion pone a una de estas personas en una foto, se mandan sus fotos de cara al motor de imagen para conservar su rostro. <button type="button" class="btn sm ghost" data-goto-people>Gestionar personas</button></p>
     <div class="checks mk-people-pick">${(mk.people || []).map((p) => `<label><input type="checkbox" data-brand-person="${esc(p.id)}" ${on.has(p.id) ? 'checked' : ''}>
       ${p.photos[0] ? `<img src="${esc(p.photos[0].url)}" alt="">` : ''} ${esc(p.name)}</label>`).join('') || '<p class="empty">No hay personas aprobadas.</p>'}</div></section>`;
 }
 
 function trashHtml(list) {
   if (!list.length) return '';
-  const kinds = { conocimiento: 'Documento', referencias: 'Referencia', logos: 'Logo' };
+  const kinds = { conocimiento: 'Documento', referencias: 'Referencia', logos: 'Logo', vestuario: 'Outfit' };
   return `<section class="mk-sec"><details><summary class="sec-title">Papelera · ${list.length}</summary>
     <p class="hint">Lo eliminado queda aquí hasta que lo borres definitivamente.</p>
     <ul class="mk-reslist">${list.map((t) => `<li class="mk-res" data-trash="${esc(t.name)}">
@@ -300,7 +333,7 @@ function renderPeople() {
   $('#mk-main').innerHTML = `
     <header class="mk-head"><div><h1 class="h1">Personas aprobadas</h1>
       <p class="hint mono">06_MARCAS/_personas/</p></div></header>
-    <p class="lede">Caras reales que el generador debe respetar. Cada persona se puede usar en varias marcas. Las fotos se mandan a Higgsfield en este orden (la primera pesa más); desactiva las que suavizan los rasgos.</p>
+    <p class="lede">Caras reales que el generador debe respetar. Cada persona se puede usar en varias marcas. Las fotos se mandan al motor de imagen en este orden (la primera pesa más); desactiva las que suavizan los rasgos.</p>
     <form class="mk-sec mk-inline" id="mk-new-person"><label class="lbl" for="mk-np-name">Nueva persona</label>
       <input id="mk-np-name" class="inp" placeholder="Nombre completo" required><button type="submit" class="btn accent">Agregar</button></form>
     ${(mk.people || []).map((p) => `<form class="mk-sec mk-person" data-person="${esc(p.id)}" autocomplete="off">
@@ -415,7 +448,7 @@ async function uploadResources(id, input) {
       r = await brandApi(id, 'add', body);
     } catch (e) { toast(`${f.name}: ${e.message}`, true); }
   }
-  if (r) { await applyDetail(r, input.dataset.uploadKind === 'logos'); toast(files.length > 1 ? 'Archivos subidos.' : 'Archivo subido.'); }
+  if (r) { await applyDetail(r, ['logos', 'vestuario'].includes(input.dataset.uploadKind)); toast(files.length > 1 ? 'Archivos subidos.' : 'Archivo subido.'); }
 }
 
 // ---------------------------------------------------------------- documento (crear o editar)
@@ -526,7 +559,7 @@ function bindBrands() {
     const path = t.closest('[data-path]')?.dataset.path;
     try {
       if (t.dataset.uploadKind) await uploadResources(id, t);
-      else if (t.matches('[data-res-active]')) await applyDetail(await brandApi(id, 'update', { path, active: t.checked }));
+      else if (t.matches('[data-res-active]')) await applyDetail(await brandApi(id, 'update', { path, active: t.checked }), path.startsWith('vestuario/'));
       else if (t.matches('[data-res-tags]')) await applyDetail(await brandApi(id, 'update', { path, tags: t.value.split(',') }));
       else if (t.matches('[data-logo-key]')) {
         const slot = t.closest('[data-slot]').dataset.slot;
@@ -569,8 +602,8 @@ function bindBrands() {
       else if (b.id === 'mk-save-rules') saveBrand({ rules: $('#mk-rules').value }, false, 'Reglas guardadas.');
       else if (b.id === 'mk-new-doc') openDoc('');
       else if (b.matches('[data-res-edit]')) openDoc(path);
-      else if (b.matches('[data-res-delete]')) confirmClick(b, async () => { await applyDetail(await brandApi(id, 'delete', { path }), path.startsWith('logos/')); toast('Enviado a la papelera.'); });
-      else if (b.matches('[data-trash-restore]')) { await applyDetail(await brandApi(id, 'restore', { name: b.closest('[data-trash]').dataset.trash })); toast('Restaurado.'); }
+      else if (b.matches('[data-res-delete]')) confirmClick(b, async () => { await applyDetail(await brandApi(id, 'delete', { path }), /^(logos|vestuario)\//.test(path)); toast('Enviado a la papelera.'); });
+      else if (b.matches('[data-trash-restore]')) { await applyDetail(await brandApi(id, 'restore', { name: b.closest('[data-trash]').dataset.trash }), true); toast('Restaurado.'); }
       else if (b.matches('[data-trash-purge]')) confirmClick(b, async () => { await applyDetail(await brandApi(id, 'purge', { name: b.closest('[data-trash]').dataset.trash })); toast('Borrado definitivamente.'); });
       else if (b.id === 'mk-add-fact') {
         $('#mk-facts').insertAdjacentHTML('beforeend', factRow({}, $$('#mk-facts .mk-fact').length));

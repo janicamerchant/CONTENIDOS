@@ -6,7 +6,7 @@
 
 .slide {
   --ts: 1; --fit: 1;
-  --ix: 50%; --iy: 30%; --iz: 1;
+  --ix: 50%; --iy: 30%; --iz: 1; --dx: 0%; --dy: 0%;
   width: 1080px; height: 1350px;
   position: relative; overflow: hidden;
   background: var(--s-bg); color: var(--s-ink);
@@ -178,7 +178,9 @@
 .s-photo { position: absolute; z-index: 2; overflow: hidden; }
 .s-photo img {
   width: 100%; height: 100%; display: block; object-fit: cover;
-  object-position: var(--ix) var(--iy); transform: scale(var(--iz)); transform-origin: var(--ix) var(--iy);
+  object-position: var(--ix) var(--iy); transform-origin: var(--ix) var(--iy);
+  /* dx/dy: desplazamiento libre (se arrastra con el mouse en el Editor; admite negativos) */
+  transform: translate(var(--dx), var(--dy)) scale(var(--iz));
 }
 .bw .s-photo img { filter: grayscale(1) contrast(1.08); }
 .s-photo.empty {
@@ -192,7 +194,8 @@
 }
 .ph-note b { color: var(--s-ink); font-weight: 500; }
 
-.fitbox { overflow: hidden; }
+/* visible: los elementos se pueden arrastrar fuera de su caja en el Editor (fitSlide mide sin esos desplazamientos) */
+.fitbox { overflow: visible; }
 .front { z-index: 5; }
 .back { z-index: 1; }
 

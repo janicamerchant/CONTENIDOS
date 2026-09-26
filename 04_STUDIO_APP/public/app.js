@@ -43,12 +43,48 @@ const brandIds = () => Object.keys(BRANDS);
 const brandOf = (id) => BRANDS[id] || BRANDS[brandIds()[0]] || FALLBACK_BRAND;
 const brandFor = (p) => p.brandData || brandOf(p.brand);
 const designOf = (p) => brandFor(p).design || 'base';
-// Marcas en modo "lámina completa": Higgsfield genera foto + tipografía juntas (ver lamina_completa.rb)
+// Marcas en modo "lámina completa": el motor genera foto + tipografía juntas (ver lamina_completa.rb)
 const fullMode = (id) => brandOf(id).modo === 'completa';
-// La lámina nombra a una persona con Soul ID entrenado: la foto sale con Soul 2.0 (ver soul.rb)
-const soulFace = (id, s) => brandOf(id).motor_persona === 'soul'
-  && peopleIn(id, `${s.photo} ${s.photoPrompt}`).some((pid) => (brandOf(id).people || []).find((x) => x.id === pid)?.soul);
-// Textos de la lámina que el servidor manda a Higgsfield y luego revisa letra por letra
+
+// ---------------------------------------------------------------- motores de imagen (imagen.rb)
+// Todos por API key. Cada marca tiene su motor por defecto; Crear y el Editor pueden cambiarlo.
+const motores = () => state.cfg?.motores || [];
+const motorInfo = (id) => motores().find((m) => m.id === id);
+// El de la marca; si su API key no está en .env, el primero conectado (Soul solo si no hay otro)
+const brandMotor = (brandId) => {
+  const b = brandOf(brandId);
+  let id = motorInfo(b.motor_imagen) ? b.motor_imagen : state.cfg?.motorDefecto || 'nano_banana_pro';
+  if (!motorInfo(id)?.disponible) {
+    const ok = motores().filter((m) => m.disponible);
+    id = (ok.find((m) => m.id !== 'hf_soul') || ok[0] || { id }).id;
+  }
+  return { motor: id, tamano: sizeFor(id, b.tamano) };
+};
+const sizeFor = (motor, want) => {
+  const t = Object.keys(motorInfo(motor)?.tamanos || {});
+  return t.includes(want) ? want : t.includes(state.cfg?.tamanoDefecto) ? state.cfg.tamanoDefecto : t[0] || '2k';
+};
+const motorUsd = (motor, tamano) => motorInfo(motor)?.tamanos?.[tamano] ?? null;
+const motorLabel = (motor, tamano) => {
+  const m = motorInfo(motor);
+  if (!m) return motor || '';
+  return `${m.nombre}${Object.keys(m.tamanos).length > 1 ? ' ' + String(tamano).toUpperCase() : ''} · ${m.proveedor}`;
+};
+const usdLabel = (n) => (n == null ? 'precio sin medir' : `~$${n.toFixed(2)}`);
+// Selector de motor + tamaño. key distingue dónde vive (crear / editor).
+function motorPicker(key, sel, disabled = false) {
+  const m = motorInfo(sel.motor);
+  const sizes = Object.keys(m?.tamanos || {});
+  return `<div class="motor-pick">
+    <label class="lbl" for="${key}-motor">Motor de imagen</label>
+    <select id="${key}-motor" class="inp sm" data-motor="${key}" ${disabled ? 'disabled' : ''}>${motores().map((x) => `<option value="${esc(x.id)}" ${x.id === sel.motor ? 'selected' : ''} ${x.disponible ? '' : 'disabled'}>${esc(x.nombre)} · ${esc(x.proveedor)}${x.disponible ? '' : ` (falta ${esc(x.env)})`}</option>`).join('')}</select>
+    ${sizes.length > 1 ? `<select id="${key}-tamano" class="inp sm" data-tamano="${key}" aria-label="Tamaño" ${disabled ? 'disabled' : ''}>${sizes.map((t) => `<option value="${t}" ${t === sel.tamano ? 'selected' : ''}>${t.toUpperCase()} · ${usdLabel(m.tamanos[t])}</option>`).join('')}</select>` : `<span class="hint">${usdLabel(motorUsd(sel.motor, sel.tamano))} por foto</span>`}
+    ${m && !m.disponible ? `<p class="hint">Falta ${esc(m.env)} en 04_STUDIO_APP/.env. Agrégala y reinicia el Estudio.</p>` : ''}
+  </div>`;
+}
+const motorReady = (sel) => !!motorInfo(sel.motor)?.disponible;
+
+// Textos de la lámina que el servidor manda al motor de imagen y luego revisa letra por letra
 const slidePayload = (s) => ({
   layout: s.layout, kicker: s.kicker, title: s.title, body: s.body, number: s.number, numberLabel: s.numberLabel,
   items: s.items, leftLabel: s.leftLabel, leftItems: s.leftItems, rightLabel: s.rightLabel, rightItems: s.rightItems,
@@ -111,6 +147,33 @@ function loadFont(family) {
   link.onload = () => document.fonts.ready.then(() => { if (state.p && state.view === 'editor') renderEditor(); });
   document.head.appendChild(link);
 }
+
+// Fuente elegida para un elemento en el Editor: se piden todos los grosores y la cursiva.
+// Prueba primero como variable (300–900), luego pesos sueltos y al final la básica.
+const fullFonts = new Set();
+function loadFontFull(family) {
+  const f = String(family || '').trim();
+  if (!f || fullFonts.has(f)) return;
+  fullFonts.add(f);
+  const fam = encodeURIComponent(f).replace(/%20/g, '+');
+  const urls = [
+    `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,300..900;1,300..900&display=swap`,
+    `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap`,
+    `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,400;0,700;1,400;1,700&display=swap`,
+    `https://fonts.googleapis.com/css2?family=${fam}&display=swap`,
+  ];
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.crossOrigin = 'anonymous';
+  let i = 0;
+  link.href = urls[0];
+  link.onerror = () => { if (++i < urls.length) link.href = urls[i]; };
+  link.onload = () => document.fonts.ready.then(() => { if (state.p && state.view === 'editor') { renderStage(); state.p.slides.forEach((_, i) => renderThumb(i)); } });
+  document.head.appendChild(link);
+}
+// Fuentes para el selector: las de los diseños propios primero, luego la lista de Google Fonts de Marcas
+const EDIT_FONTS = () => [...new Set(['Bodoni Moda', 'Instrument Serif', 'Montserrat', 'Cormorant Garamond', 'Playfair Display',
+  'DM Serif Display', 'Libre Baskerville', 'Lora', 'Fraunces', 'Archivo', 'Anton', 'Barlow', 'Jost', ...(typeof GOOGLE_FONTS !== 'undefined' ? GOOGLE_FONTS : [])])].sort((a, b) => a.localeCompare(b));
 
 // Personas aprobadas que aparecen en un texto (por nombre o alias, sin importar tildes)
 const plain = (t) => String(t || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -216,7 +279,7 @@ function blankSlide(layout = 'frase', brand = 'eva', over = {}) {
     id: uid(), layout, theme: brandOf(brand).theme || 'dark',
     kicker: '', title: '', body: '', number: '', numberLabel: '', items: [],
     leftLabel: '', leftItems: [], rightLabel: '', rightItems: [], cta: '',
-    photo: '', photoPrompt: '', source: '', image: '', cutout: '', ix: 50, iy: 30, iz: 1,
+    photo: '', photoPrompt: '', source: '', image: '', cutout: '', ix: 50, iy: 30, iz: 1, dx: 0, dy: 0,
     bw: false, texture: false, ts: 1,
     ...over,
   };
@@ -472,6 +535,8 @@ function buildSlide(p, s, i, n) {
   el.style.setProperty('--ix', s.ix + '%');
   el.style.setProperty('--iy', s.iy + '%');
   el.style.setProperty('--iz', s.iz);
+  el.style.setProperty('--dx', (s.dx || 0) + '%');
+  el.style.setProperty('--dy', (s.dy || 0) + '%');
   // Lámina completa: la imagen ya trae la tipografía; no se dibuja nada encima.
   if (s.full && s.image) {
     el.classList.add('full');
@@ -500,11 +565,49 @@ function buildSlide(p, s, i, n) {
       el.appendChild(c);
     });
   }
+  applyMoves(el, s);
   return el;
 }
 
+// Elementos que se pueden arrastrar en el Editor. Cada uno guarda su desplazamiento en s.move[clave] = [x, y]
+// (px de la lámina de 1080). Se aplica con la propiedad translate, que no choca con los transform del diseño.
+const MOVABLE = [
+  ['kicker', '.s-kicker'], ['title', '.s-title'], ['body', '.s-body, .j-lede'], ['source', '.s-source'],
+  ['accent', '.j-lime'], ['number', '.s-number'], ['numlabel', '.s-numlabel'], ['items', '.s-items'],
+  ['cols', '.s-cols'], ['lines', '.j-line'], ['punch', '.j-punch'], ['cta', '.s-chip, .j-save'],
+  ['sign', '.s-sign'], ['count', '.s-count'], ['quote', '.quote'],
+];
+const PART_LABEL = { kicker: 'Antetítulo', title: 'Titular', body: 'Texto de apoyo', source: 'Fuente del dato', accent: 'Línea de acento',
+  number: 'Cifra', numlabel: 'Texto de la cifra', items: 'Lista', cols: 'Columnas', lines: 'Líneas', punch: 'Remate', cta: 'Botón / CTA',
+  sign: 'Firma', count: 'Contador', quote: 'Comillas' };
+// s.fx[clave] = { scale, font, weight, italic: 'si' | 'no' }: tamaño con el mouse y tipografía desde el panel
+function applyMoves(el, s) {
+  MOVABLE.forEach(([k, sel]) => $$(sel, el).forEach((n) => {
+    n.classList.add('mv');
+    n.dataset.mv = k;
+    const m = s.move?.[k];
+    const f = s.fx?.[k] || {};
+    n.style.translate = m ? `${m[0]}px ${m[1]}px` : '';
+    n.style.scale = f.scale && f.scale !== 1 ? String(f.scale) : '';
+    n.style.fontFamily = f.font ? `'${f.font}', serif` : '';
+    n.style.fontWeight = f.weight || '';
+    n.style.fontStyle = f.italic === 'si' ? 'italic' : f.italic === 'no' ? 'normal' : '';
+    if (f.font) loadFontFull(f.font);
+    // Capa respecto a la persona (solo con recorte): la copia de encima (.over) se muestra u oculta
+    if (n.closest('.over')) {
+      const layer = s.layer?.[k];
+      n.style.visibility = layer === 'front' ? 'visible' : layer === 'back' ? 'hidden' : '';
+    }
+  }));
+}
+// Por defecto (slides.css) solo el titular y la cifra pasan detrás de la persona
+const layerOf = (s, k) => s.layer?.[k] || (['title', 'number'].includes(k) ? 'back' : 'front');
+
 // Reduce el texto hasta que quepa en su caja (el slider de titular sigue mandando)
 function fitSlide(el) {
+  // Se mide sin los desplazamientos manuales y luego se devuelven
+  const moved = $$('.mv', el).filter((n) => n.style.translate || n.style.scale).map((n) => [n, n.style.translate, n.style.scale]);
+  moved.forEach(([n]) => { n.style.translate = ''; n.style.scale = ''; });
   $$('.fitbox', el).forEach((box) => {
     let k = 1;
     box.style.setProperty('--fit', 1);
@@ -514,6 +617,7 @@ function fitSlide(el) {
       box.style.setProperty('--fit', k.toFixed(3));
     }
   });
+  moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
 }
 
 // ---------------------------------------------------------------- estado
@@ -548,6 +652,7 @@ function renderStage() {
   inner.replaceChildren(el);
   fitSlide(el);
   fitStage();
+  markSelection();
   $('#pos').textContent = `${state.sel + 1} / ${n}`;
 }
 
@@ -601,6 +706,7 @@ function renderBrandPick(container, value, onPick) {
 
 function renderEditor() {
   $('#p-name').value = state.p.name || '';
+  $('#btn-export-all').textContent = state.p.slides.length === 1 ? 'Exportar post' : 'Exportar carrusel';
   renderBrandPick($('#brand-pick'), state.p.brand, (b) => {
     state.p.brand = b;
     renderEditor();
@@ -611,6 +717,157 @@ function renderEditor() {
   renderInspector();
 }
 
+// Elemento seleccionado en la lámina (clave de MOVABLE). Se marca con un recuadro y una esquina para cambiar su tamaño.
+function markSelection() {
+  const inner = $('#stage-inner');
+  const slide = inner?.firstElementChild;
+  $('#sel-handle')?.remove();
+  if (!slide || !state.part) return;
+  const nodes = $$(`[data-mv="${state.part}"]`, slide);
+  if (!nodes.length) { state.part = null; return; }
+  nodes.forEach((n) => n.classList.add('sel'));
+  const main = nodes.find((n) => !n.closest('.over')) || nodes[0];
+  const r = main.getBoundingClientRect(), ir = inner.getBoundingClientRect();
+  const h = document.createElement('div');
+  h.id = 'sel-handle';
+  h.title = 'Arrastra para agrandar o achicar';
+  h.style.left = `${r.right - ir.left}px`;
+  h.style.top = `${r.bottom - ir.top}px`;
+  inner.appendChild(h);
+}
+
+// Mouse sobre la lámina: clic selecciona un elemento (titular, texto, línea, firma…) y arrastrarlo lo mueve;
+// la esquina del recuadro cambia su tamaño; en una zona sin texto se arrastra la foto con su recorte.
+// Doble clic devuelve el elemento (o la foto) a su lugar. Esc quita la selección.
+function bindPhotoDrag() {
+  const inner = $('#stage-inner');
+  let drag = null;
+  const setOut = (k, v) => {
+    const r = $(`#r-${k}`);
+    if (r) { r.value = v; r.nextElementSibling.textContent = v + '%'; }
+  };
+  const hitPart = (e) => {
+    const slide = inner.firstElementChild;
+    return document.elementsFromPoint(e.clientX, e.clientY).find((n) => n.dataset?.mv && slide?.contains(n));
+  };
+  const nodesOf = (slide, key) => $$(`[data-mv="${key}"]`, slide);
+  inner.addEventListener('pointerdown', (e) => {
+    const s = state.p && cur();
+    const slide = inner.firstElementChild;
+    if (!s || !slide || e.button !== 0 || slide.classList.contains('full')) return;
+    if (e.target.id === 'sel-handle' && state.part) {
+      // Tamaño: distancia al centro del elemento
+      const main = nodesOf(slide, state.part).find((n) => !n.closest('.over'));
+      const r = main.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      drag = { mode: 'scale', key: state.part, cx, cy, d0: Math.hypot(e.clientX - cx, e.clientY - cy) || 1,
+        s0: s.fx?.[state.part]?.scale || 1, nodes: nodesOf(slide, state.part) };
+    } else {
+      const part = hitPart(e);
+      if (part) {
+        const key = part.dataset.mv;
+        if (state.part !== key) { state.part = key; renderInspector(); markSelection(); }
+        drag = { mode: 'move', key, x: e.clientX, y: e.clientY, start: s.move?.[key] || [0, 0],
+          k: slide.getBoundingClientRect().width / 1080, nodes: nodesOf(slide, key) };
+      } else {
+        if (state.part) { state.part = null; renderInspector(); markSelection(); }
+        const box = slide.querySelector('.s-photo:not(.s-cut)');
+        if (!s.image || !box) return;
+        const r = box.getBoundingClientRect();
+        drag = { mode: 'photo', x: e.clientX, y: e.clientY, dx: s.dx || 0, dy: s.dy || 0, w: r.width, h: r.height };
+      }
+    }
+    drag.el = slide;
+    drag.changed = false;
+    inner.setPointerCapture(e.pointerId);
+    inner.classList.add('dragging');
+    e.preventDefault();
+  });
+  inner.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const s = cur();
+    drag.changed = true;
+    if (drag.mode === 'scale') {
+      const sc = Math.max(0.3, Math.min(4, Math.round(drag.s0 * (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) / drag.d0) * 100) / 100));
+      s.fx = { ...(s.fx || {}), [drag.key]: { ...(s.fx?.[drag.key] || {}), scale: sc } };
+      drag.nodes.forEach((n) => { n.style.scale = String(sc); });
+      const out = $('#fx-scale');
+      if (out) { out.value = sc; out.nextElementSibling.textContent = sc + '×'; }
+    } else if (drag.mode === 'move') {
+      const x = Math.round(drag.start[0] + (e.clientX - drag.x) / drag.k);
+      const y = Math.round(drag.start[1] + (e.clientY - drag.y) / drag.k);
+      s.move = { ...(s.move || {}), [drag.key]: [x, y] };
+      drag.nodes.forEach((n) => { n.style.translate = `${x}px ${y}px`; });
+    } else {
+      const clamp = (v) => Math.max(-100, Math.min(100, Math.round(v)));
+      s.dx = clamp(drag.dx + ((e.clientX - drag.x) / drag.w) * 100);
+      s.dy = clamp(drag.dy + ((e.clientY - drag.y) / drag.h) * 100);
+      drag.el.style.setProperty('--dx', s.dx + '%');
+      drag.el.style.setProperty('--dy', s.dy + '%');
+      setOut('dx', s.dx);
+      setOut('dy', s.dy);
+    }
+    markSelection();
+  });
+  const end = () => {
+    if (!drag) return;
+    const { changed, mode } = drag;
+    drag = null;
+    inner.classList.remove('dragging');
+    if (!changed) return;
+    renderThumb(state.sel);
+    scheduleSave();
+    if (mode !== 'photo') renderInspector();
+  };
+  inner.addEventListener('pointerup', end);
+  inner.addEventListener('pointercancel', end);
+  inner.addEventListener('dblclick', (e) => {
+    const s = state.p && cur();
+    if (!s) return;
+    const part = hitPart(e);
+    if (part) { const m = { ...(s.move || {}) }; delete m[part.dataset.mv]; s.move = m; }
+    else if (s.image) Object.assign(s, { dx: 0, dy: 0 });
+    else return;
+    refreshSlide();
+    renderInspector();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.part && state.view === 'editor' && !e.target.closest('input, textarea, select')) {
+      state.part = null; renderInspector(); markSelection();
+    }
+  });
+}
+
+// Panel del elemento seleccionado: tamaño, tipo de letra, grosor y cursiva
+function partPanel(s) {
+  const k = state.part;
+  if (!k) return '';
+  const f = s.fx?.[k] || {};
+  const o = (v, cur, label) => `<option value="${esc(v)}" ${String(v) === String(cur ?? '') ? 'selected' : ''}>${esc(label)}</option>`;
+  const weights = [['', 'Del diseño'], ['300', 'Light 300'], ['400', 'Regular 400'], ['500', 'Medium 500'], ['600', 'Semibold 600'], ['700', 'Bold 700'], ['800', 'Extra bold 800'], ['900', 'Black 900']];
+  const sc = f.scale || 1;
+  return `<section class="sec part-sec">
+      <h3 class="sec-title">Seleccionado · ${esc(PART_LABEL[k] || k)}</h3>
+      <label class="range"><span>Tamaño</span><input type="range" id="fx-scale" min="0.3" max="4" step="0.01" value="${sc}" data-fx="scale"><output>${sc}×</output></label>
+      <label class="lbl" for="fx-font">Tipo de letra</label>
+      <select id="fx-font" class="inp" data-fx="font">${o('', f.font, 'Del diseño')}${EDIT_FONTS().map((x) => o(x, f.font, x)).join('')}</select>
+      <span class="lbl">Capa</span>
+      ${s.image && s.cutout ? `<div class="seg" role="group" aria-label="Capa">
+        <button type="button" data-layer="front" aria-pressed="${layerOf(s, k) === 'front'}">Delante de la persona</button>
+        <button type="button" data-layer="back" aria-pressed="${layerOf(s, k) === 'back'}">Detrás de la persona</button></div>`
+      : `<p class="help">Para poner el texto detrás de la persona, la foto necesita su <b>Recorte</b> (sección Foto → Recorte automático).</p>`}
+      <div class="fx-row">
+        <select class="inp" data-fx="weight" aria-label="Grosor">${weights.map(([v, l]) => o(v, f.weight, l)).join('')}</select>
+        <select class="inp" data-fx="italic" aria-label="Cursiva">${o('', f.italic, 'Cursiva: del diseño')}${o('no', f.italic, 'Sin cursiva')}${o('si', f.italic, 'Cursiva')}</select>
+      </div>
+      <p class="help">Arrastra el elemento para moverlo y la esquina lima para agrandarlo o achicarlo. Doble clic lo devuelve a su lugar; Esc quita la selección.</p>
+      <div class="form-actions">
+        <button type="button" class="btn sm ghost" id="fx-reset">Restablecer este elemento</button>
+        <button type="button" class="btn sm ghost" id="fx-done">Listo</button>
+      </div>
+    </section>`;
+}
+
 function refreshSlide() {
   renderStage();
   renderThumb(state.sel);
@@ -619,6 +876,7 @@ function refreshSlide() {
 
 function select(i) {
   state.sel = Math.max(0, Math.min(state.p.slides.length - 1, i));
+  state.part = null;
   $$('#strip .thumb').forEach((t) => t.setAttribute('aria-current', String(+t.dataset.i === state.sel)));
   renderStage();
   renderInspector();
@@ -666,6 +924,7 @@ function renderInspector() {
       ${designOf(p) === 'eva' ? '<p class="help">Fondo geométrico con textura, papel rasgado y adornos de borde: siempre activos en EVA (regla de acabado).</p>' : ''}
     </section>
 
+    ${partPanel(s)}
     <section class="sec">
       <h3 class="sec-title">Texto</h3>
       ${s.full && s.image ? `<div class="photo-status ${s.qa ? 'low' : 'ok'}"><b>Lámina completa</b> · el texto está dentro de la imagen. Si cambias algo aquí, pulsa <b>Regenerar lámina completa</b>.${s.qa ? `<div class="missing">Revisión: ${esc(s.qa)}</div>` : ''}</div>` : ''}
@@ -675,23 +934,34 @@ function renderInspector() {
       ${field('Texto de apoyo', 'body', 'textarea', 3)}
       ${field('Fuente del dato', 'source', 'text', 2, 'Obligatoria si la lámina tiene una cifra externa. Ej.: CBO, junio 2024.')}
       ${range('Titular', 'ts', 0.6, 1.4, 0.02, '×')}
+      <p class="help">Haz clic en cualquier elemento de la lámina (titular, texto, línea, firma…) para seleccionarlo: se arrastra para moverlo y su esquina cambia el tamaño; aquí arriba eliges letra, grosor y cursiva.</p>
+      ${Object.keys(s.move || {}).length || Object.keys(s.fx || {}).length || Object.keys(s.layer || {}).length ? '<button type="button" class="btn sm ghost" id="reset-moves">Devolver todo a su lugar y estilo</button>' : ''}
     </section>
 
     <section class="sec">
       <h3 class="sec-title">Foto</h3>
       ${photoStatus()}
       ${field('Escena de la foto', 'photo', 'textarea', 3, 'Qué pasa en la foto y por qué cuenta el titular: quién hace qué, dónde, con qué objeto. Una persona aprobada de la marca solo si su acción explica la idea.')}
-      ${field('Prompt para generar (inglés)', 'photoPrompt', 'textarea', 4, 'Es lo que se envía a Higgsfield al generar o regenerar. Si lo dejas vacío, se arma desde la escena.')}
+      ${field('Prompt para generar (inglés)', 'photoPrompt', 'textarea', 4, 'Es lo que se envía al motor de imagen al generar o regenerar. Si lo dejas vacío, se arma desde la escena.')}
+      ${s.image && s.motor ? `<p class="help">Foto actual hecha con ${esc(motorLabel(s.motor, s.tamano))}.</p>` : ''}
+      ${s.photo || s.photoPrompt || fullMode(p.brand) ? motorPicker('editor', editorMotor(), !!state.egen) : ''}
       <div class="form-actions">
         <button type="button" class="btn sm ghost" id="copy-prompt">Copiar prompt</button>
-        ${state.cfg?.hasHF && (s.photo || s.photoPrompt || fullMode(p.brand)) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? (state.egen.status || 'Generando…') : realPerson(p.brand, s) ? (s.image ? 'Regenerar escena con tu foto real' : 'Crear escena con tu foto real') : soulFace(p.brand, s) ? (s.image ? 'Regenerar foto con Soul (tu cara)' : 'Generar foto con Soul (tu cara)') : fullMode(p.brand) ? (s.image ? 'Regenerar lámina completa' : 'Generar lámina completa') : s.image ? 'Regenerar foto con Higgsfield' : 'Generar foto con Higgsfield'}</button>` : ''}
+        ${s.photo || s.photoPrompt || fullMode(p.brand) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen || !motorReady(editorMotor()) ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? (state.egen.status || 'Generando…') : editorMotor().motor === 'hf_soul' ? (s.image ? 'Regenerar foto con Soul' : 'Generar foto con Soul') : realPerson(p.brand, s) ? (s.image ? 'Regenerar escena con tu foto real' : 'Crear escena con tu foto real') : fullMode(p.brand) ? (s.image ? 'Regenerar lámina completa' : 'Generar lámina completa') : s.image ? 'Regenerar foto' : 'Generar foto'}</button>` : ''}
       </div>
-      ${state.cfg?.hasHF && (s.photo || s.photoPrompt) ? `<p class="help">~${state.cfg.hfCredits?.high ?? 2.75} créditos. Usa el prompt de arriba${peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`).map((id) => ` y la cara de ${esc(personName(p.brand, id))}`).join('')}; la foto actual queda guardada.</p>` : ''}
+      ${s.photo || s.photoPrompt ? `<p class="help">${usdLabel(motorUsd(editorMotor().motor, editorMotor().tamano))}. Usa el prompt de arriba${peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`).map((id) => ` y la cara de ${esc(personName(p.brand, id))}`).join('')}; la foto actual queda guardada.</p>` : ''}
       ${s.prevImage ? `<button type="button" class="btn sm ghost" id="undo-photo">Volver a la foto anterior</button>` : ''}
       ${imgSlot('image', 'Foto', s.image)}
-      ${s.image ? range('Horizontal', 'ix', 0, 100, 1, '%') + range('Vertical', 'iy', 0, 100, 1, '%') + range('Zoom', 'iz', 1, 2.5, 0.02, '×') : ''}
+      ${s.image ? `<p class="help">Arrastra la foto en la lámina (en una zona sin texto) para moverla; doble clic la centra. Foto y recorte se mueven juntos.</p>`
+        + range('Horizontal', 'dx', -100, 100, 1, '%') + range('Vertical', 'dy', -100, 100, 1, '%') + range('Zoom', 'iz', 1, 2.5, 0.02, '×')
+        + `<details class="fine"><summary>Encuadre dentro de la foto</summary>${range('Recorte horizontal', 'ix', 0, 100, 1, '%')}${range('Recorte vertical', 'iy', 0, 100, 1, '%')}</details>` : ''}
       ${s.image ? imgSlot('cutout', 'Recorte', s.cutout, 'La misma foto sin fondo (PNG). Se pone encima del titular para que las letras queden detrás de la persona u objeto. Revisa que la palabra clave se siga leyendo.') : ''}
-      ${s.image && !s.cutout ? '<button type="button" class="btn sm" id="auto-cut">Recorte automático</button>' : ''}
+      ${s.image && !s.cutout ? '<button type="button" class="btn sm" id="auto-cut">Recorte automático</button><p class="help">Con el recorte puedes poner la persona delante o detrás del texto.</p>' : ''}
+      ${s.image && s.cutout ? `<span class="lbl">Persona y texto</span><div class="seg" role="group" aria-label="Persona y texto">
+        <button type="button" data-layer-all="back">Persona delante de todo</button>
+        <button type="button" data-layer-all="front">Texto delante de todo</button>
+        <button type="button" data-layer-all="diseno">Como el diseño</button></div>
+        <p class="help">Para un solo elemento, selecciónalo en la lámina y elige su capa arriba.</p>` : ''}
       ${basePhotoPicker(p, s)}
       <div class="checks">
         <label><input type="checkbox" data-c="bw" ${s.bw ? 'checked' : ''}> Blanco y negro</label>
@@ -711,13 +981,22 @@ function bindInspector() {
   ins.addEventListener('input', (e) => {
     const t = e.target;
     const s = cur();
+    if (t.dataset.fx && state.part) {
+      const v = t.dataset.fx === 'scale' ? parseFloat(t.value) : t.value;
+      const fx = { ...(s.fx?.[state.part] || {}), [t.dataset.fx]: v };
+      if (!v || v === 1) delete fx[t.dataset.fx];
+      s.fx = { ...(s.fx || {}), [state.part]: fx };
+      if (t.dataset.fx === 'scale') t.nextElementSibling.textContent = v + '×';
+      refreshSlide();
+      return;
+    }
     if (t.dataset.k) {
       const k = t.dataset.k;
       s[k] = Array.isArray(s[k]) ? t.value.split('\n') : t.value;
       refreshSlide();
     } else if (t.dataset.r) {
       s[t.dataset.r] = parseFloat(t.value);
-      t.nextElementSibling.textContent = t.value + (t.dataset.r === 'ix' || t.dataset.r === 'iy' ? '%' : '×');
+      t.nextElementSibling.textContent = t.value + (t.dataset.r === 'iz' ? '×' : '%');
       refreshSlide();
     } else if (t.id === 'p-caption') {
       state.p.caption = t.value;
@@ -729,6 +1008,11 @@ function bindInspector() {
     if (t.dataset.c) { cur()[t.dataset.c] = t.checked; refreshSlide(); }
     if (t.id === 'base-photo') { cur().basePhoto = t.value; scheduleSave(); renderInspector(); }
     if (t.id === 'outfit') { cur().outfit = t.value; scheduleSave(); renderInspector(); }
+    if (t.dataset.motor === 'editor' || t.dataset.tamano === 'editor') {
+      const motor = $('#editor-motor').value;
+      state.emotor = { projectId: state.p.id, motor, tamano: sizeFor(motor, $('#editor-tamano')?.value) };
+      renderInspector();
+    }
     if (t.dataset.upload && t.files[0]) {
       const slot = t.dataset.upload;
       uploadFile(t.files[0]).then((url) => setImage(url, slot)).catch(() => {});
@@ -738,6 +1022,20 @@ function bindInspector() {
     const b = e.target.closest('button');
     if (!b) return;
     const s = cur();
+    if (b.id === 'reset-moves') { s.move = {}; s.fx = {}; s.layer = {}; refreshSlide(); renderInspector(); return; }
+    if (b.id === 'fx-reset' && state.part) {
+      const m = { ...(s.move || {}) }, f = { ...(s.fx || {}) }, l = { ...(s.layer || {}) };
+      delete m[state.part]; delete f[state.part]; delete l[state.part];
+      Object.assign(s, { move: m, fx: f, layer: l });
+      refreshSlide(); renderInspector(); return;
+    }
+    if (b.dataset.layer && state.part) { s.layer = { ...(s.layer || {}), [state.part]: b.dataset.layer }; refreshSlide(); renderInspector(); return; }
+    if (b.dataset.layerAll) {
+      // Todo el texto delante o detrás de la persona; "diseño" vuelve a lo de siempre
+      s.layer = b.dataset.layerAll === 'diseno' ? {} : Object.fromEntries(MOVABLE.map(([k]) => [k, b.dataset.layerAll]));
+      refreshSlide(); renderInspector(); return;
+    }
+    if (b.id === 'fx-done') { state.part = null; renderStage(); renderInspector(); return; }
     if (b.dataset.layout) { s.layout = b.dataset.layout; refreshSlide(); renderInspector(); }
     else if (b.dataset.theme) { s.theme = b.dataset.theme; refreshSlide(); renderInspector(); }
     else if (b.dataset.pick) openAssets(b.dataset.pick);
@@ -798,14 +1096,17 @@ function promptFor(s, brand = state.p.brand) {
   return `${scene}. ${brandOf(brand).look || ''}. Vertical 4:5 composition with empty space for a large headline. Hyperrealistic, natural skin texture, real pores, natural hands, no text, no logos, no watermark.`;
 }
 
-// Regenera la foto de una lámina desde el Editor con la API de Higgsfield
+// Motor elegido en el Editor para este proyecto (si no se tocó, el de la marca)
+const editorMotor = () => (state.emotor?.projectId === state.p?.id ? state.emotor : brandMotor(state.p?.brand));
+
+// Regenera la foto de una lámina desde el Editor con el motor elegido
 async function regenerateInEditor(i) {
   const p = state.p, s = p.slides[i];
   clearTimeout(state.saveTimer);
   await saveProject();                    // el servidor escribe la foto nueva sobre el proyecto guardado
   try {
     const r = await api('/api/generate', {
-      projectId: p.id, quality: 'high',
+      projectId: p.id, ...editorMotor(),
       items: [{ index: i, prompt: promptFor(s, p.brand), people: peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`), photo: s.photo, photoPrompt: s.photoPrompt,
         slide: slidePayload(s), count: `${i + 1}/${p.slides.length}` }],
     });
@@ -835,7 +1136,7 @@ async function pollEditorGen() {
     if (x.status === 'completed' && state.p?.id === g.projectId) {
       const s = state.p.slides[g.index];
       if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
-      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, full: !!x.full, soul: !!x.soul, qa: x.qa || '' });
+      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '' });
       renderThumb(g.index);
       if (state.sel === g.index) renderStage();
       scheduleSave();
@@ -852,7 +1153,7 @@ async function pollEditorGen() {
 function setImage(url, slot = 'image') {
   const s = cur();
   s[slot] = url;
-  if (slot === 'image') { s.ix = 50; s.iy = 30; s.iz = 1; }
+  if (slot === 'image') Object.assign(s, { ix: 50, iy: 30, iz: 1, dx: 0, dy: 0 });
   refreshSlide();
   renderInspector();
 }
@@ -913,7 +1214,7 @@ async function renderForExport(i) {
   await Promise.all($$('img', el).map((img) => (img.complete ? Promise.resolve() : new Promise((r) => { img.onload = img.onerror = r; }))));
   await document.fonts.ready;
   fitSlide(el);
-  const fk = state.p.brand;
+  const fk = state.p.brand + '|' + [...new Set(state.p.slides.flatMap((x) => Object.values(x.fx || {}).map((f) => f.font).filter(Boolean)))].sort().join(',');
   if (fontCSS[fk] === undefined) {
     try { fontCSS[fk] = await htmlToImage.getFontEmbedCSS(el); } catch (e) { console.warn('Fuentes sin incrustar', e); fontCSS[fk] = ''; }
   }
@@ -1229,15 +1530,15 @@ function propCard(s, i) {
       </div>
       <div class="pc-photo">
         <div class="checks">
-          <label><input type="checkbox" data-i="${i}" data-c="gen" ${s.gen ? 'checked' : ''} ${busy ? 'disabled' : ''}> Generar foto con Higgsfield</label>
+          <label><input type="checkbox" data-i="${i}" data-c="gen" ${s.gen ? 'checked' : ''} ${busy ? 'disabled' : ''}> Generar foto</label>
           ${s.gen ? (brandOf(state.draft.brand).people || []).map((pp) => `<label><input type="checkbox" data-i="${i}" data-person="${esc(pp.id)}" ${slidePeople(s).includes(pp.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}> Usar la cara de ${esc(pp.name)}</label>`).join('') : ''}
           ${s.gen && !locked ? `<label title="Color real por defecto; blanco y negro solo en 1 o 2 láminas"><input type="checkbox" data-i="${i}" data-c="bw" ${s.bw ? 'checked' : ''}> Blanco y negro</label>` : ''}
         </div>
-        ${s.gen ? pfield(i, 'Escena de la foto', 'photo', 2, true) + `<details ${locked ? 'open' : ''}><summary>Prompt en inglés para Higgsfield</summary>
+        ${s.gen ? pfield(i, 'Escena de la foto', 'photo', 2, true) + `<details ${locked ? 'open' : ''}><summary>Prompt en inglés para el motor de imagen</summary>
           <textarea class="inp" rows="4" data-i="${i}" data-k="photoPrompt" aria-label="Prompt lámina ${i + 1}" ${busy ? 'readonly' : ''}>${esc(s.photoPrompt)}</textarea></details>` : ''}
         ${locked && s.gen ? `<div class="form-actions">
-          <button type="button" class="btn sm" data-regen="${i}" ${busy || !state.cfg?.hasHF ? 'disabled' : ''}>${running ? 'Generando…' : img ? 'Regenerar esta foto' : 'Generar esta foto'}</button>
-          <span class="hint">~${state.cfg?.hfCredits?.high ?? 2.75} créditos. Cambia la escena o el prompt antes si quieres otro resultado; la foto anterior queda guardada en el Editor.</span>
+          <button type="button" class="btn sm" data-regen="${i}" ${busy || !motorReady(draftMotor()) ? 'disabled' : ''}>${running ? 'Generando…' : img ? 'Regenerar esta foto' : 'Generar esta foto'}</button>
+          <span class="hint">${usdLabel(motorUsd(draftMotor().motor, draftMotor().tamano))} con ${esc(motorLabel(draftMotor().motor, draftMotor().tamano))}. Cambia la escena o el prompt antes si quieres otro resultado; la foto anterior queda guardada en el Editor.</span>
         </div>` : ''}
       </div>
     </div>
@@ -1261,14 +1562,22 @@ function renderProposal() {
 }
 
 const money = (n) => '$' + (n < 0.1 ? n.toFixed(3) : n.toFixed(2));
-const credits = (n) => (Math.round(n * 100) / 100).toLocaleString('es');
+
+// Motor elegido en Crear para este borrador (si no se tocó, el de la marca)
+const draftMotor = () => {
+  const d = state.draft;
+  return d?.motor && motorInfo(d.motor) ? { motor: d.motor, tamano: sizeFor(d.motor, d.tamano) } : brandMotor(d?.brand);
+};
 
 function renderCost() {
-  const d = state.draft, c = state.cfg || {};
-  const per = c.hfCredits?.high ?? 2.75, usdPer = c.hfCreditUsd ?? 0.0625;
+  const d = state.draft;
+  const sel = draftMotor();
+  const per = motorUsd(sel.motor, sel.tamano);
   const photos = d.slides.filter((s) => s.gen && (s.photoPrompt || s.photo || fullMode(d.brand))).length;
   const withPeople = d.slides.filter((s) => s.gen && slidePeople(s).length).length;
-  const hfCr = photos * per, hfUsd = hfCr * usdPer;
+  const imgUsd = per == null ? null : photos * per;
+  const ready = motorReady(sel);
+  const prov = motorInfo(sel.motor)?.proveedor || '';
   const u = d.usage || {};
   const g = d.gen;
   let genHtml = '';
@@ -1283,22 +1592,21 @@ function renderCost() {
       ${g.done ? `<div class="form-actions"><button type="button" class="btn accent" id="btn-open-editor">Abrir en el editor</button>
         ${g.items.some((x) => x.status === 'failed') ? '<button type="button" class="btn ghost" id="btn-retry">Reintentar fallidas</button>' : ''}</div>
         ${photos ? `<div class="line"><b>¿No te gustó alguna?</b>
-          <small>Cambia la escena o el prompt en la lámina y pulsa <b>Regenerar esta foto</b>, o regenera todas. Cada foto cuesta ~${per} créditos; la anterior queda guardada y puedes volver a ella en el Editor.</small></div>
-        <button type="button" class="btn ghost" id="btn-regen-all" ${c.hasHF ? '' : 'disabled'}>Regenerar todas · ${photos} foto${photos === 1 ? '' : 's'} ≈ ${credits(hfCr)} créditos (${money(hfUsd)})</button>` : ''}` : ''}`;
+          <small>Cambia la escena o el prompt en la lámina y pulsa <b>Regenerar esta foto</b>, o regenera todas. Puedes cambiar de motor arriba antes de regenerar. La foto anterior queda guardada y puedes volver a ella en el Editor.</small></div>
+        <button type="button" class="btn ghost" id="btn-regen-all" ${ready ? '' : 'disabled'}>Regenerar todas · ${photos} foto${photos === 1 ? '' : 's'}${imgUsd == null ? '' : ` ≈ ${money(imgUsd)}`}</button>` : ''}` : ''}`;
   }
   $('#cost-panel').innerHTML = `
     <h2>Costo aproximado</h2>
-    <div class="line"><b>Higgsfield · fotos</b><span class="v">${credits(hfCr)} créditos</span>
-      <small>${photos} foto${photos === 1 ? '' : 's'} × ~${per} créditos (${esc(c.hfModel || 'GPT Image 2.5')}, calidad alta 2K) ≈ ${money(hfUsd)} USD.${withPeople ? ` ${withPeople} con la cara de una persona aprobada como referencia (suma muy poco).` : ''} Se cobra por tokens, el total real puede variar un poco. Si una foto falla o se rechaza, no se cobra.</small></div>
+    ${photos ? motorPicker('crear', sel, !!(g && !g.done)) : ''}
+    <div class="line"><b>Fotos · ${esc(prov)}</b><span class="v">${imgUsd == null ? '—' : money(imgUsd)}</span>
+      <small>${photos} foto${photos === 1 ? '' : 's'} × ${usdLabel(per)} con ${esc(motorLabel(sel.motor, sel.tamano))}.${withPeople ? ` ${withPeople} con la cara de una persona aprobada como referencia.` : ''} Precio aproximado; si una foto falla o se rechaza, no se cobra.</small></div>
     <div class="line"><b>Claude · propuesta</b><span class="v">${money(d.claudeUsd || 0)}</span>
       <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Opus 5${u.input_tokens ? ` (última: investigación con ${u.web_searches || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
-    <div class="line"><b>OpenAI</b><span class="v">$0</span>
-      <small>No se usa directo. GPT Image 2.5 es un modelo de OpenAI, pero se paga dentro de los créditos de Higgsfield.</small></div>
-    <div class="line total"><b>Falta por gastar</b><span class="v">≈ ${money(hfUsd)}</span>
-      <small>Se descuenta del saldo de la API de Higgsfield (cloud.higgsfield.ai), que es distinto del saldo de tu plan en higgsfield.ai.</small></div>
+    <div class="line total"><b>Falta por gastar</b><span class="v">${imgUsd == null ? '—' : `≈ ${money(imgUsd)}`}</span>
+      <small>Se cobra en la cuenta de ${esc(prov)} de la API key que está en 04_STUDIO_APP/.env.</small></div>
     ${g ? genHtml : `<div class="form-actions">
-      <button type="button" class="btn accent" id="btn-approve" ${c.hasHF || !photos ? '' : 'disabled'}>${photos ? `Aprobar y generar ${photos} foto${photos === 1 ? '' : 's'}` : 'Aprobar sin fotos'}</button>
-    </div>${c.hasHF ? '' : '<p class="hint">Falta HF_CREDENTIALS en 04_STUDIO_APP/.env.</p>'}`}`;
+      <button type="button" class="btn accent" id="btn-approve" ${ready || !photos ? '' : 'disabled'}>${photos ? `Aprobar y generar ${photos} foto${photos === 1 ? '' : 's'}` : 'Aprobar sin fotos'}</button>
+    </div>`}`;
 }
 
 function draftToProject() {
@@ -1324,7 +1632,7 @@ async function approve(indices = null) {
       slide: slidePayload(s), count: `${i + 1}/${d.slides.length}` } : null)).filter(Boolean);
   if (!items.length) { d.gen = d.gen || { done: true, items: [] }; saveDraft(); renderCreate(); return; }
   try {
-    const r = await api('/api/generate', { projectId: d.projectId, quality: 'high', items });
+    const r = await api('/api/generate', { projectId: d.projectId, ...draftMotor(), items });
     const keep = (d.gen?.items || []).filter((x) => !items.some((it) => it.index === x.index));
     d.gen = { id: r.id, done: false, keep, items: [...keep, ...items.map((x) => ({ index: x.index, status: 'enviando' }))].sort((a, b) => a.index - b.index) };
     saveDraft();
@@ -1348,7 +1656,7 @@ async function pollGeneration() {
         if (x.url && s && s.image !== x.url) {
           if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
           const ds = d.slides[x.index] || {};
-          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, full: !!x.full, soul: !!x.soul, qa: x.qa || '', photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
+          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '', photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
         }
       });
     }
@@ -1379,15 +1687,16 @@ function renderOutfits() {
   const box = $('#i-outfits');
   if (!box) return;
   const br = brandOf(ideaBrand);
-  const show = br.motor_imagen === 'nano_banana_pro' && (br.people || []).length > 0;
+  const show = (br.people || []).length > 0;
   box.hidden = !show;
   if (!show) return;
   const list = br.outfits || [];
   const who = br.people.map((x) => x.name).join(', ');
-  box.innerHTML = `<label class="lbl">Vestuario de ${esc(who)}</label>
-    <p class="help">La IA viste a ${esc(who)} con uno de estos outfits en cada lámina (uno distinto por lámina). En el Editor puedes elegir otro. Sube fotos de outfits que te gusten: mejor si la ropa se ve completa.</p>
+  const open = box.querySelector('details')?.open ?? false;
+  box.innerHTML = `<details ${open ? 'open' : ''}><summary class="lbl">Vestuario de ${esc(who)} · ${list.length} outfit${list.length === 1 ? '' : 's'}</summary>
+    <p class="help">Cuando una lámina parte de la foto real de ${esc(who)}, la IA la viste con uno de estos outfits (uno distinto por lámina). En el Editor puedes elegir otro. Para activar, desactivar o etiquetar outfits: <button type="button" class="btn sm ghost" id="outfit-manage">Gestionar en Marcas</button></p>
     <div class="outfits">${list.map((f) => `<figure><img src="${esc(f.url)}" alt="${esc(f.name)}" title="${esc(f.name.replace(/\.\w+$/, '').replace(/-/g, ' '))}"><button type="button" class="x" data-outfit-del="${esc(f.path)}" aria-label="Quitar ${esc(f.name)}">×</button></figure>`).join('') || '<p class="empty">Todavía no hay outfits.</p>'}</div>
-    <label class="btn sm">Agregar outfits<input type="file" id="outfit-upload" accept="image/*" multiple hidden></label>`;
+    <label class="btn sm">Agregar outfits<input type="file" id="outfit-upload" accept="image/*" multiple hidden></label></details>`;
 }
 
 async function outfitRequest(action, body) {
@@ -1409,6 +1718,7 @@ function bindOutfits() {
     } catch (err) { toast(err.message, true); }
   });
   box.addEventListener('click', async (e) => {
+    if (e.target.id === 'outfit-manage') { mk.sel = { type: 'brand', id: ideaBrand }; showView('brands'); return; }
     const b = e.target.closest('[data-outfit-del]');
     if (!b) return;
     try { await outfitRequest('delete', { path: b.dataset.outfitDel }); toast('Outfit quitado (queda en la papelera de la marca).'); } catch (err) { toast(err.message, true); }
@@ -1478,6 +1788,14 @@ function bindCreate() {
     approve([+b.dataset.regen]);
   });
 
+  $('#cost-panel').addEventListener('change', (e) => {
+    if (e.target.dataset.motor !== 'crear' && e.target.dataset.tamano !== 'crear') return;
+    const motor = $('#crear-motor').value;
+    Object.assign(state.draft, { motor, tamano: sizeFor(motor, $('#crear-tamano')?.value) });
+    saveDraft();
+    renderProposal();
+    renderCost();
+  });
   $('#cost-panel').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -1507,9 +1825,10 @@ async function loadConfig() {
     const c = await api('/api/config');
     state.cfg = c;
     state.hasKey = c.hasKey;
-    $('#hf-state').textContent = c.hasHF
-      ? `Conectado con la API (credenciales en 04_STUDIO_APP/.env). Modelo: ${c.hfModel}.`
-      : 'Sin credenciales: agrega HF_CREDENTIALS=id:secreto en 04_STUDIO_APP/.env y reinicia el Estudio.';
+    // Una línea por proveedor: la API key sale de 04_STUDIO_APP/.env
+    const prov = {};
+    (c.motores || []).forEach((m) => { (prov[m.proveedor] ||= { env: m.env, ok: m.disponible, nombres: [] }).nombres.push(m.nombre); });
+    $('#hf-state').innerHTML = Object.entries(prov).map(([p, x]) => `<span class="${x.ok ? 'ok' : 'bad'}">${x.ok ? '✓' : '✗'}</span> <b>${esc(p)}</b> (${esc(x.nombres.join(', '))}): ${x.ok ? 'conectado' : `falta <span class="mono">${esc(x.env)}</span>`}`).join('<br>');
     $('#key-state').textContent = c.hasKey ? (c.fromEnv ? 'Usando la variable ANTHROPIC_API_KEY del sistema.' : 'API key guardada.') : 'Sin API key: los borradores con IA están desactivados.';
     $('#btn-draft').disabled = !c.hasKey;
     $('#btn-draft').title = c.hasKey ? '' : 'Agrega la API key en Ajustes';
@@ -1518,6 +1837,7 @@ async function loadConfig() {
 
 // ---------------------------------------------------------------- arranque
 function bindGlobal() {
+  bindPhotoDrag();
   $$('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
   $$('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 

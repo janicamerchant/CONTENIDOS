@@ -1,8 +1,8 @@
 # Fotos con Soul 2.0 + Soul ID (modelo entrenado con las fotos reales de una persona aprobada).
 # Da fotografía de cámara real; la tipografía la pone el Editor encima (plantilla de la marca).
 #
-# Se activa por marca en 06_MARCAS/<marca>/marca.json con "motor_persona": "soul", y por persona
-# cuando persona.json tiene "soul_id" (lo escribe tools/entrenar_soul.rb).
+# Es el motor "hf_soul" de imagen.rb (API de Higgsfield). La cara entrenada se usa cuando la lámina nombra a una
+# persona con "soul_id" en persona.json (lo escribe tools/entrenar_soul.rb); si no, Soul hace una foto sin persona fija.
 
 SOUL_MODEL = 'higgsfield-ai/soul/v2/standard'
 SOUL_STRENGTH = 1.0     # 0 a 1: cuánto manda la cara entrenada sobre el prompt
@@ -20,10 +20,6 @@ SOUL_PLACEMENT = {
 
 def soul_person(persons)
   persons.find { |p| p['soul_id'].to_s != '' }
-end
-
-def soul_mode?(brand, persons)
-  brand && brand['motor_persona'] == 'soul' && !soul_person(persons).nil?
 end
 
 # El prompt de Soul no usa nombres ni instrucciones de referencia: la cara viene del Soul ID.
@@ -46,7 +42,7 @@ def soul_prompt(it, person, brand)
   ].map { |t| t.strip.sub(/[.,;]\z/, '') }.reject(&:empty?).map { |t| "#{t[0].upcase}#{t[1..]}." }.join(' ')
 end
 
-def soul_body(it, person, brand)
-  { prompt: soul_prompt(it, person, brand), aspect_ratio: '3:4', resolution: '1080p', enhance_prompt: false,
-    custom_reference_id: person['soul_id'], custom_reference_strength: SOUL_STRENGTH, batch_size: 1 }
+def soul_body(prompt, soul_id)
+  body = { prompt: prompt, aspect_ratio: '3:4', resolution: '1080p', enhance_prompt: false, batch_size: 1 }
+  soul_id.to_s.empty? ? body : body.merge(custom_reference_id: soul_id, custom_reference_strength: SOUL_STRENGTH)
 end

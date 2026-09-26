@@ -30,7 +30,6 @@
     "raul-gomila",
     "andrea"
   ],
-  "datos": [
-
-  ]
+  "datos": [],
+  "motor_imagen": "hf_flare"
 }

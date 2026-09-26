@@ -83,13 +83,6 @@ def api_key
   k.empty? ? read_config['apiKey'].to_s.strip : k
 end
 
-def hf_key
-  c = ENV['HF_CREDENTIALS'].to_s.strip
-  return c unless c.empty?
-  id, secret = ENV['HF_API_KEY'].to_s.strip, ENV['HF_API_SECRET'].to_s.strip
-  id.empty? || secret.empty? ? '' : "#{id}:#{secret}"
-end
-
 def write_data_url(data_url, path)
   m = data_url.to_s.match(/\Adata:([\w\/+.-]+);base64,(.+)\z/m)
   raise 'Imagen inválida' unless m
@@ -128,7 +121,7 @@ require_relative 'marcas'
 require_relative 'lamina_completa'
 require_relative 'soul'
 require_relative 'foto_real'
-require_relative 'nano_banana'
+require_relative 'imagen'
 
 # ---------- Claude: borrador de carrusel ----------
 
@@ -171,7 +164,7 @@ SLIDE_SCHEMA = {
 }.freeze
 
 DRAFT_RULES = <<~TXT
-  Eres el equipo creativo de Nika Media. Con el brief del usuario, propone la arquitectura y el copy final de un carrusel de Instagram 4:5, siguiendo exactamente el perfil de marca y el flujo de producción que tienes abajo.
+  Eres el equipo creativo de Nika Media. Con el brief del usuario, propone la arquitectura y el copy final de un carrusel de Instagram 4:5 (o de un post único, si el formato lo pide), siguiendo exactamente el perfil de marca y el flujo de producción que tienes abajo.
 
   Ortografía: escribe en el idioma del brief con ortografía completa. En español, siempre con tildes, ñ y signos de apertura (año, más, está, ¿, ¡). Nunca omitas acentos.
 
@@ -188,6 +181,11 @@ DRAFT_RULES = <<~TXT
   - Deja vacíos ("" o []) los campos que no apliquen al layout.
   - caption: el texto del post para Instagram, con el CTA.
   - concept: la dirección creativa en 3 a 5 frases cortas: la idea central y el ángulo, el estilo visual (fotografía, paleta, tipografía), el tono y por qué la secuencia convence a la audiencia.
+
+  Post único (formato de 1 imagen): devuelve exactamente 1 lámina que cuente la idea completa por sí sola, sin depender de otras.
+  - layout: portada, escena, cifra o frase (no uses lista, comparar ni cta). Titular fuerte y corto; body opcional de una frase.
+  - Siempre con foto (photo y photoPrompt llenos), a color (bw false). Las reglas de proporción de fotos y de la última lámina no aplican.
+  - El CTA va en el caption, no en la imagen.
 
   Datos y fuentes:
   - Nunca inventes estadísticas, precios, fechas ni resultados. Usa solo (a) las cifras de la "Investigación verificada" que viene en el mensaje, (b) los proof points aprobados del perfil de marca, o (c) los "Datos verificados de la marca" que vienen en el mensaje, siempre con su fuente.
@@ -283,7 +281,7 @@ def claude_draft(brief)
 
   user = <<~TXT
     Marca: #{brand['name']}
-    Formato: carrusel de #{brief['laminas'] || 7} láminas
+    Formato: #{brief['laminas'].to_i == 1 ? 'post único (1 sola imagen 4:5)' : "carrusel de #{brief['laminas'] || 7} láminas"}
     Tema/oferta: #{brief['tema']}
     Objetivo: #{brief['objetivo']}
     Audiencia: #{brief['audiencia']}
@@ -330,6 +328,11 @@ def claude_draft(brief)
     break unless spanish && copy.length > 200 && copy !~ /[áéíóúñÁÉÍÓÚÑ¿¡]/
   end
   out = strip_markers!(out)
+  # Post único: una sola imagen con un diseño que se sostenga solo
+  if brief['laminas'].to_i == 1 && out['slides'].is_a?(Array) && !out['slides'].empty?
+    out['slides'] = out['slides'].first(1)
+    out['slides'][0]['layout'] = 'portada' if %w[lista comparar cta].include?(out['slides'][0]['layout'])
+  end
   enforce_color_rule!(out['slides'] || [], brand)
   out['research'] = notes
   out['usage'] = claude_usage(usages, data['model'])
@@ -377,53 +380,7 @@ def claude_usage(list, model)
   { model: model, input_tokens: inp, output_tokens: outp, web_searches: searches, calls: list.compact.size, usd: usd.round(4) }
 end
 
-# ---------- Higgsfield: fotos con la API (cloud.higgsfield.ai) ----------
-
-HF_API    = 'https://api.higgsfield.ai'
-HF_MODEL  = 'marketing-studio/image/flare'   # GPT Image 2.5 Flare
-HF_ASPECT = '3:4'                            # el modelo no acepta 4:5; el editor recorta a 4:5
-# Créditos por imagen medidos en la cuenta (calidad alta, 2K). El cobro real es por tokens.
-HF_CREDITS = { 'high' => 2.75 }.freeze
-HF_CREDIT_USD = 0.0625
-def hf_http(method, url, body = nil)
-  uri = URI(url)
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = true
-  http.read_timeout = 60
-  req = (method == :post ? Net::HTTP::Post : Net::HTTP::Get).new(uri)
-  req['Authorization'] = "Key #{hf_key}"
-  req['Content-Type'] = 'application/json'
-  req.body = JSON.generate(body) if body
-  res = http.request(req)
-  data = JSON.parse(res.body.to_s.force_encoding('UTF-8')) rescue { 'detail' => res.body.to_s[0, 300] }
-  raise "Higgsfield respondió #{res.code}: #{data['detail'] || data}" unless res.code.to_i.between?(200, 299)
-  data
-end
-
-# Sube una imagen local (ruta relativa a CONTENIDOS) y devuelve su URL pública temporal.
-def hf_upload(rel)
-  path = File.join(ROOT, rel)
-  ctype = File.extname(path).downcase == '.png' ? 'image/png' : 'image/jpeg'
-  up = hf_http(:post, "#{HF_API}/files/generate-upload-url", { content_type: ctype })
-  uri = URI(up['upload_url'])
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = true
-  put = Net::HTTP::Put.new(uri)
-  (up['upload_headers'] || { 'Content-Type' => ctype }).each { |k, v| put[k] = v }
-  put.body = File.binread(path)
-  res = http.request(put)
-  raise "No se pudo subir #{File.basename(rel)} (#{res.code})" unless res.code.to_i.between?(200, 299)
-  up['public_url']
-end
-
-def download(url, path)
-  uri = URI(url)
-  Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
-    res = http.request(Net::HTTP::Get.new(uri))
-    raise "Descarga falló (#{res.code})" unless res.code.to_i == 200
-    File.binwrite(path, res.body)
-  end
-end
+# ---------- fotos: motores en imagen.rb ----------
 
 GEN_JOBS = {}
 GEN_LOCK = Mutex.new
@@ -472,75 +429,56 @@ def attach_image(project_id, index, url, cutout = '', extra = {})
   end
 end
 
-def run_generation(job_id, project_id, items, quality)
-  refs = {}
-  refs_lock = Mutex.new
+# opts: 'motor' y 'tamano' elegidos en Crear o en el Editor (si faltan, los de la marca). Ver imagen.rb.
+def run_generation(job_id, project_id, items, opts = {})
   brand = (load_brand(project_brand(project_id)) rescue nil)
   threads = items.map do |it|
     Thread.new do
       begin
-        body = { prompt: it['prompt'], aspect_ratio: HF_ASPECT, quality: quality, resolution: '2k' }
-        # Personas aprobadas: bloqueo de identidad + sus fotos de cara (en orden de prioridad) como referencia
+        # Personas aprobadas que nombra la lámina
         ids = Array(it['people']).map(&:to_s)
         ids |= ['janica'] if it['janica']              # proyectos guardados antes de 06_MARCAS
         persons = ids.map { |pid| load_person(pid) rescue nil }.compact
-        # Persona con Soul ID entrenado: foto de cámara real con Soul 2.0; el texto lo pone el Editor
-        # Foto real de la persona + escena con Grok: la cara no se genera (ver foto_real.rb)
-        # Nano Banana Pro 4K (plan web de Higgsfield): manda sobre los demás motores (ver nano_banana.rb)
-        nbp = nbp_mode?(brand)
-        real = !nbp && edit_mode?(brand, persons)
-        soul = !nbp && !real && soul_mode?(brand, persons)
-        full = !nbp && !real && !soul && full_mode?(brand) && it['slide'].is_a?(Hash)
-        model = HF_MODEL
-        upload = ->(rel) { refs_lock.synchronize { refs[rel] ||= hf_upload(rel) } }
-        if nbp
-          # la herramienta de Higgsfield sube las fotos ella misma (más abajo)
+        motor = elegir_motor(brand, it['motor'] || opts['motor'])
+        tamano = elegir_tamano(motor, brand, it['tamano'] || opts['tamano'])
+        etiqueta = "#{MOTORES[motor][:nombre]}#{MOTORES[motor][:tamanos].size > 1 ? " #{tamano.upcase}" : ''}"
+        soul = motor == 'hf_soul'
+        # Foto real de la persona + escena nueva: la cara no se genera (ver foto_real.rb). Soul usa su propia cara entrenada.
+        real = !soul && edit_mode?(brand, persons)
+        full = !soul && !real && full_mode?(brand) && it['slide'].is_a?(Hash)
+        faces = []
+        soul_id = nil
+        slide = it['slide']
+        if soul
+          sp = soul_person(persons)
+          soul_id = sp && sp['soul_id']
+          prompt = sp ? soul_prompt(it, sp, brand) : it['prompt'].to_s
+          images = []
         elsif real
-          model = EDIT_MODEL
-          body = edit_body(it, persons.first, brand, upload)
-        elsif soul
-          model = SOUL_MODEL
-          body = soul_body(it, soul_person(persons), brand)
+          prompt, images = persona_request(it.merge('project' => project_id), persons, brand)
         elsif full
           # Lámina completa: caras aprobadas + referencias de diagramación del mismo diseño
-          slide = it['slide']
           faces = persons.flat_map { |p| person_refs(p, [FULL_FACE_REFS / persons.size, 1].max) }.first(FULL_FACE_REFS)
           lays = layout_refs(brand, slide['layout'])
-          base_prompt = full_prompt(slide, brand, faces.size, lays.size, it['count'], persons)
-          body[:prompt] = base_prompt
-          body[:image_urls] = (faces + lays).map(&upload)
-          body.delete(:image_urls) if body[:image_urls].empty?
+          base_prompt = prompt = full_prompt(slide, brand, faces.size, lays.size, it['count'], persons)
+          images = (faces + lays).map { |rel| File.join(ROOT, rel) }
         elsif !persons.empty?
           per = [MAX_FACE_REFS / persons.size, 1].max
-          body[:prompt] = "#{persons.map { |p| person_lock(p) }.join(' ')} #{body[:prompt]}"
-          body[:image_urls] = persons.flat_map { |p| person_refs(p, per) }.first(MAX_FACE_REFS).map(&upload)
+          prompt = "#{persons.map { |p| person_lock(p) }.join(' ')} #{it['prompt']}"
+          images = persons.flat_map { |p| person_refs(p, per) }.first(MAX_FACE_REFS).map { |rel| File.join(ROOT, rel) }
+        elsif brand && brand['motor_persona'] == 'foto_real'
+          prompt, images = scene_prompt(it, brand), []        # escenas sin persona con el mismo lenguaje fotográfico
+        else
+          prompt, images = it['prompt'].to_s, []
         end
         attempt = 0
         note = ''
         dest = nil
         loop do
-          if nbp
-            gen_update(job_id, it['index'], status: 'generando (Nano Banana Pro 4K)')
-            prompt, images = nbp_request(it.merge('project' => project_id), persons, brand)
-            name = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{slug(project_id, 24)}-#{format('%02d', it['index'] + 1)}.png"
-            dest = nbp_generate(prompt, images, File.join(UPLOADS, name))
-            break
-          end
-          sub = hf_http(:post, "#{HF_API}/#{model}", body)
-          gen_update(job_id, it['index'], status: sub['status'], request_id: sub['request_id'])
-          deadline = Time.now + 600
-          st = sub
-          until %w[completed failed nsfw canceled].include?(st['status'])
-            raise 'Tardó más de 10 minutos' if Time.now > deadline
-            sleep 4
-            st = hf_http(:get, sub['status_url'])
-            gen_update(job_id, it['index'], status: st['status'])
-          end
-          raise(st['status'] == 'nsfw' ? 'Higgsfield rechazó el contenido (no se cobra)' : "Falló (#{st['status']}, no se cobra)") unless st['status'] == 'completed'
-          src = st.dig('images', 0, 'url') or raise 'Respuesta sin imagen'
+          gen_update(job_id, it['index'], status: "generando (#{etiqueta})")
           name = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{slug(project_id, 24)}-#{format('%02d', it['index'] + 1)}.png"
-          dest = File.join(UPLOADS, name)
-          download(src, dest)
+          dest = generar_imagen(motor, prompt, images, File.join(UPLOADS, name), tamano, soul_id: soul_id,
+                                status: ->(st) { gen_update(job_id, it['index'], status: "#{st} (#{etiqueta})") })
           break unless full
           # Revisión de Claude: ortografía exacta, rostro y legibilidad. Si falla, se corrige sola.
           gen_update(job_id, it['index'], status: 'revisando')
@@ -548,13 +486,13 @@ def run_generation(job_id, project_id, items, quality)
           break if ok || attempt >= QA_RETRIES
           attempt += 1
           gen_update(job_id, it['index'], status: "corrigiendo (intento #{attempt + 1})", qa: note)
-          body[:prompt] = "#{base_prompt}\nTHE PREVIOUS ATTEMPT WAS REJECTED FOR THESE PROBLEMS, FIX ALL OF THEM: #{note}"
+          prompt = "#{base_prompt}\nTHE PREVIOUS ATTEMPT WAS REJECTED FOR THESE PROBLEMS, FIX ALL OF THEM: #{note}"
         end
         cut = !full && brand && brand['cutout'] ? make_cutout(dest, true) : nil
         cut_url = cut ? file_url(cut) : ''
-        extra = it.slice('photo', 'photoPrompt').compact.merge('full' => full, 'soul' => soul, 'qa' => full ? note : '')
-        attach_image(project_id, it['index'], file_url(dest), cut_url, extra)
-        gen_update(job_id, it['index'], status: 'completed', url: file_url(dest), cutout: cut_url, full: full, soul: soul, qa: full ? note : '')
+        info = { 'full' => full, 'soul' => soul, 'qa' => full ? note : '', 'motor' => motor, 'tamano' => tamano }
+        attach_image(project_id, it['index'], file_url(dest), cut_url, it.slice('photo', 'photoPrompt').compact.merge(info))
+        gen_update(job_id, it['index'], status: 'completed', url: file_url(dest), cutout: cut_url, **info.transform_keys(&:to_sym))
       rescue StandardError => e
         gen_update(job_id, it['index'], status: 'failed', error: e.message)
       end
@@ -691,7 +629,7 @@ server.mount_proc('/api/config') do |req, res|
     File.chmod(0o600, CONFIG)
   end
   json(res, { hasKey: !api_key.empty?, fromEnv: !ENV['ANTHROPIC_API_KEY'].to_s.strip.empty?,
-              hasHF: !hf_key.empty?, hfModel: 'GPT Image 2.5 Flare', hfCredits: HF_CREDITS, hfCreditUsd: HF_CREDIT_USD })
+              motores: motores_publicos, motorDefecto: MOTOR_DEFECTO, tamanoDefecto: TAMANO_DEFECTO })
 end
 
 # Propuesta de guion y dirección creativa a partir de una idea libre
@@ -727,18 +665,18 @@ end
 # Generar fotos aprobadas: POST inicia el trabajo, GET ?id= devuelve el avance
 server.mount_proc('/api/generate') do |req, res|
   if req.request_method == 'POST'
-    raise 'Falta HF_CREDENTIALS en 04_STUDIO_APP/.env' if hf_key.empty?
     b = body_json(req)
     items = (b['items'] || []).select { |it| it['prompt'].to_s.strip != '' }
     raise 'No hay fotos para generar.' if items.empty?
     raise 'Guarda el proyecto antes de generar.' unless File.exist?(File.join(PROJECTS, "#{slug(b['projectId'], 64)}.json"))
-    quality = HF_CREDITS.key?(b['quality']) ? b['quality'] : 'high'
+    # Falla aquí (y no lámina por lámina) si falta la key del motor elegido
+    opts = { 'motor' => elegir_motor((load_brand(project_brand(b['projectId'])) rescue nil), b['motor']), 'tamano' => b['tamano'] }
     id = "g#{Time.now.to_i}#{rand(1000)}"
     GEN_LOCK.synchronize do
       GEN_JOBS[id] = { id: id, projectId: b['projectId'], done: false,
                        items: items.map { |it| { index: it['index'], status: 'enviando' } } }
     end
-    Thread.new { run_generation(id, b['projectId'], items, quality) }
+    Thread.new { run_generation(id, b['projectId'], items, opts) }
     json(res, { id: id })
   else
     job = GEN_LOCK.synchronize { GEN_JOBS[req.query['id']] && Marshal.load(Marshal.dump(GEN_JOBS[req.query['id']])) }

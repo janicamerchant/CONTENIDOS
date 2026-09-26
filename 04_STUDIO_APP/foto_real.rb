@@ -1,11 +1,12 @@
-# Foto real + escena con IA: parte de una foto REAL de la persona aprobada y Grok Imagine 2.0 solo cambia
-# el lugar, la luz y el fondo. La cara no se genera, así que es la de la foto. El texto lo pone el Editor.
+# Foto real + escena: parte de una foto REAL de la persona aprobada y el motor de imagen (imagen.rb) solo cambia
+# el lugar, la luz, el fondo y, si hay vestuario, la ropa. La cara no se genera: es la de la foto. El texto lo pone el Editor.
 #
 # Se activa por marca en 06_MARCAS/<marca>/marca.json con "motor_persona": "foto_real".
 # La foto base de cada lámina es s['basePhoto'] (nombre de archivo en _personas/<id>/); si falta, se elige por diseño
 # con "fotos_base" de persona.json, por ejemplo { "portada": "janica-real-seria-hd.jpg", "cta": "...", "otras": "..." }.
+# Vestuario: 06_MARCAS/<marca>/vestuario/ (uno distinto por lámina, o el que se elija en el Editor).
 
-EDIT_MODEL = 'xai/grok-imagine-image-2.0'
+PERSONA_FACE_REFS = 2    # fotos reales extra (además de la base) para fijar la identidad
 
 EDIT_PLACEMENT = {
   'portada' => 'Show her smaller in the frame, on the RIGHT THIRD of the image. The LEFT 55 percent is an empty, clean, softly lit wall with nothing on it.',
@@ -47,6 +48,58 @@ def edit_prompt(it, person, brand)
   ].join(' ')
 end
 
-def edit_body(it, person, brand, upload)
-  { prompt: edit_prompt(it, person, brand), image_urls: [upload.call(edit_base(person, it))], resolution: '2k', aspect_ratio: '3:4' }
+# Escena sin persona: foto nueva desde el prompt de la lámina
+def scene_prompt(it, brand)
+  s = it['slide'].is_a?(Hash) ? it['slide'] : it
+  scene = (s['photoPrompt'].to_s.strip.empty? ? s['photo'].to_s : s['photoPrompt'].to_s).dup
+  scene.gsub!(/[^.,;]*\b(headline|title|text|copy|typography|lettering|logos?)\b[^.,;]*[.,;]?/i, '')
+  [
+    scene.strip.sub(/[.,;]\z/, '') + '.',
+    EDIT_PLACEMENT[s['layout']].to_s.sub('Show her', 'Place the main subject').sub(/\bShe\b/, 'It'),
+    brand['look'].to_s,
+    PHOTO_REALISM,
+    'No text, no letters, no logos, no watermark.'
+  ].reject(&:empty?).join(' ')
+end
+
+# Outfits activos de la marca (06_MARCAS/<marca>/vestuario/), rutas absolutas
+def brand_outfits(brand)
+  dir = brand_dir(brand['id'])
+  resources(dir)['vestuario'].select { |r| r['active'] }.map { |r| File.join(dir, r['path']) }
+end
+
+# Outfit de la lámina: s['outfit'] = nombre de archivo, 'original' (ropa de la foto base) o vacío (automático).
+# En automático cada lámina del carrusel recibe un outfit distinto, fijo para ese proyecto.
+def pick_outfit(it, brand)
+  s = it['slide'].is_a?(Hash) ? it['slide'] : it
+  choice = (it['outfit'] || s['outfit']).to_s
+  return nil if choice == 'original'
+  list = brand_outfits(brand)
+  return nil if list.empty?
+  named = list.find { |p| File.basename(p) == choice }
+  return named if named
+  start = it['project'].to_s.bytes.sum
+  list[(start + it['index'].to_i * 7) % list.size]
+end
+
+# Devuelve [prompt, rutas absolutas de imágenes]
+def persona_request(it, persons, brand)
+  person = persons.first
+  return [scene_prompt(it, brand), []] unless person
+  base = File.join(ROOT, edit_base(person, it))
+  extra = (person['photos'] || []).select { |f| f['active'] }.map { |f| File.join(person_dir(person['id']), f['name']) }
+  extra = (extra - [base]).first(PERSONA_FACE_REFS)
+  outfit = pick_outfit(it, brand)
+  prompt = edit_prompt(it, person, brand).sub('Keep this exact woman unchanged',
+                                               'Keep this exact woman from the first image unchanged')
+  if outfit
+    # Cambia ropa y pose; la cara sigue siendo la de la foto real
+    prompt = prompt.sub('same outfit and jewelry, same pose.', 'her own jewelry and earrings.')
+                   .sub('Change only the location, background and lighting', 'Change the location, background and lighting')
+    prompt += " Dress her in the exact outfit shown in the LAST image: same garments, cut, fabric, colors, belt, shoes and bag. " \
+              'Ignore the model, face and body in that last image; it is a clothing reference only. ' \
+              'Choose a natural, elegant pose that shows the outfit and fits the scene, full body or three-quarter body.'
+  end
+  prompt += " The images between the first#{outfit ? ' and the last' : ''} are the same woman, for identity reference only. #{PHOTO_REALISM}"
+  [prompt, [base, *extra, *outfit]]
 end

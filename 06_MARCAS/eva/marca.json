@@ -50,7 +50,6 @@
   "personas": [
     "janica"
   ],
-  "datos": [
-
-  ]
+  "datos": [],
+  "motor_imagen": "hf_flare"
 }

@@ -12,14 +12,11 @@
     "objetivo": "Autoridad"
   },
   "look": "warm quiet-luxury editorial magazine photograph, warm late-afternoon side light with soft window or leaf shadows, ivory, beige, sand, stone and light wood palette, premium real space, clean plain wall area at the upper left for a large headline",
-  "logos": {
-  },
+  "logos": {},
   "personas": [
     "janica"
   ],
-  "datos": [
-
-  ],
+  "datos": [],
   "plantillas": {
     "portada": [
       "referencias/lowprofile-01-portada-janica.jpg",
@@ -58,5 +55,7 @@
     ]
   },
   "motor_persona": "foto_real",
-  "motor_imagen": "nano_banana_pro"
+  "motor_imagen": "nano_banana_pro",
+  "tamano": "2k",
+  "modo": "foto"
 }

@@ -62,8 +62,8 @@
         <textarea id="i-idea" class="inp" rows="6" required placeholder="Ej. Un carrusel para dueños de agencias de seguros sobre cuánto dinero pierden cuando un lead espera más de 5 minutos. Quiero que Janica aparezca al final invitando a la demo."></textarea>
       </div>
       <div class="field">
-        <label class="lbl" for="i-laminas">Láminas</label>
-        <select id="i-laminas" class="inp"><option>5</option><option>6</option><option selected>7</option><option>8</option><option>10</option></select>
+        <label class="lbl" for="i-laminas">Formato</label>
+        <select id="i-laminas" class="inp"><option value="1">Post único (1 imagen)</option><option value="5">Carrusel · 5 láminas</option><option value="6">Carrusel · 6 láminas</option><option value="7" selected>Carrusel · 7 láminas</option><option value="8">Carrusel · 8 láminas</option><option value="10">Carrusel · 10 láminas</option></select>
       </div>
       <div class="field">
         <label class="lbl" for="i-cta">CTA</label>
@@ -151,7 +151,7 @@
       <ol>
         <li><b>Elige la lámina</b> en la columna izquierda.</li>
         <li><b>Texto</b> (panel derecho): Antetítulo, Titular y Texto de apoyo se editan directo y la lámina se actualiza mientras escribes. En el Titular, la palabra entre <code>*asteriscos*</code> va en verde lima y Enter hace un salto de línea para decidir dónde se corta cada renglón. El control <b>Titular</b> agranda o achica la letra.</li>
-        <li><b>Foto</b>: Horizontal, Vertical y Zoom para encuadrar. Si la persona tapa demasiado el texto, pulsa <b>Quitar</b> en el Recorte (o <b>Recorte automático</b> para ponerlo). <b>Regenerar foto con Higgsfield</b> crea otra y <b>Volver a la foto anterior</b> la recupera.</li>
+        <li><b>Foto</b>: Horizontal, Vertical y Zoom para encuadrar. Si la persona tapa demasiado el texto, pulsa <b>Quitar</b> en el Recorte (o <b>Recorte automático</b> para ponerlo). <b>Regenerar foto</b> crea otra con el <b>Motor de imagen</b> que elijas y <b>Volver a la foto anterior</b> la recupera.</li>
         <li>Arriba del panel derecho cambias el <b>Diseño</b> (Portada, Escena, Cifra…) y el fondo <b>Oscuro / Claro</b>.</li>
         <li>Todo se guarda solo. Al terminar, pulsa <b>Exportar carrusel</b>.</li>
       </ol>
@@ -313,8 +313,9 @@
     <input id="api-key" class="inp" type="password" placeholder="sk-ant-…" autocomplete="off">
     <p class="hint" id="key-state"></p>
     <p class="hint">Se guarda solo en esta computadora, en <span class="mono">04_STUDIO_APP/data/config.json</span>. Se usa para las propuestas y borradores con IA (modelo Claude Opus 5).</p>
-    <span class="lbl" style="margin-top:8px">Higgsfield (fotos)</span>
+    <span class="lbl" style="margin-top:8px">Motores de imagen (API keys)</span>
     <p class="hint" id="hf-state"></p>
+    <p class="hint">Se configuran en <span class="mono">04_STUDIO_APP/.env</span>: <span class="mono">GEMINI_API_KEY</span> (Nano Banana Pro), <span class="mono">OPENAI_API_KEY</span> (GPT Image) y <span class="mono">HF_CREDENTIALS</span> (API de Higgsfield). Tras cambiarlas, reinicia el Estudio.</p>
     <div class="form-actions"><button class="btn accent" type="submit">Guardar</button></div>
   </form>
 </dialog>
