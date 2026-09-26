@@ -40,7 +40,7 @@ def edit_prompt(it, person, brand)
   [
     'Keep this exact woman unchanged: same face, same facial features, same expression, same hair, same outfit and jewelry, same pose. ' \
     'Do not retouch, smooth, beautify or redraw her face.',
-    "Change only the location, background and lighting to match this scene: #{scene.strip.sub(/[.,;]\z/, '')}.",
+    "Change only the location, background and lighting to match this scene: #{scene.strip.sub(/\A[.,;\s]+/, '').sub(/[.,;]\z/, '')}.",
     EDIT_PLACEMENT[s['layout']] || EDIT_PLACEMENT['escena'],
     'Warm ivory, beige and light wood palette, soft natural window light; match the light on her to the room.',
     'Real camera photograph, natural skin texture, no text, no letters, no logos, no watermark.'

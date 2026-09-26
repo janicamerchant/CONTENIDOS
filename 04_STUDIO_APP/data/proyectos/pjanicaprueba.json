@@ -29,19 +29,19 @@
       "photo": "Janica Merchant de pie junto a una mesa de trabajo de madera clara en una oficina con ventanal, revisando en su laptop un panel de automatizaciones mientras el teléfono descansa boca abajo. Ocupa el lado derecho del encuadre y deja aire a la izquierda para el titular.",
       "photoPrompt": "Janica Merchant seated at a light wood desk beside a tall window with soft afternoon light, closed laptop and a coffee cup, looking calmly toward the window, modern ivory one-shoulder top, gold hoop earrings, she sits on the right half of the frame, clean plain ivory wall on the upper left",
       "source": "",
-      "image": "/files/04_STUDIO_APP/data/uploads/20260926-123601-pjanicaprueba-01.png",
-      "cutout": "/files/04_STUDIO_APP/data/uploads/20260926-123601-pjanicaprueba-01-recorte.png",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260926-120625-pjanicaprueba-01.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260926-120625-pjanicaprueba-01-recorte.png",
       "ix": 50,
       "iy": 30,
       "iz": 1,
       "bw": false,
       "texture": false,
       "ts": 1,
-      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260925-011039-pjanicaprueba-01.png",
-      "prevCutout": "",
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260926-123601-pjanicaprueba-01.png",
+      "prevCutout": "/files/04_STUDIO_APP/data/uploads/20260926-123601-pjanicaprueba-01-recorte.png",
       "full": false,
       "qa": "",
-      "soul": true
+      "soul": false
     },
     {
       "id": "soul2test",
@@ -105,14 +105,19 @@
       "photo": "Plano medio de una emprendedora sentada de noche frente a una pantalla con una bandeja de correo interminable, la luz azul sobre su rostro cansado y una agenda cerrada al lado. El sujeto a la derecha, cruzando levemente el área del titular.",
       "photoPrompt": "A hyperrealistic woman entrepreneur in her late thirties sits at night in a home office desk facing a laptop screen filled with an endless scrolling email inbox, blue screen light on her tired face, a closed leather planner beside her, exhausted but determined expression, medium shot, subject positioned on the right side crossing slightly into the left headline area, warm lamp light mixing with cool screen glow, real room with bookshelves and textured wall, natural color, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
       "source": "Microsoft Work Trend Index, 2025",
-      "image": "/files/04_STUDIO_APP/data/uploads/20260924-214339-p1790300554116-03.png",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260926-120625-pjanicaprueba-03.png",
       "cutout": "",
       "ix": 50,
       "iy": 30,
       "iz": 1,
       "bw": false,
       "texture": false,
-      "ts": 0.9
+      "ts": 0.9,
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260924-214339-p1790300554116-03.png",
+      "prevCutout": "",
+      "full": false,
+      "soul": false,
+      "qa": ""
     },
     {
       "id": "zpchur3",
@@ -217,5 +222,5 @@
       "ts": 1
     }
   ],
-  "updatedAt": "2026-09-26T12:36:04-03:00"
+  "updatedAt": "2026-09-26T12:07:45-04:00"
 }

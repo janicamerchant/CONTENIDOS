@@ -128,6 +128,7 @@ require_relative 'marcas'
 require_relative 'lamina_completa'
 require_relative 'soul'
 require_relative 'foto_real'
+require_relative 'nano_banana'
 
 # ---------- Claude: borrador de carrusel ----------
 
@@ -485,12 +486,16 @@ def run_generation(job_id, project_id, items, quality)
         persons = ids.map { |pid| load_person(pid) rescue nil }.compact
         # Persona con Soul ID entrenado: foto de cámara real con Soul 2.0; el texto lo pone el Editor
         # Foto real de la persona + escena con Grok: la cara no se genera (ver foto_real.rb)
-        real = edit_mode?(brand, persons)
-        soul = !real && soul_mode?(brand, persons)
-        full = !real && !soul && full_mode?(brand) && it['slide'].is_a?(Hash)
+        # Nano Banana Pro 4K (plan web de Higgsfield): manda sobre los demás motores (ver nano_banana.rb)
+        nbp = nbp_mode?(brand)
+        real = !nbp && edit_mode?(brand, persons)
+        soul = !nbp && !real && soul_mode?(brand, persons)
+        full = !nbp && !real && !soul && full_mode?(brand) && it['slide'].is_a?(Hash)
         model = HF_MODEL
         upload = ->(rel) { refs_lock.synchronize { refs[rel] ||= hf_upload(rel) } }
-        if real
+        if nbp
+          # la herramienta de Higgsfield sube las fotos ella misma (más abajo)
+        elsif real
           model = EDIT_MODEL
           body = edit_body(it, persons.first, brand, upload)
         elsif soul
@@ -514,6 +519,13 @@ def run_generation(job_id, project_id, items, quality)
         note = ''
         dest = nil
         loop do
+          if nbp
+            gen_update(job_id, it['index'], status: 'generando (Nano Banana Pro 4K)')
+            prompt, images = nbp_request(it, persons, brand)
+            name = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{slug(project_id, 24)}-#{format('%02d', it['index'] + 1)}.png"
+            dest = nbp_generate(prompt, images, File.join(UPLOADS, name))
+            break
+          end
           sub = hf_http(:post, "#{HF_API}/#{model}", body)
           gen_update(job_id, it['index'], status: sub['status'], request_id: sub['request_id'])
           deadline = Time.now + 600

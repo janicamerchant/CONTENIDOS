@@ -20,7 +20,6 @@
   "datos": [
 
   ],
-  "modo": "completa",
   "plantillas": {
     "portada": [
       "referencias/lowprofile-01-portada-janica.jpg",
@@ -58,5 +57,6 @@
       "referencias/lowprofile-01-portada-janica.jpg"
     ]
   },
-  "motor_persona": "soul"
+  "motor_persona": "foto_real",
+  "motor_imagen": "nano_banana_pro"
 }

@@ -36,6 +36,7 @@ Los proyectos se guardan solos en `data/proyectos/`; las imágenes subidas y gen
 ## Credenciales
 
 - **Higgsfield**: `04_STUDIO_APP/.env` con `HF_CREDENTIALS=id:secreto` (de cloud.higgsfield.ai). Los créditos de la API son un saldo aparte del plan de higgsfield.ai. El archivo está en `.gitignore`.
+- **Higgsfield web (Nano Banana Pro 4K)**: las marcas con `"motor_imagen": "nano_banana_pro"` en `marca.json` (hoy Janica) generan con la herramienta oficial `~/bin/higgsfield`, que usa la sesión y los créditos del plan de higgsfield.ai (~4 créditos por foto 4K). La API no ofrece este modelo. Instalación: `curl -fsSL https://raw.githubusercontent.com/higgsfield-ai/cli/main/install.sh -o i.sh && sh i.sh --prefix "$HOME" --no-hf`, luego `~/bin/higgsfield auth login` y `~/bin/higgsfield workspace set <id>` (`workspace list` muestra el id). Cada computador que genere necesita su propia sesión.
 - **Anthropic**: en Ajustes, o `ANTHROPIC_API_KEY=...` en el mismo `.env`.
 - Tras cambiar el `.env`, reinicia el Estudio.
 

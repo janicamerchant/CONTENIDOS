@@ -20,7 +20,7 @@ DOC_EXT = %w[.md .txt .pdf].freeze
 KINDS = { 'conocimiento' => DOC_EXT, 'referencias' => IMAGE_EXT, 'logos' => IMAGE_EXT }.freeze
 MAX_REF_IMAGES = 20     # referencias visuales activas que ve Claude en cada propuesta (van en caché)
 MAX_FACE_REFS = 8       # fotos de cara que se mandan a Higgsfield por foto
-BRAND_FIELDS = %w[name file swatch design theme colors fonts titleCase defaults look cutout personas datos logos byline modo plantillas motor_persona].freeze
+BRAND_FIELDS = %w[name file swatch design theme colors fonts titleCase defaults look cutout personas datos logos byline modo plantillas motor_persona motor_imagen].freeze
 
 def read_json(path, default = nil)
   File.exist?(path) ? JSON.parse(File.read(path, encoding: 'UTF-8')) : default
