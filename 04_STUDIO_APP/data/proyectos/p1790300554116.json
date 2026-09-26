@@ -44,44 +44,6 @@
       "soul": false
     },
     {
-      "id": "czldjv5",
-      "layout": "cifra",
-      "theme": "light",
-      "kicker": "El día roto",
-      "title": "Interrumpida cada *2 minutos*",
-      "body": "Telemetría de Microsoft 365: reuniones, correos y notificaciones fragmentan la jornada de los trabajadores del conocimiento.",
-      "number": "2 min",
-      "numberLabel": "entre interrupción e interrupción",
-      "items": [
-
-      ],
-      "leftLabel": "",
-      "leftItems": [
-
-      ],
-      "rightLabel": "",
-      "rightItems": [
-
-      ],
-      "cta": "",
-      "photo": "Detalle cenital en blanco y negro de un escritorio: un teléfono encendido con notificaciones apiladas, una taza de café fría a medias y una libreta con una sola línea escrita. Manos de mujer a punto de tomar el teléfono desde el borde derecho.",
-      "photoPrompt": "Black and white overhead detail shot of a cluttered desk: a smartphone screen glowing with stacked notification banners, a half-finished cold coffee cup, an open notebook with a single unfinished line, a woman's hands entering from the right edge reaching for the phone, tense unfinished atmosphere, textured linen desk surface and real office ambience, hard directional daylight creating strong shadows, monochrome black and white, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
-      "source": "Microsoft Work Trend Index, 2025",
-      "image": "/files/04_STUDIO_APP/data/uploads/20260925-120029-p1790300554116-02.png",
-      "cutout": "",
-      "ix": 50,
-      "iy": 50,
-      "iz": 1,
-      "bw": true,
-      "texture": false,
-      "ts": 1,
-      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260924-235027-p1790300554116-02.png",
-      "prevCutout": "",
-      "full": true,
-      "qa": "",
-      "soul": false
-    },
-    {
       "id": "50n59eb",
       "layout": "escena",
       "theme": "light",
@@ -114,6 +76,44 @@
       "texture": false,
       "ts": 0.9,
       "prevImage": "/files/04_STUDIO_APP/data/uploads/20260924-235054-p1790300554116-03.png",
+      "prevCutout": "",
+      "full": true,
+      "qa": "",
+      "soul": false
+    },
+    {
+      "id": "czldjv5",
+      "layout": "cifra",
+      "theme": "light",
+      "kicker": "El día roto",
+      "title": "Interrumpida cada *2 minutos*",
+      "body": "Telemetría de Microsoft 365: reuniones, correos y notificaciones fragmentan la jornada de los trabajadores del conocimiento.",
+      "number": "2 min",
+      "numberLabel": "entre interrupción e interrupción",
+      "items": [
+
+      ],
+      "leftLabel": "",
+      "leftItems": [
+
+      ],
+      "rightLabel": "",
+      "rightItems": [
+
+      ],
+      "cta": "",
+      "photo": "Detalle cenital en blanco y negro de un escritorio: un teléfono encendido con notificaciones apiladas, una taza de café fría a medias y una libreta con una sola línea escrita. Manos de mujer a punto de tomar el teléfono desde el borde derecho.",
+      "photoPrompt": "Black and white overhead detail shot of a cluttered desk: a smartphone screen glowing with stacked notification banners, a half-finished cold coffee cup, an open notebook with a single unfinished line, a woman's hands entering from the right edge reaching for the phone, tense unfinished atmosphere, textured linen desk surface and real office ambience, hard directional daylight creating strong shadows, monochrome black and white, hyperrealistic editorial photograph, natural skin texture, no text, no logos",
+      "source": "Microsoft Work Trend Index, 2025",
+      "image": "/files/04_STUDIO_APP/data/uploads/20260925-120029-p1790300554116-02.png",
+      "cutout": "",
+      "ix": 50,
+      "iy": 50,
+      "iz": 1,
+      "bw": true,
+      "texture": false,
+      "ts": 1,
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260924-235027-p1790300554116-02.png",
       "prevCutout": "",
       "full": true,
       "qa": "",
@@ -237,5 +237,5 @@
       "soul": false
     }
   ],
-  "updatedAt": "2026-09-25T12:34:36-04:00"
+  "updatedAt": "2026-09-25T13:58:19-04:00"
 }
