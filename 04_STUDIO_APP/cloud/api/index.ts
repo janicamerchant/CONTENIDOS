@@ -1,6 +1,9 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
+import {waitUntil} from '@vercel/functions';
+import {aiConfig,enqueue,generationStatus,runWorker,recoveredProject} from '../src/generation.js';
+import {libraryRoute,adminOnly,checked,readyFile} from '../src/library.js';
 import {authenticate,authorizeBrand,databaseError,HttpError} from '../src/auth.js';
 import {adminClient,config} from '../src/config.js';
 const id=z.string().min(1).max(128);
@@ -17,13 +20,24 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
   const url=new URL(req.url??'/','https://studio.invalid');const route=url.pathname.replace(/^\/api\/?/,'');
   if(req.method!=='GET'&&req.method!=='POST')throw new HttpError(405,'Método no admitido.');
   if(route==='public-config'&&req.method==='GET'){const c=config();return send(200,{url:c.SUPABASE_URL,publishableKey:c.SUPABASE_PUBLISHABLE_KEY,signup:false});}
+  if(route==='worker'){if(!process.env.CRON_SECRET||req.headers.authorization!=='Bearer '+process.env.CRON_SECRET)throw new HttpError(401,'No autorizado.');await runWorker(8);return send(200,{ok:true});}
   const who=await authenticate(req.headers.authorization);
+  if(['propose','draft','generate','brands/_draft'].includes(route)&&req.method==='POST'){const r=await enqueue(who,route,await body(req));waitUntil(runWorker());return send(202,r);}
+  if(route==='generate'&&req.method==='GET'){const r=await generationStatus(who,url.searchParams.get('id')||'');if(!r.done)waitUntil(runWorker());return send(200,r);}
+
   if(route==='me'&&req.method==='GET')return send(200,{id:who.id,role:who.role});
+  if(route.startsWith('brands')||route.startsWith('people')||(route==='requests'&&req.method==='POST')){const result=await libraryRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
+  if(route==='jobs/cutout'&&req.method==='POST'){
+   const b=z.object({group:z.uuid(),index:z.number().int().min(0),fileId:z.uuid()}).parse(await body(req));
+   const j=checked(await who.db.from('trabajos').select('*').eq('grupo_id',b.group).eq('lamina_id',String(b.index)).eq('estado','succeeded').single());
+   await authorizeBrand(who,j.marca_id,true);await readyFile(who,b.fileId,j.marca_id);
+   checked(await adminClient().from('trabajos').update({resultado:{...j.resultado,cutout:'storage://'+b.fileId}}).eq('id',j.id).eq('estado','succeeded'));return send(200,{ok:true});
+  }
   if(route==='projects'){
    if(req.method==='GET'){
     const project=url.searchParams.get('id');let q=who.db.from('proyectos').select('*').order('updated_at',{ascending:false});
     if(project)q=q.eq('id',id.parse(project));const r=await q;databaseError(r.error);
-    if(project){if(!r.data?.[0])throw new HttpError(404,'Proyecto no encontrado.');return send(200,{...r.data[0].documento,version:r.data[0].version});}
+    if(project){if(!r.data?.[0])throw new HttpError(404,'Proyecto no encontrado.');return send(200,await recoveredProject(who,r.data[0]));}
     return send(200,r.data?.map(p=>({id:p.id,name:p.documento.name,brand:p.marca_id,slides:p.documento.slides?.length??0,updatedAt:p.updated_at,version:p.version})));
    }
    const b=z.object({id,brand:id,version:z.number().int().nonnegative(),slides:z.array(z.record(z.string(),z.unknown())).max(30)}).passthrough().parse(await body(req));
@@ -31,7 +45,8 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    const r=await who.db.rpc('guardar_proyecto',{p_id:b.id,p_marca:b.brand,p_documento:document,p_version:version});databaseError(r.error);return send(200,{id:r.data.id,version:r.data.version,updatedAt:r.data.updated_at});
   }
   if(route==='brands'&&req.method==='GET'){const r=await who.db.from('marcas').select('*');databaseError(r.error);return send(200,{brands:r.data?.filter(b=>!b.archivada&&b.id!=='_comun').map(b=>({...b.identidad,id:b.id,version:b.version})),archived:r.data?.filter(b=>b.archivada).map(b=>({id:b.id,name:b.identidad.name}))});}
-  if(route==='config'&&req.method==='GET')return send(200,{hasKey:false,fromEnv:true,motores:[],motorDefecto:'nano_banana_pro',tamanoDefecto:'2k'});
+  if(route==='config'&&req.method==='GET')return send(200,aiConfig());
+  if(route==='config'&&req.method==='POST')throw new HttpError(403,'Las claves se configuran en Vercel, no en el navegador.');
   if(route==='requests'&&req.method==='GET'){
    const r=await who.db.from('solicitudes').select('documento');databaseError(r.error);return send(200,r.data?.map(x=>x.documento));
   }
@@ -55,6 +70,13 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
   if(route==='jobs'&&req.method==='GET'){
    const job=z.uuid().parse(url.searchParams.get('id'));const r=await who.db.from('trabajos').select('id,estado,resultado,error,updated_at').eq('id',job).single();databaseError(r.error);return send(200,r.data);
   }
+  if(route==='assets/sign-batch'&&req.method==='POST'){
+   const b=z.object({ids:z.array(z.uuid()).min(1).max(300)}).parse(await body(req));
+   const files=checked(await who.db.from('archivos').select('id,object_path').in('id',b.ids).eq('listo',true).is('eliminado_at',null));
+   if(!files.length)return send(200,{urls:{},expiresIn:3600});
+   const signed=checked(await who.db.storage.from('estudio').createSignedUrls(files.map((f:any)=>f.object_path),3600));
+   return send(200,{urls:Object.fromEntries(files.map((f:any,i:number)=>[f.id,signed[i]?.signedUrl||null])),expiresIn:3600});
+  }
   if(route==='assets/sign'&&req.method==='POST'){
    const b=z.object({id:z.uuid()}).parse(await body(req));const file=await who.db.from('archivos').select('object_path,listo,eliminado_at').eq('id',b.id).single();
    if(file.error||!file.data?.listo||file.data.eliminado_at)throw new HttpError(404,'Archivo no encontrado.');
@@ -62,16 +84,16 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    const r=await who.db.storage.from('estudio').createSignedUrl(file.data.object_path,300);databaseError(r.error);return send(200,{url:r.data!.signedUrl,expiresIn:300});
   }
   if(route==='assets/upload'&&req.method==='POST'){
-   const b=z.object({brand:id,name:z.string().min(1).max(180),mime:z.enum(['image/png','image/jpeg','image/webp','image/gif','application/pdf','text/plain','text/markdown']),bytes:z.number().int().positive().max(52428800)}).parse(await body(req));
-   await authorizeBrand(who,b.brand,true);const admin=adminClient();const fileId=randomUUID();
-   const r=await admin.from('archivos').insert({id:fileId,alcance:'marca',marca_id:b.brand,nombre:b.name,mime:b.mime,bytes:b.bytes}).select('object_path').single();databaseError(r.error);
+   const b=z.object({brand:id.optional(),person:id.optional(),name:z.string().min(1).max(180),mime:z.enum(['image/png','image/jpeg','image/webp','image/gif','application/pdf','text/plain','text/markdown']),bytes:z.number().int().positive().max(52428800)}).parse(await body(req));
+   if(b.person){adminOnly(who);const p=checked(await who.db.from('personas').select('id').eq('id',b.person).eq('archivada',false).maybeSingle());if(!p)throw new HttpError(404,'Persona no encontrada.');}else{if(!b.brand)throw new HttpError(400,'Falta la marca.');await authorizeBrand(who,b.brand,true);}const admin=adminClient();const fileId=randomUUID();
+   const r=await admin.from('archivos').insert({id:fileId,alcance:b.person?'persona':'marca',marca_id:b.person?null:b.brand,persona_id:b.person||null,nombre:b.name,mime:b.mime,bytes:b.bytes}).select('object_path').single();databaseError(r.error);
    const signed=await admin.storage.from('estudio').createSignedUploadUrl(r.data!.object_path,{upsert:false});databaseError(signed.error);
    return send(200,{id:fileId,path:r.data!.object_path,token:signed.data!.token});
   }
   if(route==='assets/finalize'&&req.method==='POST'){
    const b=z.object({id:z.uuid()}).parse(await body(req));const file=await who.db.from('archivos').select('*').eq('id',b.id).single();
-   if(file.error||!file.data||file.data.alcance!=='marca')throw new HttpError(404,'Archivo no encontrado.');
-   await authorizeBrand(who,file.data.marca_id,true);const admin=adminClient();const download=await admin.storage.from('estudio').download(file.data.object_path);databaseError(download.error);
+   if(file.error||!file.data||!['marca','persona'].includes(file.data.alcance))throw new HttpError(404,'Archivo no encontrado.');
+   if(file.data.alcance==='persona')adminOnly(who);else await authorizeBrand(who,file.data.marca_id,true);const admin=adminClient();const download=await admin.storage.from('estudio').download(file.data.object_path);databaseError(download.error);
    const bytes=Buffer.from(await download.data!.arrayBuffer());if(bytes.length!==file.data.bytes)throw new HttpError(422,'El tamaño del archivo no coincide.');
    const sha256=createHash('sha256').update(bytes).digest('hex');
    // SVG/HTML are never accepted. Verify raster/PDF signatures before exposing a file.

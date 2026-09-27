@@ -8,3 +8,4 @@ scripts/integration.ts
 scripts/management.mjs
 scripts/apply-migration.mjs
 dist
+scripts/functional-test.ts

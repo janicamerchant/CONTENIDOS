@@ -3,7 +3,7 @@
   "framework": null,
   "functions": {
     "api/index.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "rewrites": [
@@ -32,5 +32,11 @@
     }
   ],
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/worker",
+      "schedule": "* * * * *"
+    }
+  ]
 }

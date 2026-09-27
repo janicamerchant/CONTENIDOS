@@ -215,8 +215,9 @@ function baseVars(br, theme) {
 function loadImage(src) {
   return new Promise((ok, fail) => {
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => ok(img);
-    img.onerror = () => fail(new Error('No se pudo cargar ' + src));
+    img.onerror = () => fail(new Error('No se pudo cargar la imagen.'));
     img.src = src;
   });
 }
@@ -534,6 +535,8 @@ function buildSlide(p, s, i, n) {
     s.bw ? 'bw' : '', s.texture ? 'tex' : '', hasImg ? 'has-photo' : '',
   ].filter(Boolean).join(' ');
   if ((br.design || 'base') === 'base') Object.entries(baseVars(br, s.theme)).forEach(([k, v]) => el.style.setProperty(k, v));
+  const background = br.backgrounds?.[s.theme];
+  if (background) el.style.setProperty('--brand-background', 'url(' + JSON.stringify(background) + ')');
   el.style.setProperty('--ts', s.ts);
   el.style.setProperty('--ix', s.ix + '%');
   el.style.setProperty('--iy', s.iy + '%');
@@ -638,9 +641,11 @@ async function saveProject() {
     state.p.id = r.id;
     store.set('lastProject', r.id);
     $('#save-state').textContent = 'Guardado ' + new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+    return true;
   } catch (e) {
     $('#save-state').textContent = 'No se pudo guardar';
     toast('No se pudo guardar el proyecto: ' + e.message, true);
+    return false;
   }
 }
 
@@ -1106,7 +1111,7 @@ const editorMotor = () => (state.emotor?.projectId === state.p?.id ? state.emoto
 async function regenerateInEditor(i) {
   const p = state.p, s = p.slides[i];
   clearTimeout(state.saveTimer);
-  await saveProject();                    // el servidor escribe la foto nueva sobre el proyecto guardado
+  if (await saveProject() === false) return;                    // el servidor escribe la foto nueva sobre el proyecto guardado
   try {
     const r = await api('/api/generate', {
       projectId: p.id, ...editorMotor(),
@@ -1386,7 +1391,7 @@ async function draftFromRequest(r, btn) {
     });
     state.p = p;
     state.sel = 0;
-    await saveProject();
+    if (await saveProject() === false) return;
     r.projectId = p.id;
     r.status = 'produccion';
     await saveRequest(r);
@@ -1577,7 +1582,7 @@ function renderCost() {
   const per = motorUsd(sel.motor, sel.tamano);
   const photos = d.slides.filter((s) => s.gen && (s.photoPrompt || s.photo || fullMode(d.brand))).length;
   const withPeople = d.slides.filter((s) => s.gen && slidePeople(s).length).length;
-  const imgUsd = per == null ? null : photos * per;
+  const imgUsd = photos * (state.cfg?.reservationPerImage || 2);
   const ready = motorReady(sel);
   const prov = motorInfo(sel.motor)?.proveedor || '';
   const u = d.usage || {};
@@ -1598,12 +1603,12 @@ function renderCost() {
         <button type="button" class="btn ghost" id="btn-regen-all" ${ready ? '' : 'disabled'}>Regenerar todas · ${photos} foto${photos === 1 ? '' : 's'}${imgUsd == null ? '' : ` ≈ ${money(imgUsd)}`}</button>` : ''}` : ''}`;
   }
   $('#cost-panel').innerHTML = `
-    <h2>Costo aproximado</h2>
+    <h2>Presupuesto de generación</h2>
     ${photos ? motorPicker('crear', sel, !!(g && !g.done)) : ''}
-    <div class="line"><b>Fotos · ${esc(prov)}</b><span class="v">${imgUsd == null ? '—' : money(imgUsd)}</span>
-      <small>${photos} foto${photos === 1 ? '' : 's'} × ${usdLabel(per)} con ${esc(motorLabel(sel.motor, sel.tamano))}.${withPeople ? ` ${withPeople} con la cara de una persona aprobada como referencia.` : ''} Precio aproximado; si una foto falla o se rechaza, no se cobra.</small></div>
+    <div class="line"><b>Reserva · ${esc(prov)}</b><span class="v">${imgUsd == null ? '—' : money(imgUsd)}</span>
+      <small>${photos} foto${photos === 1 ? '' : 's'} × ${usdLabel(per)} con ${esc(motorLabel(sel.motor, sel.tamano))}.${withPeople ? ` ${withPeople} con la cara de una persona aprobada como referencia.` : ''} Precio aproximado del proveedor. El Estudio reserva hasta US$2 por foto para controlar el presupuesto; una ejecución incierta conserva la reserva hasta revisarse.</small></div>
     <div class="line"><b>Claude · propuesta</b><span class="v">${money(d.claudeUsd || 0)}</span>
-      <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Opus 5${u.input_tokens ? ` (última: investigación con ${u.web_searches || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
+      <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Sonnet 4.6${u.input_tokens ? ` (última: investigación con ${u.web_searches || u.server_tool_use?.web_search_requests || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
     <div class="line total"><b>Falta por gastar</b><span class="v">${imgUsd == null ? '—' : `≈ ${money(imgUsd)}`}</span>
       <small>Se cobra en la cuenta de ${esc(prov)} de la API key que está en 04_STUDIO_APP/.env.</small></div>
     ${g ? genHtml : `<div class="form-actions">
@@ -1625,7 +1630,7 @@ async function approve(indices = null) {
   if (!d.projectId) {
     state.p = draftToProject();
     state.sel = 0;
-    await saveProject();
+    if (await saveProject() === false) return;
     d.projectId = state.p.id;
   }
   const want = indices && new Set(indices);
@@ -1665,7 +1670,7 @@ async function pollGeneration() {
     saveDraft();
     if (state.view === 'create') { renderProposal(); renderCost(); }
     if (job.done) {
-      if (state.p?.id === d.projectId) await saveProject();
+      if (state.p?.id === d.projectId) if (await saveProject() === false) return;
       const bad = job.items.filter((x) => x.status === 'failed').length;
       toast(bad ? `Fotos listas, ${bad} fallaron. Puedes reintentarlas.` : 'Fotos listas. Ya están en las láminas.', !!bad);
       return;
@@ -1944,7 +1949,7 @@ function bindGlobal() {
       newProject(r.brief.marca, { name: r.brief.tema, requestId: r.id, slides: skeletonFromBrief(r.brief) });
       r.projectId = state.p.id;
       r.status = 'produccion';
-      await saveProject();
+      if (await saveProject() === false) return;
       saveRequest(r).catch((err) => toast(err.message, true));
     }
   });

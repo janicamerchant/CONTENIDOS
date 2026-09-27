@@ -3,3 +3,13 @@
 #studio-shell{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 body:has(> #login:not([hidden])){overflow-y:auto}
 @media(max-width:900px){#studio-shell{flex:none;min-height:100dvh}}
+/* Prevent toolbar and flex min-content widths from expanding the mobile page. */
+.top,.stage-bar{flex-shrink:0}.stage-bar{flex-wrap:wrap}
+@media(max-width:900px){
+ html,body{width:100%;max-width:100%}#studio-shell,.view,.rail,.stage-wrap,.inspector,.mk-main,.req-form-wrap,.req-list-wrap{width:100%;min-width:0}
+ .top{gap:12px;padding:12px}.tabs{display:flex;flex-wrap:wrap;max-width:100%}.top-actions{margin-left:0}
+ .strip{width:100%;min-width:0}.stage-bar{gap:8px;padding:12px}.stage-bar .spacer{display:none}
+ .stage-bar>*{max-width:100%}.stage-wrap{flex:none}.inspector{flex:none}.req-form>*{min-width:0}
+ .pc-top,.pc-photo,.mk-head,.form-actions{flex-wrap:wrap;min-width:0}.mk-res{display:flex;flex-wrap:wrap;min-width:0}
+ .deliv-row,.mk-photos{max-width:100%}.mk-person,.mk-sec{min-width:0;max-width:100%}
+}

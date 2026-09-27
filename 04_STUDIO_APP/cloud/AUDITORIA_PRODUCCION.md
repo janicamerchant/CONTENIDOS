@@ -1,4 +1,43 @@
-# Auditoría funcional de Estudio en producción
+# Reparación y verificación en producción
+
+Actualización: 26 de septiembre de 2026 (27 de septiembre UTC).
+Sitio: https://estudio-content.vercel.app
+Despliegue: `dpl_Bp1bkM1Ye2xJ9U6NNtShALUqxMup`.
+
+Las rutas ausentes de la auditoría inicial se implementaron y publicaron. El registro histórico aparece al final; sus fallos describen la versión anterior.
+
+## Cambios
+
+- Marcas, documentos comunes, recursos y personas: lectura, edición, archivos, asociaciones, archivo y restauración. Identidad/asociaciones con transacciones; edición de marcas con control de versión.
+- Solicitudes: creación y actualización persistentes.
+- IA: Claude Sonnet 4.6 para propuestas y perfiles; Higgsfield Flare para imágenes. Variables privadas en servidor y disponibilidad real en la interfaz. Reserva atómica de presupuesto, idempotencia, cola persistente, cron protegido y recuperación de imágenes al reabrir.
+- Recorte de personas: segmentación local en el navegador y subida firmada por TUS.
+- Entregas: URLs firmadas por lotes, carga de imágenes sin descargar previamente toda la biblioteca y renovación de enlaces.
+- Exportación: imágenes con CORS, textura SVG compatible, ruta correcta y fondos originales de EVA asociados como copias privadas.
+- Navegación y tamaño de los paneles: scroll y adaptación móvil sin desbordamiento horizontal en la ventana probada.
+
+## Evidencia
+
+- TypeScript, compilación y 28 pruebas automatizadas aprobadas.
+- Nueve comprobaciones remotas de aislamiento, permisos, conflictos de guardado y presupuesto concurrente aprobadas; cuentas y datos temporales eliminados.
+- Perfil de marca real generado con Claude; propuesta real e imagen real comprobadas durante el desarrollo.
+- Producción: API de marcas/personas/documentos/solicitudes, guardado del editor, PNG, galería, recorte de una foto real y controles de acceso comprobados con cuenta temporal.
+- Producción: carrusel de dos láminas con foto real exportado; móvil a 390 × 844 sin desbordamiento; sin errores de JavaScript. Propuesta Claude con idempotencia e imagen Higgsfield completadas; recuperación de imagen al reabrir confirmada. Archivo/restauración aprobados y datos temporales eliminados.
+- Dependencias de producción: `npm audit --omit=dev` sin vulnerabilidades conocidas.
+- Endpoint del ejecutor: 401 sin secreto; 200 con el secreto de cron.
+- Escaneo de secretos: ninguna clave privada encontrada en los archivos de código ni en el frontend compilado.
+
+## Límites que siguen aplicando
+
+No se certifica paridad visual de todos los diseños con Ruby ni todos los navegadores. La segmentación sirve para personas; los resultados generativos requieren revisión visual. Solo están conectados Anthropic e Higgsfield; no se anuncian como disponibles motores sin credenciales. SMTP e invitaciones por email no están configurados. El asesor de Supabase todavía advierte que la protección contra contraseñas filtradas está desactivada; no se modificó la contraseña de usuarios existentes.
+
+Higgsfield no devuelve un coste confirmado en la respuesta utilizada: la reserva de US$2 se conserva para el límite interno. No representa una factura real. Los trabajos de resultado incierto no se reenvían automáticamente para evitar cobros duplicados.
+
+Las pruebas usan datos temporales y los eliminan. Evidencia detallada local, ignorada por Git: `artifacts/functional-report.json` y artefactos de auditoría. Las pruebas con IA consumen créditos reales.
+
+---
+
+# Auditoría funcional de Estudio en producción — registro inicial
 
 Fecha: 26 de septiembre de 2026 (Santiago; ejecución 27 de septiembre UTC).
 Destino: https://estudio-content.vercel.app

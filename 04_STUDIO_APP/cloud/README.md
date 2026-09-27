@@ -1,110 +1,53 @@
-> Auditoría funcional actual: [AUDITORIA_PRODUCCION.md](AUDITORIA_PRODUCCION.md). La versión publicada sigue siendo una migración parcial; consultar los bloqueos antes de usarla como reemplazo del Estudio local.
+# Estudio en Vercel + Supabase
 
-# Estudio web — implementación de la base y migración
+Sitio: https://estudio-content.vercel.app
 
-**Estado: esquema aplicado en Supabase `okgjpsntveloemjrsmjd` (content studio), importación inicial verificada, acceso y editor conectados en una compilación local. No es todavía una versión del Estudio lista para producción.** El servidor Ruby y la interfaz actual siguen siendo la versión operativa. No se han enviado invitaciones ni gastado créditos de IA. El registro público remoto está desactivado; falta designar al primer administrador.
+El frontend está en `web/legacy/` con su adaptación en `web/cloud.js`. El servidor Ruby y los archivos del Estudio local se mantienen independientes.
 
-## Implementado
+## Funciones
 
-- Migración SQL con marcas, recursos, datos, personas/fotos, relaciones, proyectos, solicitudes, entregas, miembros, archivos, trabajos y auditoría.
-- RLS por marca, miembros activos y roles. Datos comunes legibles por miembros; edición reservada a admin. Personas compartidas visibles solo a sus marcas. Administración de personas compartidas pendiente de API admin.
-- Storage privado con metadatos autorizados, rutas por UUID, enlaces de descarga de cinco minutos y subidas directas firmadas sin reemplazo.
-- Proyectos con comparación de versión atómica y protección adicional ante escritura directa por REST.
-- Primitivas de cola duradera en Postgres: idempotencia, reserva de presupuesto, exclusión al reclamar y recuperación conservadora. **Falta el ejecutor que llama a los proveedores y finaliza los trabajos; la cola por sí sola no genera imágenes.**
-- Inventario sin credenciales, importación repetible con SHA-256 remoto, aislamiento de archivos sin marca y negativa a sobrescribir filas diferentes.
-- Copia complementaria de tablas y objetos, con manifiesto de integridad.
-- Base de API TypeScript: configuración pública, sesión/miembro, lectura de marcas, proyectos, consulta de trabajos y ciclo de subida/firma de archivos. Conectada a un adaptador del frontend que conserva referencias persistentes, aísla el almacenamiento por usuario y serializa los guardados.
-- Pruebas de SQL sobre PGlite (Postgres real en WASM) con roles y esquemas Auth/Storage mínimos. No sustituyen la integración contra Supabase Auth, PostgREST y Storage reales.
+- Login, alta inicial de administrador, enlace privado para elegir contraseña y cierre de sesión. Registro público desactivado.
+- Proyectos con autoguardado y versiones; un conflicto no sobrescribe una edición más reciente.
+- Marcas: identidad, reglas, datos, documentos, logos, referencias, vestuario, papelera, archivo y restauración. Personas compartidas y sus fotos solo se administran con rol admin.
+- Solicitudes: creación, consulta, actualización y borrador con IA.
+- Propuestas y perfiles con Claude Sonnet 4.6, documentos de marca y búsqueda web acotada; imágenes con Higgsfield GPT Image 2.5 Flare, fotos aprobadas y vestuario como referencias.
+- Cola persistente: reserva atómica del lote completo, claves de idempotencia, leases y cron cada minuto. Un envío de resultado incierto no se reenvía automáticamente. Consultar estado también impulsa la cola.
+- Imágenes generadas recuperables al reabrir el proyecto. El cliente conserva referencias `storage://` al guardar, nunca URLs temporales.
+- Subidas directas a Storage; archivos grandes usan TUS con firma. Galerías con URLs firmadas y carga diferida, sin descargar todos los originales antes de mostrar la página.
+- Recorte de personas en el navegador con MediaPipe; no necesita una clave ni envía la imagen a un servicio de recorte.
+- Exportación PNG y entregas en Storage privado.
 
-## Verificar localmente
+## Seguridad y presupuesto
 
-Requiere Node 22 o posterior y Supabase CLI para administrar migraciones. Las pruebas no requieren Docker ni una cuenta remota.
+Las tablas mantienen RLS y los secretos solo se usan en servidor. Las APIs comprueban usuario, miembro activo, rol y marca; los RPC de escritura privilegiados solo son ejecutables por service role. Los cambios de identidad/asociaciones y las reservas de generación se guardan en transacciones.
 
-```sh
-cd 04_STUDIO_APP/cloud
-npm ci
-npm run check
-npm run inventory
-```
+Se reserva US$2 por propuesta/perfil o imagen. Claude registra el coste calculado desde el uso devuelto. Higgsfield tiene precio variable; si la respuesta no incluye coste confirmado, se conserva la reserva en el presupuesto del Estudio. Esta reserva no equivale a una factura del proveedor. El límite mensual se configura por miembro en `miembros.limite_mensual_usd`.
 
-`artifacts/summary.json` contiene cantidades y advertencias; `artifacts/inventory.json` contiene los registros y las referencias. Ambos están excluidos de Git porque incluyen datos del negocio. El inventario no modifica los originales. Ordena los archivos de forma determinista y evita duplicados cuando distintas referencias se leen en paralelo. No lee `.env` del Estudio local ni `data/config.json`.
+Un trabajo `uncertain` requiere revisar su ID y el historial del proveedor antes de liberar presupuesto o generar nuevamente. No hay reintentos automáticos de envíos ambiguos. Las imágenes terminadas permanecen en `trabajos.resultado` aunque se cierre el navegador; el proyecto recupera el resultado si su imagen original no fue reemplazada.
 
-Los enlaces `/files/...` se convierten a `storage://<uuid>` persistente. La futura capa de cliente debe resolverlos a enlaces firmados al mostrar/exportar y renovarlos antes de caducar. Nunca guardar la URL firmada en el proyecto.
+## Variables de producción
 
-Los originales no referenciados quedan en cuarentena accesible solo al administrador. No asumir que son comunes a todas las marcas. Un archivo usado en dos marcas puede copiarse por marca para mantener el aislamiento; esto aumenta el tamaño frente al inventario del disco.
+Configurar en Vercel: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ANTHROPIC_API_KEY`, `HF_CREDENTIALS` y `CRON_SECRET`. Las cuatro últimas son secretos. No subir `.env` ni `SUPABASE_ACCESS_TOKEN`.
 
-## Configurar el destino
+Solo se muestran motores conectados: Google y OpenAI directos no están configurados en esta instalación. No se requieren para el motor Higgsfield disponible.
 
-1. Elegir organización propietaria y crear un proyecto **de pruebas** separado de producción. Crear también el proyecto Vercel de la misma organización. El destino elegido y verificado es `okgjpsntveloemjrsmjd` (`content studio`, región `ca-central-1`). El acceso por Management API ya está configurado localmente.
-2. Copiar `.env.example` a `.env` dentro de esta carpeta y completar URL, `sb_publishable_...`, clave secreta, identificador de proyecto, email admin y URL final. No reutilizar secretos de producción en previews. El script comprueba que URL e identificador coincidan.
-3. Aplicar las migraciones de `supabase/migrations/` en orden en un proyecto dedicado vacío usando el flujo de migraciones de Supabase. **Ya aplicadas al destino elegido**, junto con la corrección HTTP 409 y los índices de claves foráneas. No volver a ejecutar la migración inicial allí. Revisar `supabase link --help` y `supabase db push --help` antes de enlazar/aplicar. No ejecutar esta migración en un proyecto que ya contenga tablas homónimas.
-4. Desactivar registro público, incluidos flujos de OAuth. El `config.toml` ya lo desactiva **localmente**; no cambia por sí solo la configuración remota. Configurar SMTP propio y redirects exactos para producción y pruebas.
-5. Crear el usuario administrador en Auth y ejecutar `npm run bootstrap:admin`. Este script no envía correos y se detiene si ya existe un admin activo. El email debe ser de la persona designada por el dueño, no una suposición.
-6. `npm run test:integration` ejecuta pruebas remotas con usuarios temporales admin/editor/lector, dos marcas y suspensión; verifica REST, Storage, guardados y presupuesto concurrentes. Ya pasaron contra el destino elegido. No envía emails ni llama a IA; elimina sus usuarios y datos al terminar.
-7. Ejecutar `npm run inventory` y revisar cuarentena/advertencias. `npm run migrate:apply` realiza la carga al destino configurado y descarga cada objeto para verificar su checksum. Puede consumir transferencia. Dejar de escribir en el origen durante la copia final.
+## Desarrollo y validación
 
-El esquema asume acceso por marcas asignadas. Para dar acceso a todas las marcas, crear asignaciones explícitas para cada miembro; una marca nueva no concede acceso automáticamente. El primer administrador debe gestionar las asignaciones. Ningún usuario puede autoasignarse un rol.
+- `npm run dev`: servidor local (puerto 4322; variable `PORT` para cambiarlo).
+- `npm run build`: crea `dist/` desde cero, incluido el modelo de recorte y su runtime WASM.
+- `npm run check`: TypeScript y pruebas de permisos, versiones y presupuesto.
+- `npm run test:integration`: comprobaciones remotas con usuarios/datos temporales y limpieza.
+- `npx tsx scripts/functional-test.ts`: flujos API/navegador contra `TEST_SITE` (por defecto `http://127.0.0.1:4323`). Crea y elimina una marca de prueba.
+- Añadir `--cutout` para probar segmentación y subida, `--ai` para una propuesta y una imagen reales, `--profile` para un perfil real. Las opciones IA consumen créditos del proveedor.
 
-## Migración, repetición y corte
+La auditoría histórica y su estado de resolución están en [AUDITORIA_PRODUCCION.md](AUDITORIA_PRODUCCION.md).
 
-La importación permite repetir exactamente la misma copia tras un fallo sin duplicar datos. `npm run migrate:verify` compara las filas del destino con el origen actual y exige que todos los archivos tengan su checksum verificado antes de emitir el recibo. Los reintentos de subida usan rutas inmutables sin reemplazo y las solicitudes tienen timeout. Los objetos no se exponen hasta verificar sus bytes. Si el origen cambia durante la importación se detecta al final y no se emite recibo de éxito.
+## Datos y operación
 
-**No existe todavía sincronización incremental automática.** Si una fila u objeto del inventario ya existe con contenido diferente, el script se detiene y exige conciliación. No soluciona conflictos borrando ni sobrescribiendo datos. Antes del corte se debe implementar y probar la conciliación de cambios o realizar la copia final a un destino limpio con escrituras locales pausadas. Un recibo de copia no autoriza el corte.
+La importación inicial incluyó 298 archivos, 9 proyectos, 20 entregas, 3 marcas, documentos comunes y 3 personas. El recibo y los hashes están en `artifacts/` local (ignorado por Git). `npm run inventory`, `npm run migrate:verify` y `npm run backup` mantienen las herramientas de inventario, comprobación y copia.
 
-Conservar una copia fechada de todos los originales fuera del repositorio. Después del corte, evitar dos sistemas aceptando escrituras. Un retorno a Ruby requiere primero recuperar cambios nuevos de nube; no basta con encender el servidor antiguo.
+Las migraciones están en `supabase/migrations/`; el proyecto remoto es `okgjpsntveloemjrsmjd`. `scripts/apply-migration.mjs` usa Management API y sincroniza la versión del archivo con el historial remoto. No se vuelve a ejecutar la importación sobre datos editados en cloud.
 
-## Respaldo
+SMTP e invitaciones por email no están configurados. El acceso existente usa contraseña. MediaPipe segmenta personas, no objetos generales; todo resultado generativo debe revisarse visualmente antes de publicar contenido.
 
-`npm run backup` descarga tablas y objetos a una carpeta privada bajo `backups/`, con checksums. Es una copia complementaria, **no un snapshot transaccional ni un respaldo completo de Auth**. Debe acompañarse de backups de Postgres/Auth gestionados por Supabase, SQL versionado, copia externa y prueba de restauración a otro proyecto. Pausar escrituras para una exportación consistente. No publicar los respaldos.
-
-## API disponible para integración posterior
-
-Todas salvo `/api/public-config` requieren `Authorization: Bearer <access_token>` verificado con Supabase Auth y un miembro activo.
-
-| Ruta | Operación |
-|---|---|
-| GET `/api/public-config` | URL y clave publishable; rechaza una clave secreta mal configurada |
-| GET `/api/me` | Identidad y rol actual |
-| GET `/api/brands` | Marcas permitidas por RLS |
-| GET `/api/projects[?id=...]` | Proyectos permitidos |
-| POST `/api/projects` | Documento con `id`, `brand`, `slides`, `version` (0 para nuevo); devuelve nueva versión |
-| GET `/api/jobs?id=...` | Estado persistido de un trabajo autorizado |
-| POST `/api/assets/upload` | Registrar `brand`, `name`, `mime`, `bytes`; recibir `path` y token de subida directa |
-| POST `/api/assets/finalize` | Verificar bytes del objeto por `id` y marcarlo disponible |
-| POST `/api/assets/sign` | Obtener descarga temporal por `id` |
-
-`npm run build` genera `dist/` con login y el editor existente. `npm run dev` sirve la vista local en http://127.0.0.1:4322. La generación de IA y administración de marcas todavía están pendientes; no publicar como versión completa. `vercel.json` configura la API y esta compilación. La raíz del proyecto Vercel sería `04_STUDIO_APP/cloud`.
-
-## Trabajo pendiente antes de producción
-
-- Login con contraseña y cierre de sesión implementados; falta designar y configurar administrador, invitaciones y SMTP/enlace mágico. El frontend se compila desde la copia versionada `web/legacy/` de la interfaz local, sin modificar el servidor Ruby. Validar el editor/exportador completo con una sesión real antes de producción.
-- Adaptar el resto de contratos de las 14 rutas y probar paridad de edición, marcas, personas, papelera, exportación y descargas.
-- Ejecutores de Claude/Google/OpenAI/Higgsfield y recorte; validar API/modelos/precios vigentes. Guardar ID externo antes de consultar el resultado. Reintentar polling, no reenviar automáticamente una generación incierta. Finalizar usando lease_token para impedir escrituras de ejecutores antiguos.
-- Para una imagen tardía: asociar por ID estable de lámina y verificar versión; no reemplazar el proyecto entero ni una regeneración más reciente. Guardar resultados en entregas aunque requieran reconciliación.
-- Reservar el máximo acotado de cada operación en el servidor, incluidos QA/reintentos/recorte; registrar coste real y liberar solo costes confirmados. El límite SQL no limita por sí solo lo que el proveedor puede facturar.
-- Realtime con recuperación por consulta al reconectar, límites de concurrencia y tareas programadas autenticadas con secreto independiente del navegador.
-- Advisors de seguridad sin hallazgos y claves foráneas con índices verificados en el destino. Autorización real, suspensión y concurrencia ya probadas. Faltan URLs expiradas, subida inválida, timeout/reinicio del futuro ejecutor y restauración completa. No declarar seguridad basándose solo en un plugin.
-- Conciliación de migración final, copia externa, configuración de producción/dominio y prueba completa con un post y un carrusel.
-
-## Copia remota verificada
-
-En el proyecto `content studio` se verificaron 3 marcas más documentos comunes, 3 personas, 9 proyectos, 20 entregas y 298 archivos (803.138.799 bytes). El recibo está en `artifacts/receipt-okgjpsntveloemjrsmjd.json`. Los 126 archivos sin marca inequívoca siguen restringidos a admin. No se ha hecho el corte de producción ni desactivado el Estudio local.
-
-La pantalla de acceso usa contraseña para usuarios provisionados por administración; no ofrece registro público ni envía emails. El acceso por enlace mágico requiere configurar SMTP y redirects antes de activarlo.
-
-## Conectar GitHub a Vercel
-
-Importar `janicamerchant/CONTENIDOS`, rama `main`:
-
-- Root Directory: `04_STUDIO_APP/cloud`
-- Framework Preset: Other
-- Install Command: `npm ci`
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Node.js: 24.x
-
-Configurar las variables `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` y `SUPABASE_SECRET_KEY` desde el archivo local `.env`. No subir ese archivo ni configurar `SUPABASE_ACCESS_TOKEN` en Vercel: es una credencial de administración local. Los secretos no se necesitan para compilar, pero sí para ejecutar la API.
-
-`web/legacy/` es una copia versionada de los cinco archivos de la interfaz original; permite compilar sin acceder fuera de la raíz de Vercel. Actualizarla explícitamente cuando se incorporen cambios del Estudio local. No contiene marcas, proyectos, imágenes ni credenciales.
-
-Este despliegue permite comprobar login e integración del editor. La generación de IA y la administración completa de marcas siguen pendientes.
+Referencias de implementación: [Higgsfield API](https://open.higgsfield.ai/models/marketing-studio/image/flare/api-reference), [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs), [Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing), [Supabase TUS firmado](https://supabase.com/docs/guides/storage/uploads/resumable-uploads#presigned-uploads), [MediaPipe](https://developers.google.com/edge/mediapipe/solutions/vision/image_segmenter/web_js).
