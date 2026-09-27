@@ -1,0 +1,10 @@
+.env
+.env.*
+node_modules
+artifacts
+backups
+supabase
+scripts/integration.ts
+scripts/management.mjs
+scripts/apply-migration.mjs
+dist

@@ -5,3 +5,4 @@ dist/
 .vercel/
 artifacts/
 backups/
+.vercel
