@@ -13,3 +13,5 @@ html=html.replace('<script src="marcas.js"></script>\n<script src="app.js"></scr
 await writeFile('dist/index.html',html);await copyFile('web/cloud.css','dist/cloud.css');
 await build({entryPoints:['web/cloud.js'],outfile:'dist/cloud.js',bundle:true,format:'esm',minify:true,target:'es2022'});
 console.log('Interfaz compilada sin modificar el Estudio local.');
+await copyFile('web/password.html','dist/password.html');
+await build({entryPoints:['web/password.js'],outfile:'dist/password.js',bundle:true,format:'esm',minify:true,target:'es2022'});
