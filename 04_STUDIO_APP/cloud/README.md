@@ -1,3 +1,5 @@
+> Auditoría funcional actual: [AUDITORIA_PRODUCCION.md](AUDITORIA_PRODUCCION.md). La versión publicada sigue siendo una migración parcial; consultar los bloqueos antes de usarla como reemplazo del Estudio local.
+
 # Estudio web — implementación de la base y migración
 
 **Estado: esquema aplicado en Supabase `okgjpsntveloemjrsmjd` (content studio), importación inicial verificada, acceso y editor conectados en una compilación local. No es todavía una versión del Estudio lista para producción.** El servidor Ruby y la interfaz actual siguen siendo la versión operativa. No se han enviado invitaciones ni gastado créditos de IA. El registro público remoto está desactivado; falta designar al primer administrador.

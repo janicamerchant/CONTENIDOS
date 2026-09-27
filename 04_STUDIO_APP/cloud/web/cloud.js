@@ -42,7 +42,7 @@ async function start(){
   const r=await fetch('/api/public-config');if(!r.ok)throw new Error('No se pudo conectar al Estudio.');const cfg=await r.json();
   client=createClient(cfg.url,cfg.publishableKey);
   document.querySelector('#login-form').addEventListener('submit',async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;status.textContent='Entrando…';try{const f=new FormData(e.target);const {error}=await client.auth.signInWithPassword({email:String(f.get('email')),password:String(f.get('password'))});if(error)throw new Error('Email o contraseña incorrectos.');location.reload();}catch(e){status.textContent=e.message;}finally{btn.disabled=false;}});
-  const {data:{session}}=await client.auth.getSession();if(!session){status.textContent='';return;}
+  const {data:{session}}=await client.auth.getSession();if(!session){document.querySelector('#login-form button').disabled=false;status.textContent='';return;}
   try{me=await request('/api/me');}catch(e){await client.auth.signOut();throw e;}
   document.querySelector('#login').hidden=true;document.querySelector('#studio-shell').hidden=false;
   const exit=document.createElement('button');exit.className='btn ghost';exit.textContent='Cerrar sesión';exit.onclick=async()=>{await client.auth.signOut();location.reload();};document.querySelector('.top').append(exit);
