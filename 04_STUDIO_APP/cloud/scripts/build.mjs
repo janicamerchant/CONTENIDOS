@@ -1,0 +1,15 @@
+import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';import {build} from 'esbuild';
+await mkdir('dist',{recursive:true});
+for(const name of ['app.css','slides.css','marcas.js'])await copyFile(`web/legacy/${name}`,`dist/${name}`);
+let app=await readFile('web/legacy/app.js','utf8');
+const begin=app.indexOf('async function api(path, body) {'),end=app.indexOf('\nlet toastTimer;',begin);if(begin<0||end<0)throw new Error('Contrato del cliente cambió: revisar adaptador.');
+app=app.slice(0,begin)+'async function api(path, body) { return window.cloudApi(path, body); }\n'+app.slice(end);
+app=app.replace('localStorage.getItem(k)','localStorage.getItem(window.cloudStorageKey(k))').replace('localStorage.setItem(k, v)','localStorage.setItem(window.cloudStorageKey(k), v)');
+app=app.replace('setupDictation();\ninit();',"window.cloudCurrentBrand = () => state.p?.brand || ideaBrand;\nwindow.cloudShowDeliveries = () => showView('deliveries');\nsetupDictation();\ninit();");
+await writeFile('dist/app.js',app);
+let html=await readFile('web/legacy/index.html','utf8');html=html.replace(/<link rel="icon"[^>]+>/,'').replace('</head>','<link rel="stylesheet" href="cloud.css">\n</head>');
+const login=await readFile('web/login.html','utf8');html=html.replace('<body>','<body>\n'+login+'\n<div id="studio-shell" hidden>');
+html=html.replace('<script src="marcas.js"></script>\n<script src="app.js"></script>','</div>\n<script type="module" src="/cloud.js"></script>');
+await writeFile('dist/index.html',html);await copyFile('web/cloud.css','dist/cloud.css');
+await build({entryPoints:['web/cloud.js'],outfile:'dist/cloud.js',bundle:true,format:'esm',minify:true,target:'es2022'});
+console.log('Interfaz compilada sin modificar el Estudio local.');

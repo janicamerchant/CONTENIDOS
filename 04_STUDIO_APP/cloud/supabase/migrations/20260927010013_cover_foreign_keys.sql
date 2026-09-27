@@ -1,0 +1,11 @@
+begin;
+create index entregas_archivo_marca on public.entregas(archivo_id,marca_id);
+drop index public.marca_recursos_archivo;
+create index marca_recursos_archivo_marca on public.marca_recursos(archivo_id,marca_id);
+drop index public.persona_fotos_archivo;
+create index persona_fotos_archivo_persona on public.persona_fotos(archivo_id,persona_id);
+create index proyectos_autor on public.proyectos(created_by);
+create index solicitudes_autor on public.solicitudes(created_by);
+drop index public.trabajos_proyecto;
+create index trabajos_proyecto_marca on public.trabajos(proyecto_id,marca_id);
+commit;

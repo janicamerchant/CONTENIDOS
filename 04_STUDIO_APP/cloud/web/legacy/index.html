@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estudio de Carruseles</title>
+<link rel="icon" href="/files/01_SKILL_OPERATIVO/assets/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wdth,wght@62..125,400..900&family=Barlow:wght@400;500;600;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,700;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Jost:wght@400;500;600&family=Montserrat:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="slides.css">
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brandmark">
+    <span class="wm">Estudio</span>
+    <span class="wm-sub">Carruseles · Nika Media</span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" data-view="create" role="tab">Crear</button>
+    <button class="tab" data-view="editor" role="tab">Editor</button>
+    <button class="tab" data-view="requests" role="tab">Solicitudes <span class="count" id="req-count"></span></button>
+    <button class="tab" data-view="deliveries" role="tab">Entregas</button>
+    <button class="tab" data-view="brands" role="tab">Marcas</button>
+  </nav>
+  <div class="top-actions">
+    <span class="save-state" id="save-state"></span>
+    <button class="btn ghost" id="btn-settings" title="Ajustes">Ajustes</button>
+  </div>
+</header>
+
+<!-- ============ CREAR: idea → propuesta → costo → aprobación ============ -->
+<main class="view" id="view-create" hidden>
+  <ol class="steps" id="steps" aria-label="Pasos">
+    <li data-step="idea"><b>1</b> Idea</li>
+    <li data-step="prop"><b>2</b> Propuesta</li>
+    <li data-step="cost"><b>3</b> Costo y aprobación</li>
+  </ol>
+
+  <section class="step" id="st-idea">
+    <h1 class="h1">¿Qué carrusel quieres hacer?</h1>
+    <p class="lede">Describe la idea con tus palabras. Claude arma el guion y la dirección creativa con la guía de la marca, y tú lo editas antes de gastar créditos en fotos.</p>
+    <p class="banner" id="idea-nokey" hidden>Falta la API key de Anthropic para escribir la propuesta. <button type="button" class="btn sm" data-settings>Abrir Ajustes</button></p>
+    <form id="idea-form" class="req-form" autocomplete="off">
+      <div class="field full">
+        <span class="lbl">Marca</span>
+        <div class="brand-pick lg" id="i-brand" role="radiogroup" aria-label="Marca"></div>
+      </div>
+      <div class="field full">
+        <div class="lbl-row">
+          <label class="lbl" for="i-idea">Tu idea</label>
+          <div class="dictate" id="dictate" hidden>
+            <select id="dictate-lang" class="inp sm" aria-label="Idioma del dictado" title="Idioma del dictado">
+              <option value="es-US">Español / Spanglish</option>
+              <option value="en-US">English</option>
+            </select>
+            <button type="button" class="btn sm" id="btn-dictate" aria-pressed="false">🎙 Hablar</button>
+          </div>
+        </div>
+        <textarea id="i-idea" class="inp" rows="6" required placeholder="Ej. Un carrusel para dueños de agencias de seguros sobre cuánto dinero pierden cuando un lead espera más de 5 minutos. Quiero que Janica aparezca al final invitando a la demo."></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl" for="i-laminas">Formato</label>
+        <select id="i-laminas" class="inp"><option value="1">Post único (1 imagen)</option><option value="5">Carrusel · 5 láminas</option><option value="6">Carrusel · 6 láminas</option><option value="7" selected>Carrusel · 7 láminas</option><option value="8">Carrusel · 8 láminas</option><option value="10">Carrusel · 10 láminas</option></select>
+      </div>
+      <div class="field">
+        <label class="lbl" for="i-cta">CTA</label>
+        <input id="i-cta" class="inp" type="text">
+      </div>
+      <div class="field full">
+        <label class="lbl" for="i-notas">Notas (opcional)</label>
+        <input id="i-notas" class="inp" type="text" placeholder="Tono, datos a usar, qué evitar…">
+      </div>
+      <div class="field full outfits-field" id="i-outfits" hidden></div>
+      <div class="form-actions full">
+        <button type="submit" class="btn accent" id="btn-propose">Crear propuesta</button>
+        <span class="hint" id="idea-hint"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="step prop-layout" id="st-prop" hidden>
+    <div class="prop-main">
+      <div class="prop-head">
+        <div>
+          <label class="lbl" for="d-name">Proyecto</label>
+          <input id="d-name" class="inp title-inp" type="text">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn ghost sm" id="btn-back-idea">← Cambiar idea</button>
+          <button type="button" class="btn ghost sm" id="btn-repropose">Rehacer propuesta</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="d-concept">Dirección creativa</label>
+        <textarea id="d-concept" class="inp" rows="4"></textarea>
+      </div>
+      <details class="research" id="d-research-box" hidden>
+        <summary>Investigación y fuentes (búsqueda web de Claude)</summary>
+        <div class="research-body" id="d-research"></div>
+      </details>
+      <h2 class="h2 prop-sub">Guion por lámina</h2>
+      <ol class="prop-slides" id="prop-slides"></ol>
+      <div class="field">
+        <label class="lbl" for="d-caption">Caption del post</label>
+        <textarea id="d-caption" class="inp" rows="5"></textarea>
+      </div>
+    </div>
+    <aside class="cost" id="cost-panel" aria-live="polite"></aside>
+  </section>
+</main>
+
+<!-- ============ EDITOR ============ -->
+<main class="view" id="view-editor">
+  <aside class="rail">
+    <div class="proj">
+      <label class="lbl" for="p-name">Proyecto</label>
+      <input id="p-name" class="inp" type="text">
+      <div class="brand-pick" id="brand-pick" role="radiogroup" aria-label="Marca"></div>
+    </div>
+    <ol class="strip" id="strip"></ol>
+    <div class="rail-actions">
+      <button class="btn" id="btn-add">+ Lámina</button>
+      <button class="btn ghost" id="btn-projects">Abrir…</button>
+      <button class="btn ghost" id="btn-new">Nuevo</button>
+    </div>
+  </aside>
+
+  <section class="stage-wrap">
+    <div class="stage-bar">
+      <div class="nav-slides">
+        <button class="icon-btn" id="prev" aria-label="Lámina anterior">←</button>
+        <span class="mono" id="pos">1 / 1</span>
+        <button class="icon-btn" id="next" aria-label="Lámina siguiente">→</button>
+      </div>
+      <div class="spec mono">1080 × 1350 · 4:5 · zona segura <label class="chk"><input type="checkbox" id="safe-toggle"> ver</label></div>
+      <div class="export">
+        <select id="exp-scale" class="inp sm" aria-label="Resolución">
+          <option value="1">1080 × 1350</option>
+          <option value="2" selected>2160 × 2700</option>
+        </select>
+        <button class="btn" id="btn-export-one">PNG lámina</button>
+        <button class="btn accent" id="btn-export-all">Exportar carrusel</button>
+      </div>
+    </div>
+    <div class="stage" id="stage"><div class="stage-inner" id="stage-inner"></div></div>
+    <details class="editor-help" id="editor-help" open>
+      <summary>Cómo corregir detalles</summary>
+      <ol>
+        <li><b>Elige la lámina</b> en la columna izquierda.</li>
+        <li><b>Texto</b> (panel derecho): Antetítulo, Titular y Texto de apoyo se editan directo y la lámina se actualiza mientras escribes. En el Titular, la palabra entre <code>*asteriscos*</code> va en verde lima y Enter hace un salto de línea para decidir dónde se corta cada renglón. El control <b>Titular</b> agranda o achica la letra.</li>
+        <li><b>Foto</b>: Horizontal, Vertical y Zoom para encuadrar. Si la persona tapa demasiado el texto, pulsa <b>Quitar</b> en el Recorte (o <b>Recorte automático</b> para ponerlo). <b>Regenerar foto</b> crea otra con el <b>Motor de imagen</b> que elijas y <b>Volver a la foto anterior</b> la recupera.</li>
+        <li>Arriba del panel derecho cambias el <b>Diseño</b> (Portada, Escena, Cifra…) y el fondo <b>Oscuro / Claro</b>.</li>
+        <li>Todo se guarda solo. Al terminar, pulsa <b>Exportar carrusel</b>.</li>
+      </ol>
+    </details>
+  </section>
+
+  <aside class="inspector" id="inspector"></aside>
+</main>
+
+<!-- ============ SOLICITUDES ============ -->
+<main class="view" id="view-requests" hidden>
+  <section class="req-form-wrap">
+    <h1 class="h1">Nueva solicitud</h1>
+    <p class="lede">El brief se guarda en <span class="mono">05_SOLICITUDES/</span> como .md y .json, listo para producción. Con una API key activa, Claude arma el primer borrador del carrusel en el editor.</p>
+    <form id="req-form" class="req-form" autocomplete="off">
+      <div class="field full">
+        <span class="lbl">Marca</span>
+        <div class="brand-pick lg" id="r-brand" role="radiogroup" aria-label="Marca"></div>
+      </div>
+      <div class="field full">
+        <label class="lbl" for="r-tema">Tema u oferta</label>
+        <textarea id="r-tema" class="inp" rows="2" required placeholder="Ej. Por qué los leads que no reciben respuesta en 5 minutos se enfrían"></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-objetivo">Objetivo</label>
+        <select id="r-objetivo" class="inp">
+          <option>Generar demos / DMs</option>
+          <option>Autoridad</option>
+          <option>Guardados y compartidos</option>
+          <option>Comunidad</option>
+          <option>Venta / oferta</option>
+          <option>Educación</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-laminas">Láminas</label>
+        <select id="r-laminas" class="inp">
+          <option>5</option><option>6</option><option selected>7</option><option>8</option><option>10</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-audiencia">Audiencia</label>
+        <input id="r-audiencia" class="inp" type="text">
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-idioma">Idioma</label>
+        <select id="r-idioma" class="inp"><option>Español</option><option>English</option></select>
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-cta">CTA</label>
+        <input id="r-cta" class="inp" type="text">
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-entrega">Fecha de entrega</label>
+        <input id="r-entrega" class="inp" type="date">
+      </div>
+      <div class="field full">
+        <label class="lbl" for="r-referencias">Referencias nuevas</label>
+        <input id="r-referencias" class="inp" type="text" placeholder="Links, nombres de archivo o personas a incluir">
+      </div>
+      <div class="field full">
+        <label class="lbl" for="r-notas">Notas para producción</label>
+        <textarea id="r-notas" class="inp" rows="3" placeholder="Datos a verificar, tono, qué evitar…"></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl" for="r-solicitante">Solicitado por</label>
+        <input id="r-solicitante" class="inp" type="text">
+      </div>
+      <div class="form-actions full">
+        <button type="submit" class="btn" data-mode="save">Guardar solicitud</button>
+        <button type="submit" class="btn accent" data-mode="draft" id="btn-draft">Guardar y crear borrador con IA</button>
+        <span class="hint" id="draft-hint"></span>
+      </div>
+    </form>
+  </section>
+  <section class="req-list-wrap">
+    <div class="list-head">
+      <h2 class="h2">Cola de solicitudes</h2>
+      <button class="btn ghost sm" id="btn-open-reqs">Abrir carpeta</button>
+    </div>
+    <div id="req-list" class="req-list"></div>
+  </section>
+</main>
+
+<!-- ============ ENTREGAS ============ -->
+<main class="view" id="view-deliveries" hidden>
+  <div class="list-head wide">
+    <h1 class="h1">Entregas</h1>
+    <button class="btn ghost sm" id="btn-open-deliv">Abrir 03_ENTREGAS</button>
+  </div>
+  <div id="deliv-list" class="deliv-list"></div>
+</main>
+
+<!-- ============ MARCAS: identidad y base de conocimiento (06_MARCAS/) ============ -->
+<main class="view" id="view-brands" hidden>
+  <aside class="mk-rail">
+    <div class="list-head">
+      <h2 class="h2">Marcas</h2>
+      <button class="btn sm accent" id="mk-new">+ Nueva marca</button>
+    </div>
+    <nav class="mk-list" id="mk-list" aria-label="Marcas"></nav>
+    <span class="lbl mk-sub">Para todas las marcas</span>
+    <nav class="mk-list" id="mk-list-extra" aria-label="Recursos compartidos"></nav>
+    <details class="mk-archived" id="mk-archived-box">
+      <summary>Archivadas</summary>
+      <div id="mk-archived"></div>
+    </details>
+  </aside>
+  <section class="mk-main" id="mk-main"></section>
+</main>
+
+<!-- ============ MODALES ============ -->
+<dialog id="dlg-doc" class="dlg wide">
+  <form id="doc-form" method="dialog">
+    <div class="dlg-head">
+      <h2 class="h2" id="doc-title">Documento</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Cerrar">×</button>
+    </div>
+    <div class="doc-body">
+      <label class="lbl" for="doc-name" id="doc-name-lbl">Título</label>
+      <input id="doc-name" class="inp" type="text" placeholder="Ej. Ofertas de octubre">
+      <textarea id="doc-text" class="inp mono-area" rows="22" aria-label="Contenido"></textarea>
+      <div class="form-actions">
+        <button type="submit" class="btn accent" id="doc-save">Guardar</button>
+        <span class="hint">Markdown o texto plano. Claude lo lee completo en cada propuesta de esta marca.</span>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+
+<dialog id="dlg-assets" class="dlg wide">
+  <div class="dlg-head">
+    <h2 class="h2">Elegir imagen</h2>
+    <div class="dlg-tools">
+      <input type="search" id="asset-q" class="inp sm" placeholder="Buscar archivo">
+      <label class="btn sm">Subir imagen<input type="file" id="asset-upload" accept="image/*" hidden></label>
+      <button class="icon-btn" data-close aria-label="Cerrar">×</button>
+    </div>
+  </div>
+  <div class="asset-grid" id="asset-grid"></div>
+</dialog>
+
+<dialog id="dlg-projects" class="dlg">
+  <div class="dlg-head">
+    <h2 class="h2">Proyectos guardados</h2>
+    <button class="icon-btn" data-close aria-label="Cerrar">×</button>
+  </div>
+  <div id="proj-list" class="proj-list"></div>
+</dialog>
+
+<dialog id="dlg-settings" class="dlg">
+  <div class="dlg-head">
+    <h2 class="h2">Ajustes</h2>
+    <button class="icon-btn" data-close aria-label="Cerrar">×</button>
+  </div>
+  <form id="settings-form" class="settings">
+    <label class="lbl" for="api-key">API key de Anthropic</label>
+    <input id="api-key" class="inp" type="password" placeholder="sk-ant-…" autocomplete="off">
+    <p class="hint" id="key-state"></p>
+    <p class="hint">Se guarda solo en esta computadora, en <span class="mono">04_STUDIO_APP/data/config.json</span>. Se usa para las propuestas y borradores con IA (modelo Claude Opus 5).</p>
+    <span class="lbl" style="margin-top:8px">Motores de imagen (API keys)</span>
+    <p class="hint" id="hf-state"></p>
+    <p class="hint">Se configuran en <span class="mono">04_STUDIO_APP/.env</span>: <span class="mono">GEMINI_API_KEY</span> (Nano Banana Pro), <span class="mono">OPENAI_API_KEY</span> (GPT Image) y <span class="mono">HF_CREDENTIALS</span> (API de Higgsfield). Tras cambiarlas, reinicia el Estudio.</p>
+    <div class="form-actions"><button class="btn accent" type="submit">Guardar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-export" class="dlg">
+  <div class="dlg-head"><h2 class="h2" id="exp-title">Exportando…</h2></div>
+  <div class="exp-body">
+    <div class="bar"><span id="exp-bar"></span></div>
+    <p class="hint" id="exp-msg"></p>
+    <div class="form-actions" id="exp-actions" hidden>
+      <button class="btn" id="exp-open">Abrir carpeta</button>
+      <button class="btn ghost" data-close>Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="export-stage" aria-hidden="true"></div>
+
+<!-- marcas.js solo declara funciones; app.js arranca la app y las usa -->
+<script src="marcas.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
