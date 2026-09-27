@@ -1,1 +1,5 @@
 [hidden]{display:none!important}#login{max-width:440px;margin:10vh auto;padding:24px;color:#eeeae2;font-family:Arial,sans-serif}.login-label{font-size:12px;letter-spacing:.14em}#login h1{font-size:clamp(46px,8vw,72px);line-height:1;letter-spacing:-.055em;font-weight:600;margin:38px 0}#login label{display:block;font-size:14px;margin:22px 0}#login input{display:block;width:100%;margin-top:10px;padding:14px;background:#252526;border:1px solid #666;color:#fff;font-size:16px;border-radius:0;box-sizing:border-box}#login button{width:100%;padding:16px;background:#ece8de;color:#171717;border:0;font-size:16px;cursor:pointer}#login button:disabled{opacity:.6}#login input:focus-visible,#login button:focus-visible{outline:2px solid #c5c2b8;outline-offset:3px}.login-note,#login-status{font-size:14px;line-height:1.5;color:#b9b6b0}#login-status{min-height:22px}
+/* Keep the authenticated wrapper in the original viewport-sized flex layout. */
+#studio-shell{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+body:has(> #login:not([hidden])){overflow-y:auto}
+@media(max-width:900px){#studio-shell{flex:none;min-height:100dvh}}
