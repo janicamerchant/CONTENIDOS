@@ -6,9 +6,9 @@ let request, dlg, data;
 function brandChecks(name, selected, disabled) {
   return data.brands.map((b) => `<label class="team-brand"><input type="checkbox" name="${name}" value="${esc(b.id)}" ${selected.includes(b.id) ? 'checked' : ''} ${disabled ? 'disabled' : ''}> ${esc(b.name)}</label>`).join('');
 }
-function linkBox(email, link) {
-  return `<div class="team-link"><b>Enlace de acceso para ${esc(email)}</b>
-    <p class="hint">Envíaselo por WhatsApp o email. Con él elige su contraseña y después entra con su email. Sirve una sola vez y vence en aproximadamente 1 hora; si vence, genera otro.</p>
+function linkBox(email, link, emailed) {
+  return `<div class="team-link"><b>${emailed ? `Email enviado a ${esc(email)}` : `No se pudo enviar el email a ${esc(email)}: envíale este enlace`}</b>
+    <p class="hint">${emailed ? 'Le llegó un correo de no-reply@nikamediaus.com con el botón para crear su contraseña. Si no lo encuentra (revisa spam), puedes copiarle este mismo enlace. ' : 'Mándaselo por WhatsApp o email. '}Sirve una sola vez y vence en 24 horas; si vence, pulsa "Nuevo enlace".</p>
     <div class="team-link-row"><input class="inp" readonly value="${esc(link)}"><button type="button" class="btn accent" data-copy="${esc(link)}">Copiar</button></div></div>`;
 }
 function render(note = '') {
@@ -25,7 +25,7 @@ function render(note = '') {
       <span class="lbl">Marcas a las que tiene acceso</span>
       <div class="team-brands" data-invite-brands>${brandChecks('marca', [], false)}</div>
       <p class="hint">Los administradores ven todas las marcas.</p>
-      <div class="form-actions"><button type="submit" class="btn accent">Invitar y generar enlace</button></div>
+      <div class="form-actions"><button type="submit" class="btn accent">Invitar y enviar email</button></div>
     </form>
     <h3 class="sec-title">Equipo · ${m.length}</h3>
     <div class="team-list">${m.map((x) => `
@@ -36,7 +36,7 @@ function render(note = '') {
         <label class="team-limit">US$ <input class="inp sm" type="number" min="0" max="10000" step="1" value="${x.limite}" data-field="limite"> /mes</label>
         <div class="team-brands">${x.rol === 'admin' ? '<small>Todas las marcas</small>' : brandChecks('m-' + x.id, x.marcas, !x.activo)}</div>
         <div class="team-acts">
-          ${x.activo ? '<button type="button" class="btn sm" data-act="link">Nuevo enlace</button>' : ''}
+          ${x.activo ? '<button type="button" class="btn sm" data-act="link" title="Envía un email nuevo con el enlace para crear o cambiar la contraseña">Nuevo enlace</button>' : ''}
           ${x.yo ? '' : `<button type="button" class="btn sm ghost ${x.activo ? 'danger' : ''}" data-act="toggle">${x.activo ? 'Desactivar' : 'Activar'}</button>`}
         </div>
       </div>`).join('')}</div>`;
@@ -58,7 +58,7 @@ function bind() {
       try {
         const r = await request('/api/team/invite', { email: f.email.value, rol: f.rol.value, limite: Number(f.limite.value) || 0,
           marcas: [...f.querySelectorAll('[name=marca]:checked')].map((c) => c.value) });
-        await load(linkBox(r.email, r.link));
+        await load(linkBox(r.email, r.link, r.emailed));
       } finally { btn.disabled = false; }
     });
   });
@@ -85,7 +85,7 @@ function bind() {
     const row = b.closest('.team-row');
     if (!row) return;
     const id = row.dataset.id, member = data.members.find((x) => x.id === id);
-    if (b.dataset.act === 'link') act(async () => { const r = await request('/api/team/link', { id }); await load(linkBox(r.email, r.link)); });
+    if (b.dataset.act === 'link') act(async () => { const r = await request('/api/team/link', { id }); await load(linkBox(r.email, r.link, r.emailed)); });
     if (b.dataset.act === 'toggle') {
       if (member.activo && !confirm(`¿Desactivar a ${member.email}? No podrá entrar hasta que la vuelvas a activar.`)) return;
       act(async () => { await request('/api/team/update', { id, activo: !member.activo }); await load(`<p class="team-ok">${esc(member.email)} ${member.activo ? 'desactivado' : 'activado'}.</p>`); });
