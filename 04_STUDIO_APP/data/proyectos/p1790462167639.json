@@ -10,7 +10,7 @@
       "layout": "portada",
       "theme": "dark",
       "kicker": "",
-      "title": "NO ESTAR NO ES DESAPARECER*",
+      "title": "NO ESTAR NO ES *DESAPARECER*",
       "body": "Lo visible depende del algoritmo. Lo memorable depende de ti.",
       "number": "",
       "numberLabel": "",
@@ -29,16 +29,16 @@
       "photo": "Janica Merchant de pie en un pasillo de oficina con paredes de vidrio y piedra clara, seria, de tres cuartos, sosteniendo unos lentes de sol en la mano mientras mira hacia la ventana. Luz de tarde entrando de lado, sombras suaves de marcos sobre la pared. Ella ocupa el lado derecho; el lado izquierdo superior queda como pared marfil lisa para el titular, que roza su cabello.",
       "photoPrompt": "Janica Merchant standing in a premium office corridor with glass partitions and pale stone walls, three-quarter medium shot, serious composed expression, holding dark sunglasses in one hand, looking toward the window; she wears a fitted ivory one-shoulder midi dress with a thin gold belt and gold hoop earrings; use the approved Janica Merchant reference for the face; warm natural late-afternoon sunlight from the side, soft window-frame shadows, ivory, beige, sand and light wood palette; subject placed on the right side of the frame crossing slightly into the left text area, clean smooth ivory wall left and upper-left for headline space; 4:5 vertical, hyperrealistic editorial photograph, natural skin texture, natural color, no text, no logos",
       "source": "",
-      "image": "/files/04_STUDIO_APP/data/uploads/20260926-193607-p1790462167639-01.png",
-      "cutout": "/files/04_STUDIO_APP/data/uploads/20260926-193607-p1790462167639-01-recorte.png",
-      "ix": 0,
-      "iy": 69,
-      "iz": 1.18,
-      "dx": 16,
-      "dy": 16,
+      "image": "/files/04_STUDIO_APP/data/uploads/20260926-212122-p1790462167639-01.png",
+      "cutout": "/files/04_STUDIO_APP/data/uploads/20260926-212122-p1790462167639-01-recorte.png",
+      "ix": 50,
+      "iy": 30,
+      "iz": 1,
+      "dx": -1,
+      "dy": 0,
       "bw": false,
       "texture": false,
-      "ts": 0.72,
+      "ts": 0.66,
       "full": false,
       "soul": true,
       "qa": "",
@@ -47,23 +47,24 @@
       "outfit": "blazer-cafe-crop-falda-plisada.jpg",
       "move": {
         "title": [
-          -41,
-          -26
-        ],
-        "body": [
-          -33,
+          36,
           22
         ],
-        "accent": [
-          -26,
-          48
-        ],
-        "sign": [
-          -34,
-          -24
+        "body": [
+          -19,
+          159
         ]
-      }
+      },
+      "fx": {
+        "title": {
+          "scale": 1.2
+        }
+      },
+      "layer": {
+      },
+      "prevImage": "/files/04_STUDIO_APP/data/uploads/20260926-212249-p1790462167639-01.png",
+      "prevCutout": "/files/04_STUDIO_APP/data/uploads/20260926-212249-p1790462167639-01-recorte.png"
     }
   ],
-  "updatedAt": "2026-09-26T19:44:25-03:00"
+  "updatedAt": "2026-09-26T21:26:04-03:00"
 }
