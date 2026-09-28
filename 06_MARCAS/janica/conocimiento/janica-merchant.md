@@ -39,7 +39,7 @@ Reflexiva, elegante, honesta, directa, motivadora y con inteligencia emocional. 
   - Mayúsculas monumentales para afirmaciones (LOW PROFILE. SIEMPRE. / MENOS RUIDO y MÁS PROTECCIÓN.).
   - Minúsculas con una palabra en *cursiva* para frases reflexivas (No todas las personas celebran tu *crecimiento*.).
 - La palabra en cursiva se marca con *asteriscos*. Una sola por titular.
-- Texto de apoyo: sans geométrica limpia (Montserrat), gris oscuro, 3 a 4 líneas cortas máximo.
+- Texto de apoyo: sans geométrica limpia (Montserrat), gris oscuro, 1 o 2 líneas cortas máximo (una sola frase). Lo demás va en el caption.
 - Firma: JANICA MERCHANT en mayúsculas pequeñas muy espaciadas, abajo a la izquierda, con una línea fina encima en el cierre.
 - Número de lámina: línea fina y "4/7" en serif cursiva, abajo a la derecha. Discreto.
 - Referencia secundaria (carpeta `referencias-estilo-tipografico-otra-persona/`, solo estilo, nunca esa cara): el titular puede mezclar serif gigante con una segunda línea en sans bold, y pasar por detrás de la persona.
