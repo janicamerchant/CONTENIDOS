@@ -1,5 +1,6 @@
 import {Upload} from 'tus-js-client';
 import {cutoutPerson} from './cutout.js';
+import {openTeam} from './team.js';
 import {createClient} from '@supabase/supabase-js';
 let client,me,storageEndpoint;const reverse=new Map();let saveQueue=Promise.resolve();
 export async function request(path,body){
@@ -86,7 +87,7 @@ async function start(){
   const {data:{session}}=await client.auth.getSession();if(!session){document.querySelector('#login-form button').disabled=false;status.textContent='';return;}
   try{me=await request('/api/me');}catch(e){await client.auth.signOut();throw e;}
   document.querySelector('#login').hidden=true;document.querySelector('#studio-shell').hidden=false;
-  const exit=document.createElement('button');exit.className='btn ghost';exit.textContent='Cerrar sesión';exit.onclick=async()=>{await client.auth.signOut();location.reload();};document.querySelector('.top').append(exit);
+  const exit=document.createElement('button');exit.className='btn ghost';exit.textContent='Cerrar sesión';exit.onclick=async()=>{await client.auth.signOut();location.reload();};if(me.role==='admin'){const team=document.createElement('button');team.className='btn ghost';team.textContent='Equipo';team.onclick=()=>openTeam(request);document.querySelector('.top').append(team);}document.querySelector('.top').append(exit);
   document.querySelector('#btn-settings').hidden=true;
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.cloudRefreshImages?.();});
   client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')location.reload();});

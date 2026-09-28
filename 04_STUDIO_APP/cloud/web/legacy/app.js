@@ -5,7 +5,8 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = (t) => esc(t).replace(/\*([^*]+)\*/g, '<em class="acc">$1</em>').replace(/\n/g, '<br>');
+const fmt = (t) => esc(t).replace(/==([^=]+)==/g, '<mark class="hl">$1</mark>').replace(/__([^_]+)__/g, '<span class="ul">$1</span>')
+  .replace(/\*([^*]+)\*/g, '<em class="acc">$1</em>').replace(/\n/g, '<br>');
 const fileUrl = (rel) => '/files/' + rel.split('/').map(encodeURIComponent).join('/');
 const uid = () => Math.random().toString(36).slice(2, 9);
 const pad = (n) => String(n).padStart(2, '0');
@@ -275,6 +276,7 @@ const LAYOUTS = {
   frase: { label: 'Frase', icon: '<rect x="3" y="10" width="28" height="24" fill="currentColor" opacity=".35"/><rect x="7" y="16" width="20" height="4" fill="currentColor"/><rect x="7" y="23" width="14" height="4" fill="currentColor"/>' },
   lista: { label: 'Lista', icon: '<rect x="3" y="4" width="22" height="5" fill="currentColor"/><g fill="currentColor" opacity=".6"><rect x="3" y="15" width="4" height="4"/><rect x="10" y="16" width="18" height="2"/><rect x="3" y="23" width="4" height="4"/><rect x="10" y="24" width="18" height="2"/><rect x="3" y="31" width="4" height="4"/><rect x="10" y="32" width="18" height="2"/></g>' },
   comparar: { label: 'Comparar', icon: '<rect x="3" y="4" width="22" height="5" fill="currentColor"/><rect x="3" y="14" width="13" height="24" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="18" y="14" width="13" height="24" fill="currentColor" opacity=".6"/>' },
+  bloques: { label: 'Bloques', icon: '<rect x="3" y="4" width="24" height="6" fill="currentColor"/><rect x="3" y="13" width="16" height="3" fill="currentColor" opacity=".6"/><rect x="3" y="28" width="28" height="8" fill="currentColor"/><rect x="3" y="38" width="12" height="2" fill="currentColor" opacity=".6"/>' },
   cta: { label: 'CTA', icon: '<rect x="3" y="10" width="26" height="8" fill="currentColor"/><rect x="3" y="22" width="16" height="5" fill="currentColor" opacity=".6"/><rect x="3" y="34" width="10" height="4" fill="currentColor" opacity=".4"/>' },
 };
 
@@ -283,7 +285,7 @@ function blankSlide(layout = 'frase', brand = 'eva', over = {}) {
     id: uid(), layout, theme: brandOf(brand).theme || 'dark',
     kicker: '', title: '', body: '', number: '', numberLabel: '', items: [],
     leftLabel: '', leftItems: [], rightLabel: '', rightItems: [], cta: '',
-    photo: '', photoPrompt: '', source: '', image: '', cutout: '', ix: 50, iy: 30, iz: 1, dx: 0, dy: 0,
+    photo: '', photoPrompt: '', source: '', image: '', cutout: '', ix: 50, iy: 30, iz: 1, dx: 0, dy: 0, blocks: [], template: '',
     bw: false, texture: false, ts: 1,
     ...over,
   };
@@ -340,8 +342,10 @@ function sampleProject() {
   };
 }
 
+// Los bloques que escribe Claude llegan sin id: se les pone uno para poder moverlos y editarlos
+const withBlockIds = (s) => { (s.blocks || []).forEach((b) => { b.id ||= uid(); }); return s; };
 function normalizeProject(p) {
-  p.slides = (p.slides || []).map((s) => blankSlide(s.layout || 'frase', p.brand, s));
+  p.slides = (p.slides || []).map((s) => withBlockIds(blankSlide(s.layout || 'frase', p.brand, s)));
   if (!p.slides.length) p.slides.push(blankSlide('portada', p.brand));
   p.caption = p.caption || '';
   return p;
@@ -478,7 +482,118 @@ function janicaInner(p, s) {
   }
 }
 
+
+// ---------------------------------------------------------------- diseño por bloques
+// Una lámina "bloques" es una lista de bloques de texto con estilo, zona, alineación y ancho. Marcas en el texto:
+// *cursiva* · ==resaltador== · __subrayado de pincel__. Plantillas basadas en las láminas aprobadas de Janica.
+const BLOCK_STYLES = {
+  'titulo': 'Titular', 'titulo-xl': 'Remate gigante', 'serif': 'Serif', 'sans': 'Texto', 'sans-grande': 'Texto grande',
+  'etiqueta': 'Etiqueta (versalitas)', 'espaciado': 'Frase espaciada', 'cifra': 'Cifra', 'fuente': 'Fuente del dato',
+  'guardar': 'Guardar (con icono)', 'firma': 'Firma', 'linea': 'Línea de acento',
+};
+const BLOCK_ZONES = { arriba: 'Arriba', centro: 'Centro', abajo: 'Abajo', izquierda: 'Lateral izquierdo', derecha: 'Lateral derecho' };
+const BLOCK_ALIGN = { izq: 'Izquierda', centro: 'Centrado', der: 'Derecha' };
+const bk = (style, text, zone = 'arriba', align = 'izq', extra = {}) => ({ style, text, zone, align, ...extra });
+const BLOCK_TEMPLATES = {
+  'portada-subrayado': { name: 'Portada con subrayado', words: 18, blocks: [
+    bk('titulo-xl', 'LA CULPA QUE NADIE __TE__ QUITÓ', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('sans', 'Hay una culpa que nadie te enseñó a soltar.', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('firma', '', 'arriba', 'izq')] },
+  'a-ti-si': { name: 'Contraste · A ti sí', words: 45, blocks: [
+    bk('serif', 'Pero nadie le pregunta a un hombre *si se siente* culpable por trabajar demasiado.', 'arriba', 'centro'),
+    bk('serif', 'Nadie lo juzga por tener *ambición*.', 'arriba', 'centro'),
+    bk('titulo-xl', '==A TI SÍ.==', 'arriba', 'centro'),
+    bk('etiqueta', 'MIS POSIBILIDADES TAMBIÉN CUENTAN', 'izquierda', 'izq'),
+    bk('etiqueta', 'EXPECTATIVAS QUE NO SON MÍAS', 'derecha', 'izq')] },
+  'cifra-resaltada': { name: 'Cifra con resaltado', words: 25, blocks: [
+    bk('titulo', 'TU DÍA NO SE LLENA. *SE FRAGMENTA.*'),
+    bk('cifra', '==275=='),
+    bk('serif', 'INTERRUPCIONES AL DÍA'),
+    bk('serif', 'Una cada 2 minutos.'),
+    bk('fuente', 'Microsoft Work Trend Index 2025')] },
+  'arriba-abajo': { name: 'Titular arriba · remate abajo', words: 35, blocks: [
+    bk('titulo', 'Y eso no es un defecto tuyo', 'arriba', 'izq', { ancho: 'medio', punto: true }),
+    bk('sans', 'Es el peso de un sistema que nunca fue diseñado para que una mujer pudiera tenerlo todo…', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('titulo-xl', 'SIN DESTRUIRSE EN EL INTENTO.', 'abajo')] },
+  'voz-interior': { name: 'Voz interior', words: 45, blocks: [
+    bk('serif', 'Y *lo más injusto* es que aparece'),
+    bk('sans-grande', 'incluso cuando lo estás haciendo bien.'),
+    bk('sans', 'Cuando eres buena madre.\nBuena profesional.\nBuena pareja.', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('sans', 'Cuando das todo lo que tienes…\ny aun así una voz te dice:', 'abajo'),
+    bk('titulo-xl', 'NO ES __SUFICIENTE.__', 'abajo')] },
+  'escalera': { name: 'Escalera', words: 40, blocks: [
+    bk('titulo', 'La culpa de trabajar'), bk('sans', 'cuando tus hijos te necesitan.'),
+    bk('titulo', 'De descansar'), bk('sans', 'cuando todavía hay cosas pendientes.'),
+    bk('titulo', 'De querer'), bk('titulo-xl', 'ALGO __PARA TI__'), bk('sans', 'cuando todos parecen necesitar algo de ti primero.')] },
+  'dato-centrado': { name: 'Dato centrado', words: 40, blocks: [
+    bk('titulo', 'COMPRAR IA NO ES INTEGRAR IA.', 'arriba', 'centro'),
+    bk('cifra', 'SOLO ==1 %==', 'centro', 'der', { ancho: 'medio' }),
+    bk('sans', 'describe su despliegue como maduro: integrado al flujo de trabajo y conectado con resultados.', 'centro', 'der', { ancho: 'medio' }),
+    bk('serif', 'La brecha no está en la herramienta. *Está en el sistema.*', 'abajo', 'centro'),
+    bk('fuente', 'McKinsey · Superagency in the Workplace, 2025.', 'abajo', 'centro')] },
+  'cierre-guardar': { name: 'Cierre con guardar', words: 55, blocks: [
+    bk('titulo', 'LOS HIJOS DE MADRES FELICES Y REALIZADAS APRENDEN CON EL EJEMPLO.', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('sans', 'Aprenden que una mujer puede construir algo propio.\nQue puede tener ambición.', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('etiqueta', 'NO LE ESTÁS FALLANDO A NADIE.'),
+    bk('titulo-xl', 'LA CULPA NO ES TUYA. *__NUNCA LO FUE.__*', 'abajo'),
+    bk('guardar', 'Guarda este carrusel para volver a él cuando la culpa intente hacerte dudar.', 'abajo', 'izq', { ancho: 'medio' }),
+    bk('firma', '', 'abajo')] },
+  'remate-linea': { name: 'Remate con línea', words: 35, blocks: [
+    bk('serif', 'Si hoy te sientes culpable por crecer, invertir en tu negocio o reservar un espacio para ti…', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('espaciado', 'necesitas recordar esto:'),
+    bk('titulo-xl', 'NO LE ESTÁS FALLANDO A NADIE.', 'arriba', 'izq', { ancho: 'medio' }),
+    bk('linea', '')] },
+};
+const newBlocks = (tpl) => BLOCK_TEMPLATES[tpl].blocks.map((b) => ({ ...b, id: uid() }));
+function blockHtml(p, b) {
+  const cls = `blk blk-${b.style} a-${b.align || 'izq'}${b.ancho === 'medio' ? ' w-medio' : ''}${['titulo', 'titulo-xl', 'cifra'].includes(b.style) ? ' s-title' : ''}`;
+  if (b.style === 'linea') return `<i class="${cls}" data-block="${esc(b.id)}"></i>`;
+  if (b.style === 'firma') return `<div class="${cls}" data-block="${esc(b.id)}">${esc(brandFor(p).name)}</div>`;
+  if (b.style === 'guardar') return `<div class="${cls}" data-block="${esc(b.id)}"><span class="j-bm" aria-hidden="true"></span><span>${fmt(b.text)}</span></div>`;
+  return `<div class="${cls}" data-block="${esc(b.id)}">${fmt(b.text)}${b.punto ? '<span class="blk-dot">.</span>' : ''}</div>`;
+}
+function blocksInner(p, s) {
+  const zones = {};
+  (s.blocks || []).forEach((b) => { (zones[b.zone || 'arriba'] ||= []).push(b); });
+  return `${photo(s, false)}<div class="j-wash"></div>
+    ${Object.entries(zones).map(([z, list]) => `<div class="s-blocks z-${z} front">${list.map((b) => blockHtml(p, b)).join('')}</div>`).join('')}
+    ${cut(s)}`;
+}
+// Editor de bloques (panel derecho)
+function blocksEditor(s) {
+  const o = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  return `<label class="lbl" for="blk-template">Plantilla</label>
+    <select id="blk-template" class="inp"><option value="">Aplicar una plantilla…</option>${Object.entries(BLOCK_TEMPLATES).map(([k, t]) => `<option value="${k}" ${k === s.template ? 'selected' : ''}>${esc(t.name)} · hasta ${t.words} palabras</option>`).join('')}</select>
+    <p class="help">Marcas en el texto: <code>*cursiva*</code> · <code>==resaltador==</code> · <code>__subrayado__</code>. Enter = salto de línea.</p>
+    <div class="blk-list">${(s.blocks || []).map((b, i) => `<div class="blk-item ${state.part === 'b:' + b.id ? 'sel' : ''}" data-bi="${i}">
+      <div class="blk-head">
+        <select class="inp sm" data-bf="style" aria-label="Estilo">${o(BLOCK_STYLES, b.style)}</select>
+        <select class="inp sm" data-bf="zone" aria-label="Zona">${o(BLOCK_ZONES, b.zone || 'arriba')}</select>
+        <select class="inp sm" data-bf="align" aria-label="Alineación">${o(BLOCK_ALIGN, b.align || 'izq')}</select>
+        <label class="blk-chk" title="Ocupa solo la mitad del ancho"><input type="checkbox" data-bf="ancho" ${b.ancho === 'medio' ? 'checked' : ''}> ½</label>
+        <span class="blk-btns"><button type="button" class="icon-btn" data-bmove="-1" aria-label="Subir">↑</button><button type="button" class="icon-btn" data-bmove="1" aria-label="Bajar">↓</button><button type="button" class="icon-btn" data-bdel aria-label="Quitar bloque">×</button></span>
+      </div>
+      ${['linea', 'firma'].includes(b.style) ? '' : `<textarea class="inp" rows="${Math.min(4, Math.max(1, String(b.text || '').split('\n').length))}" data-bf="text">${esc(b.text || '')}</textarea>`}
+    </div>`).join('')}</div>
+    <button type="button" class="btn sm" id="blk-add">+ Añadir bloque</button>
+    <p class="help">${(() => { const w = (s.blocks || []).filter((b) => b.style !== 'fuente').map((b) => String(b.text || '').replace(/[*=_]/g, '')).join(' ').split(/\s+/).filter(Boolean).length; const max = BLOCK_TEMPLATES[s.template]?.words; return `${w} palabras${max ? ` · la plantilla pide hasta ${max}` : ''}`; })()}</p>`;
+}
+// Al pasar una lámina a "bloques" sin bloques: titular arriba, apoyo debajo, con el texto que ya tenía
+function blocksFromFields(s) {
+  const out = [];
+  if (s.kicker) out.push(bk('etiqueta', s.kicker));
+  if (s.title) out.push(bk('titulo', s.title, 'arriba', 'izq', { ancho: 'medio' }));
+  if (s.number) out.push(bk('cifra', s.number));
+  if (s.numberLabel) out.push(bk('serif', s.numberLabel));
+  (s.items || []).filter(Boolean).forEach((t) => out.push(bk('sans', t, 'arriba', 'izq', { ancho: 'medio' })));
+  if (s.body) out.push(bk('sans', s.body, 'arriba', 'izq', { ancho: 'medio' }));
+  if (s.cta) out.push(bk('guardar', s.cta, 'abajo'));
+  if (s.source) out.push(bk('fuente', s.source, 'abajo'));
+  return (out.length ? out : newBlocks('arriba-abajo')).map((b) => ({ ...b, id: b.id || uid() }));
+}
+
 function slideInner(p, s, i, n) {
+  if (s.layout === 'bloques') return blocksInner(p, s);
   if (designOf(p) === 'janica') return janicaInner(p, s);
   const eva = designOf(p) === 'eva';
   const hasImg = !!(s.image || s.photo);
@@ -564,7 +679,7 @@ function buildSlide(p, s, i, n) {
   // Con recorte, solo el titular grande (y la cifra) pasa detrás de la persona: se duplica el bloque
   // de texto encima del recorte con el titular oculto, así antetítulo, apoyo, listas y botón se leen siempre.
   if (s.image && s.cutout) {
-    $$('.fitbox.front, .s-panel', el).forEach((box) => {
+    $$('.fitbox.front, .s-panel, .s-blocks', el).forEach((box) => {
       const c = box.cloneNode(true);
       c.classList.add('over');
       c.setAttribute('aria-hidden', 'true');
@@ -588,7 +703,10 @@ const PART_LABEL = { kicker: 'Antetítulo', title: 'Titular', body: 'Texto de ap
   sign: 'Firma', count: 'Contador', quote: 'Comillas' };
 // s.fx[clave] = { scale, font, weight, italic: 'si' | 'no' }: tamaño con el mouse y tipografía desde el panel
 function applyMoves(el, s) {
-  MOVABLE.forEach(([k, sel]) => $$(sel, el).forEach((n) => {
+  const parts = [];
+  MOVABLE.forEach(([k, sel]) => $$(sel, el).forEach((n) => parts.push([k, n])));
+  $$('[data-block]', el).forEach((n) => parts.push(['b:' + n.dataset.block, n]));   // los bloques mandan sobre los selectores genéricos
+  parts.forEach(([k, n]) => {
     n.classList.add('mv');
     n.dataset.mv = k;
     const m = s.move?.[k];
@@ -604,10 +722,11 @@ function applyMoves(el, s) {
       const layer = s.layer?.[k];
       n.style.visibility = layer === 'front' ? 'visible' : layer === 'back' ? 'hidden' : '';
     }
-  }));
+  });
 }
 // Por defecto (slides.css) solo el titular y la cifra pasan detrás de la persona
-const layerOf = (s, k) => s.layer?.[k] || (['title', 'number'].includes(k) ? 'back' : 'front');
+const layerOf = (s, k) => s.layer?.[k] || ((['title', 'number'].includes(k) || (k.startsWith('b:') && ['titulo', 'titulo-xl', 'cifra'].includes((s.blocks || []).find((b) => 'b:' + b.id === k)?.style))) ? 'back' : 'front');
+const partLabel = (s, k) => (k.startsWith('b:') ? `Bloque · ${BLOCK_STYLES[(s.blocks || []).find((b) => 'b:' + b.id === k)?.style] || ''}` : PART_LABEL[k] || k);
 
 // Reduce el texto hasta que quepa en su caja (el slider de titular sigue mandando)
 function fitSlide(el) {
@@ -855,7 +974,7 @@ function partPanel(s) {
   const weights = [['', 'Del diseño'], ['300', 'Light 300'], ['400', 'Regular 400'], ['500', 'Medium 500'], ['600', 'Semibold 600'], ['700', 'Bold 700'], ['800', 'Extra bold 800'], ['900', 'Black 900']];
   const sc = f.scale || 1;
   return `<section class="sec part-sec">
-      <h3 class="sec-title">Seleccionado · ${esc(PART_LABEL[k] || k)}</h3>
+      <h3 class="sec-title">Seleccionado · ${esc(partLabel(s, k))}</h3>
       <label class="range"><span>Tamaño</span><input type="range" id="fx-scale" min="0.3" max="4" step="0.01" value="${sc}" data-fx="scale"><output>${sc}×</output></label>
       <label class="lbl" for="fx-font">Tipo de letra</label>
       <select id="fx-font" class="inp" data-fx="font">${o('', f.font, 'Del diseño')}${EDIT_FONTS().map((x) => o(x, f.font, x)).join('')}</select>
@@ -936,11 +1055,11 @@ function renderInspector() {
     <section class="sec">
       <h3 class="sec-title">Texto</h3>
       ${s.full && s.image ? `<div class="photo-status ${s.qa ? 'low' : 'ok'}"><b>Lámina completa</b> · el texto está dentro de la imagen. Si cambias algo aquí, pulsa <b>Regenerar lámina completa</b>.${s.qa ? `<div class="missing">Revisión: ${esc(s.qa)}</div>` : ''}</div>` : ''}
-      ${field('Antetítulo', 'kicker')}
+      ${L === 'bloques' ? blocksEditor(s) : `${field('Antetítulo', 'kicker')}
       ${titled ? field('Titular', 'title', 'textarea', 3, 'Marca en color de acento con <code>*asteriscos*</code>. Enter = salto de línea.') : ''}
       ${specific}
       ${field('Texto de apoyo', 'body', 'textarea', 3)}
-      ${field('Fuente del dato', 'source', 'text', 2, 'Obligatoria si la lámina tiene una cifra externa. Ej.: CBO, junio 2024.')}
+      ${field('Fuente del dato', 'source', 'text', 2, 'Obligatoria si la lámina tiene una cifra externa. Ej.: CBO, junio 2024.')}`}
       ${range('Titular', 'ts', 0.6, 1.4, 0.02, '×')}
       <p class="help">Haz clic en cualquier elemento de la lámina (titular, texto, línea, firma…) para seleccionarlo: se arrastra para moverlo y su esquina cambia el tamaño; aquí arriba eliges letra, grosor y cursiva.</p>
       ${Object.keys(s.move || {}).length || Object.keys(s.fx || {}).length || Object.keys(s.layer || {}).length ? '<button type="button" class="btn sm ghost" id="reset-moves">Devolver todo a su lugar y estilo</button>' : ''}
@@ -989,6 +1108,12 @@ function bindInspector() {
   ins.addEventListener('input', (e) => {
     const t = e.target;
     const s = cur();
+    if (t.dataset.bf === 'text') {
+      const bi = +t.closest('[data-bi]').dataset.bi;
+      s.blocks[bi].text = t.value;
+      refreshSlide();
+      return;
+    }
     if (t.dataset.fx && state.part) {
       const v = t.dataset.fx === 'scale' ? parseFloat(t.value) : t.value;
       const fx = { ...(s.fx?.[state.part] || {}), [t.dataset.fx]: v };
@@ -1016,6 +1141,21 @@ function bindInspector() {
     if (t.dataset.c) { cur()[t.dataset.c] = t.checked; refreshSlide(); }
     if (t.id === 'base-photo') { cur().basePhoto = t.value; scheduleSave(); renderInspector(); }
     if (t.id === 'outfit') { cur().outfit = t.value; scheduleSave(); renderInspector(); }
+    if (t.dataset.bf && t.dataset.bf !== 'text') {
+      const b = cur().blocks[+t.closest('[data-bi]').dataset.bi];
+      if (t.dataset.bf === 'ancho') b.ancho = t.checked ? 'medio' : ''; else b[t.dataset.bf] = t.value;
+      refreshSlide(); renderInspector();
+    }
+    if (t.id === 'blk-template' && t.value) {
+      const s = cur();
+      const hasText = (s.blocks || []).some((b) => String(b.text || '').trim());
+      if (!hasText || confirm('Se reemplazan los bloques de esta lámina por los de la plantilla (con textos de ejemplo). ¿Continuar?')) {
+        Object.assign(s, { blocks: newBlocks(t.value), template: t.value, move: {}, fx: {}, layer: {} });
+        state.part = null;
+        refreshSlide();
+      }
+      renderInspector();
+    }
     if (t.dataset.motor === 'editor' || t.dataset.tamano === 'editor') {
       const motor = $('#editor-motor').value;
       state.emotor = { projectId: state.p.id, motor, tamano: sizeFor(motor, $('#editor-tamano')?.value) };
@@ -1030,6 +1170,13 @@ function bindInspector() {
     const b = e.target.closest('button');
     if (!b) return;
     const s = cur();
+    if (b.dataset.bmove || b.dataset.bdel !== undefined) {
+      const i = +b.closest('[data-bi]').dataset.bi;
+      if (b.dataset.bdel !== undefined) s.blocks.splice(i, 1);
+      else { const j = i + +b.dataset.bmove; if (j >= 0 && j < s.blocks.length) [s.blocks[i], s.blocks[j]] = [s.blocks[j], s.blocks[i]]; }
+      refreshSlide(); renderInspector(); return;
+    }
+    if (b.id === 'blk-add') { (s.blocks ||= []).push({ ...bk('sans', 'Texto nuevo'), id: uid() }); refreshSlide(); renderInspector(); return; }
     if (b.id === 'reset-moves') { s.move = {}; s.fx = {}; s.layer = {}; refreshSlide(); renderInspector(); return; }
     if (b.id === 'fx-reset' && state.part) {
       const m = { ...(s.move || {}) }, f = { ...(s.fx || {}) }, l = { ...(s.layer || {}) };
@@ -1044,7 +1191,7 @@ function bindInspector() {
       refreshSlide(); renderInspector(); return;
     }
     if (b.id === 'fx-done') { state.part = null; renderStage(); renderInspector(); return; }
-    if (b.dataset.layout) { s.layout = b.dataset.layout; refreshSlide(); renderInspector(); }
+    if (b.dataset.layout) { s.layout = b.dataset.layout; if (s.layout === 'bloques' && !(s.blocks || []).length) s.blocks = blocksFromFields(s); refreshSlide(); renderInspector(); }
     else if (b.dataset.theme) { s.theme = b.dataset.theme; refreshSlide(); renderInspector(); }
     else if (b.dataset.pick) openAssets(b.dataset.pick);
     else if (b.dataset.clear) { s[b.dataset.clear] = ''; if (b.dataset.clear === 'image') s.cutout = ''; refreshSlide(); renderInspector(); }
@@ -1410,12 +1557,78 @@ async function draftFromRequest(r, btn) {
 async function loadDeliveries() {
   let list = [];
   try { list = await api('/api/deliveries'); } catch (e) { toast(e.message, true); }
-  $('#deliv-list').innerHTML = list.length ? list.map((d) => `
+  state.deliveries = list;
+  $('#deliv-list').innerHTML = list.length ? list.map((d, di) => `
     <section class="deliv">
       <h3>${esc(d.folder)} <span class="mono">${d.images.length} imágenes · ${new Date(d.updatedAt).toLocaleDateString('es')}</span>
-        <button type="button" class="btn sm ghost" data-open="03_ENTREGAS/${esc(d.folder)}">Abrir carpeta</button></h3>
-      <div class="deliv-row">${d.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(u)}" alt=""></a>`).join('')}</div>
+        <button type="button" class="btn sm accent" data-dl-all="${di}">Descargar .zip</button></h3>
+      <div class="deliv-row">${d.images.map((u, ii) => `<figure class="deliv-img"><a href="${esc(u)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(u)}" alt=""></a>
+        <button type="button" class="deliv-dl" data-dl="${di}:${ii}" title="Descargar esta imagen" aria-label="Descargar imagen ${ii + 1}">↓</button></figure>`).join('')}</div>
     </section>`).join('') : '<p class="empty">Aún no hay entregas.</p>';
+}
+
+// ---------------------------------------------------------------- descargar entregas
+// ZIP sin compresión, armado en el navegador (las PNG ya vienen comprimidas): una entrega = un archivo .zip
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = (buf) => { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function makeZip(files) {
+  const enc = new TextEncoder(), now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4], [18, size, 4], [22, size, 4], [26, name.length, 2], [28, 0, 2]]
+      .forEach(([o, v, n]) => (n === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true)));
+    const c = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2], [16, crc, 4], [20, size, 4], [24, size, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+      .forEach(([o, v, n]) => (n === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true)));
+    parts.push(h, name, f.data);
+    central.push(c, name);
+    offset += 30 + name.length + size;
+  }
+  const cdSize = central.reduce((n, x) => n + x.byteLength, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, cdSize, 4], [16, offset, 4], [20, 0, 2]]
+    .forEach(([o, v, n]) => (n === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true)));
+  return new Blob([...parts, ...central, end], { type: 'application/zip' });
+}
+function saveBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+const extOf = (type) => (/jpe?g/.test(type) ? '.jpg' : /webp/.test(type) ? '.webp' : '.png');
+async function fetchImage(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('No se pudo descargar una imagen.');
+  return r.blob();
+}
+// Una imagen: con su nombre de entrega (MARCA_proyecto_01.png)
+async function downloadDeliveryImage(di, ii) {
+  const d = state.deliveries[di];
+  try { const b = await fetchImage(d.images[ii]); saveBlob(b, `${d.folder}_${pad(ii + 1)}${extOf(b.type)}`); } catch (e) { toast(e.message, true); }
+}
+// Toda la entrega en un .zip
+async function downloadDelivery(di, btn) {
+  const d = state.deliveries[di];
+  const label = btn.textContent;
+  btn.disabled = true;
+  try {
+    const files = [];
+    for (const [i, url] of d.images.entries()) {
+      btn.textContent = `Descargando ${i + 1}/${d.images.length}…`;
+      const b = await fetchImage(url);
+      files.push({ name: `${d.folder}_${pad(i + 1)}${extOf(b.type)}`, data: new Uint8Array(await b.arrayBuffer()) });
+    }
+    saveBlob(makeZip(files), `${d.folder}.zip`);
+    toast(`${d.folder}.zip descargado.`);
+  } catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.textContent = label; }
 }
 
 async function openFolder(path) {
@@ -1506,6 +1719,7 @@ function pfield(i, label, key, rows = 0, full = false) {
 const slidePeople = (s) => s.people || (s.janica ? ['janica'] : []);
 
 function propCard(s, i) {
+  withBlockIds(s);
   const g = state.draft.gen;
   const locked = !!g;                    // textos y diseño se editan en el Editor después de aprobar
   const busy = g && !g.done;             // mientras genera, nada de la foto se toca
@@ -1529,11 +1743,11 @@ function propCard(s, i) {
     </div>
     <div>
       <div class="pc-body">
-        ${pfield(i, 'Antetítulo', 'kicker')}
+        ${L === 'bloques' ? `<p class="help">Plantilla: ${esc(BLOCK_TEMPLATES[s.template]?.name || 'libre')}. Zona y estilo se ajustan en el Editor.</p>${(s.blocks || []).filter((b) => !['linea', 'firma'].includes(b.style)).map((b) => `<label class="lbl">${esc(BLOCK_STYLES[b.style] || b.style)} · ${esc(BLOCK_ZONES[b.zone] || '')}</label><textarea class="inp" rows="2" data-i="${i}" data-bid="${esc(b.id)}" ${locked ? 'readonly' : ''}>${esc(b.text || '')}</textarea>`).join('')}` : `${pfield(i, 'Antetítulo', 'kicker')}
         ${L !== 'cifra' ? pfield(i, 'Titular (*acento*)', 'title', 2) : ''}
         ${specific}
         ${pfield(i, 'Texto de apoyo', 'body', 2, true)}
-        ${pfield(i, 'Fuente del dato (visible en la lámina)', 'source', 0, true)}
+        ${pfield(i, 'Fuente del dato (visible en la lámina)', 'source', 0, true)}`}
       </div>
       <div class="pc-photo">
         <div class="checks">
@@ -1763,6 +1977,7 @@ function bindCreate() {
   const list = $('#prop-slides');
   list.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.bid) { const b = (state.draft.slides[+t.dataset.i].blocks || []).find((x) => x.id === t.dataset.bid); if (b) { b.text = t.value; saveDraft(); } return; }
     if (!t.dataset.k || t.tagName === 'SELECT') return;
     const s = state.draft.slides[+t.dataset.i];
     s[t.dataset.k] = Array.isArray(s[t.dataset.k]) ? t.value.split('\n') : t.value;
@@ -1956,6 +2171,10 @@ function bindGlobal() {
   $('#btn-open-reqs').addEventListener('click', () => openFolder('05_SOLICITUDES'));
   $('#btn-open-deliv').addEventListener('click', () => openFolder('03_ENTREGAS'));
   $('#deliv-list').addEventListener('click', (e) => {
+    const all = e.target.closest('[data-dl-all]');
+    if (all) { downloadDelivery(+all.dataset.dlAll, all); return; }
+    const one = e.target.closest('[data-dl]');
+    if (one) { const [di, ii] = one.dataset.dl.split(':').map(Number); downloadDeliveryImage(di, ii); return; }
     const b = e.target.closest('[data-open]');
     if (b) openFolder(b.dataset.open);
   });

@@ -377,7 +377,7 @@ function renderNewBrand() {
     <header class="mk-head"><div><h1 class="h1">Nueva marca</h1></div></header>
     <section class="mk-sec mk-assist">
       <h2 class="sec-title">Con ayuda de Claude (opcional)</h2>
-      <p class="hint">Cuéntale qué es la marca, a quién le vende y cómo se ve. Si das el sitio web, Claude lo investiga. Arma el perfil, las reglas, los colores y las tipografías, y tú lo corriges abajo antes de crearla. Cuesta ≈ $0.15–0.40.</p>
+      <p class="hint">Cuéntale qué es la marca, a quién le vende y cómo se ve. Si das el sitio web, el Estudio lo lee (colores más usados, tipografías, logo y textos) y Claude lo investiga. Arma el perfil, las reglas, los colores y las tipografías, y tú lo corriges abajo antes de crearla. Cuesta ≈ $0.15–0.40.</p>
       <div class="req-form">
         <div class="field"><label class="lbl" for="mk-a-name">Nombre</label><input id="mk-a-name" class="inp" value="${esc(d.name || '')}" placeholder="Ej. Viva Insurance"></div>
         <div class="field"><label class="lbl" for="mk-a-web">Sitio web o Instagram</label><input id="mk-a-web" class="inp" value="${esc(d.website || '')}" placeholder="https://…"></div>
@@ -386,20 +386,66 @@ function renderNewBrand() {
       </div>
       <div class="form-actions"><button type="button" class="btn accent" id="mk-assist-go" ${state.hasKey ? '' : 'disabled title="Agrega la API key en Ajustes"'}>Armar perfil con Claude</button><span class="hint" id="mk-assist-hint"></span></div>
       ${d.questions?.length ? `<div class="mk-questions"><b>Claude necesita que confirmes:</b><ul>${d.questions.map((q) => `<li>${esc(q)}</li>`).join('')}</ul></div>` : ''}
+      ${d.site ? siteBox(d.site) : ''}
       ${d.research ? `<details class="research"><summary>Investigación de Claude</summary><div class="research-body">${esc(d.research).replace(/(https?:\/\/[^\s<)\]]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>')}</div></details>` : ''}
     </section>
     <form class="mk-sec" id="mk-new-form" autocomplete="off">
       <h2 class="sec-title">Identidad</h2>
       ${identityFields(b, true)}
-      <h2 class="sec-title">Perfil de marca</h2>
+      <div class="lbl-row"><h2 class="sec-title">Perfil de marca</h2><button type="button" class="btn sm" data-ai-write="profile" ${state.hasKey ? '' : 'disabled title="Falta la API key de Anthropic"'}>✨ Escribir con IA</button></div>
       <p class="hint">Se guarda como <span class="mono">conocimiento/perfil.md</span>. Posicionamiento, audiencia, ofertas, voz, pilares, sistema visual, personas, datos aprobados y qué está prohibido.</p>
       <textarea class="inp mono-area" name="profile" rows="14" placeholder="# Nombre de la marca&#10;&#10;## Posicionamiento&#10;…">${esc(d.profile || '')}</textarea>
-      <h2 class="sec-title">Reglas para Claude</h2>
+      <div class="lbl-row"><h2 class="sec-title">Reglas para Claude</h2><button type="button" class="btn sm" data-ai-write="rules" ${state.hasKey ? '' : 'disabled title="Falta la API key de Anthropic"'}>✨ Escribir con IA</button></div>
+      <p class="hint" id="mk-ai-hint"></p>
       <textarea class="inp mono-area" name="rules" rows="6" placeholder="- Tono…&#10;- Fotos…&#10;- Evitar…">${esc(d.rules || '')}</textarea>
       <div class="form-actions"><button type="submit" class="btn accent">Crear marca</button><span class="hint">Después podrás subir logos, documentos, referencias y enlazar personas.</span></div>
     </form>`;
   attachDictation($('#mk-main .dictate'), $('#mk-a-desc'));
   updatePreview();
+}
+
+// "Escribir con IA": Claude redacta el perfil y las reglas con el nombre, la descripción de arriba y lo que ya esté escrito.
+// Solo rellena esos textos (el que se pidió siempre; el otro si está vacío). No toca identidad, colores ni tipografías.
+async function writeWithAI(btn) {
+  const form = $('#mk-new-form');
+  const name = (form.elements.name?.value || $('#mk-a-name').value).trim();
+  if (!name) { toast('Escribe primero el nombre de la marca (arriba, en Identidad).', true); form.elements.name?.focus(); return; }
+  const target = btn.dataset.aiWrite, other = target === 'profile' ? 'rules' : 'profile';
+  const draft = [
+    $('#mk-a-desc').value.trim(),
+    form.elements.profile.value.trim() && `Borrador actual del perfil (respétalo y complétalo):\n${form.elements.profile.value.trim()}`,
+    form.elements.rules.value.trim() && `Borrador actual de las reglas (respétalas y complétalas):\n${form.elements.rules.value.trim()}`,
+  ].filter(Boolean).join('\n\n');
+  const label = btn.textContent;
+  $$('[data-ai-write]').forEach((x) => { x.disabled = true; });
+  btn.textContent = 'Claude está escribiendo…';
+  $('#mk-ai-hint').textContent = 'Tarda entre 30 segundos y dos minutos. Cuesta ≈ $0.15–0.40.';
+  try {
+    const r = await api('/api/brands/_draft', { name, website: $('#mk-a-web').value.trim(), description: draft });
+    form.elements[target].value = r[target] || '';
+    if (!form.elements[other].value.trim()) form.elements[other].value = r[other] || '';
+    mk.draft = { ...(mk.draft || {}), name, profile: form.elements.profile.value, rules: form.elements.rules.value, questions: r.questions, research: r.research, site: r.site };
+    $('#mk-ai-hint').innerHTML = (r.site ? siteBox(r.site) : '') + (r.questions?.length ? `<b>Claude necesita que confirmes:</b> ${r.questions.map(esc).join(' · ')}` : '');
+    toast(`Texto listo (${money(r.usage?.usd || 0)}). Revísalo antes de crear la marca.`);
+  } catch (e) {
+    toast(e.message, true);
+    $('#mk-ai-hint').textContent = '';
+  } finally {
+    $$('[data-ai-write]').forEach((x) => { x.disabled = !state.hasKey; });
+    btn.textContent = label;
+  }
+}
+
+// Lo que el Estudio sacó del sitio web: colores, tipografías y logo (para comprobar lo que usó Claude)
+function siteBox(site) {
+  const sw = (c) => `<span class="mk-site-sw" style="background:${esc(c)}" title="${esc(c)}"></span><code>${esc(c)}</code>`;
+  return `<div class="mk-site">
+    <b>Leído de <a href="${esc(site.url)}" target="_blank" rel="noopener">${esc(site.title || site.url)}</a></b>
+    ${site.logo ? `<img class="mk-site-logo" src="${esc(site.logo)}" alt="Logo del sitio" onerror="this.remove()">` : ''}
+    ${site.colors?.length ? `<div class="mk-site-row"><span class="lbl">Colores</span>${site.colors.map(sw).join('')}</div>` : ''}
+    ${site.neutrals?.length ? `<div class="mk-site-row"><span class="lbl">Neutros</span>${site.neutrals.map(sw).join('')}</div>` : ''}
+    ${site.fonts?.length ? `<div class="mk-site-row"><span class="lbl">Tipografías</span>${site.fonts.map((f) => `<code>${esc(f)}</code>`).join(' ')}</div>` : ''}
+  </div>`;
 }
 
 async function assistBrand(btn) {
@@ -412,7 +458,7 @@ async function assistBrand(btn) {
   try {
     const r = await api('/api/brands/_draft', { name, website, description });
     mk.draft = {
-      name, website, description, profile: r.profile, rules: r.rules, questions: r.questions, research: r.research,
+      name, website, description, profile: r.profile, rules: r.rules, questions: r.questions, research: r.research, site: r.site,
       brand: {
         name, design: 'base', theme: r.theme, titleCase: r.titleCase, cutout: false, look: r.look,
         colors: { accent: r.accent, darkBg: r.darkBg, darkInk: r.darkInk, lightBg: r.lightBg, lightInk: r.lightInk },
@@ -621,6 +667,7 @@ function bindBrands() {
         saveBrand({ logos }, true, 'Logo asignado.');
       } else if (b.matches('[data-goto-people]')) openSel({ type: 'people' });
       else if (b.id === 'mk-assist-go') assistBrand(b);
+      else if (b.dataset.aiWrite) writeWithAI(b);
       else if (b.dataset.photoMove) {
         const pid = b.closest('[data-person]').dataset.person;
         await api(`/api/people/${pid}/photo`, { op: 'update', photo: b.closest('[data-photo]').dataset.photo, move: +b.dataset.photoMove });

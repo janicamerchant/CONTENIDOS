@@ -595,3 +595,44 @@
 
 /* Lámina completa: la imagen generada ya trae la tipografía (ver lamina_completa.rb) */
 .slide.full .s-full { position: absolute; inset: 0; z-index: 2; }
+
+/* ==========================================================================
+   Diseño por bloques (layout "bloques"): pila de textos por zona con su estilo.
+   Plantillas basadas en las láminas aprobadas de Janica (app.js · BLOCK_TEMPLATES).
+   ========================================================================== */
+.l-bloques .s-blocks { --fit: 1; position: absolute; left: 84px; right: 84px; z-index: 5; display: flex; flex-direction: column; gap: 24px; }
+.l-bloques .z-arriba { top: 100px; }
+.l-bloques .z-abajo { bottom: 100px; }
+.l-bloques .z-centro { top: 50%; transform: translateY(-50%); }
+.l-bloques .z-izquierda { left: 70px; right: auto; top: 43%; width: 240px; }
+.l-bloques .z-derecha { left: auto; right: 70px; top: 46%; width: 240px; }
+.l-bloques .j-wash {
+  background: radial-gradient(ellipse 80% 34% at 30% 12%, var(--wash, rgba(246,241,233,.5)), transparent 72%),
+              radial-gradient(ellipse 90% 30% at 40% 90%, var(--wash, rgba(246,241,233,.5)), transparent 72%);
+}
+.blk { color: var(--s-ink); margin: 0; }
+.blk.a-izq { align-self: flex-start; text-align: left; }
+.blk.a-centro { align-self: center; text-align: center; }
+.blk.a-der { align-self: flex-end; text-align: right; }
+.blk.w-medio { max-width: 58%; }
+.blk-titulo { font: 400 calc(88px * var(--ts) * var(--fit))/.95 var(--f-display); letter-spacing: -.01em; text-wrap: balance; }
+.blk-titulo-xl { font: 400 calc(132px * var(--ts) * var(--fit))/.9 var(--f-display); letter-spacing: -.015em; text-wrap: balance; }
+.blk-serif { font: 400 calc(50px * var(--fit))/1.12 var(--f-display); text-wrap: pretty; }
+.blk-sans { font: 400 calc(31px * var(--fit))/1.38 var(--f-body); opacity: .92; }
+.blk-sans-grande { font: 300 calc(46px * var(--fit))/1.2 var(--f-body); }
+.blk-etiqueta { font: 500 calc(20px * var(--fit))/1.5 var(--f-body); letter-spacing: .3em; text-transform: uppercase; }
+.blk-espaciado { font: 400 calc(27px * var(--fit))/1.4 var(--f-body); letter-spacing: .14em; }
+.blk-cifra { font: 400 calc(230px * var(--ts) * var(--fit))/.9 var(--f-display); letter-spacing: -.02em; }
+.blk-fuente { font: 400 calc(18px * var(--fit))/1.4 var(--f-body); opacity: .62; }
+.blk-guardar { display: flex; align-items: center; gap: 22px; font: 400 calc(25px * var(--fit))/1.4 var(--f-body); }
+.blk-guardar .j-bm { flex: none; }
+.blk-firma { font: 500 20px/1 var(--f-body); letter-spacing: .42em; text-transform: uppercase; }
+.blk-linea { display: block; width: 520px; max-width: 100%; height: 5px; border-radius: 3px; background: var(--lime); }
+.blk.a-centro.blk-linea { margin: 0 auto; }
+.blk-dot { color: var(--lime); }
+/* Marcas en el texto: ==resaltador== y __subrayado__ (también sirven en los diseños clásicos) */
+mark.hl { background: var(--lime); color: inherit; padding: 0 .1em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.ul { text-decoration: underline; text-decoration-color: var(--lime); text-decoration-thickness: .09em; text-underline-offset: .14em; text-decoration-skip-ink: none; }
+.t-dark .blk:not(.blk-linea) { text-shadow: 0 1px 22px rgba(0,0,0,.3); }
+/* La copia de encima del recorte no repite los fondos de resaltador */
+.over mark.hl { background: none; }

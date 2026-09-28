@@ -6,6 +6,7 @@ import {aiConfig,enqueue,generationStatus,runWorker,recoveredProject} from '../s
 import {libraryRoute,adminOnly,checked,readyFile} from '../src/library.js';
 import {authenticate,authorizeBrand,databaseError,HttpError} from '../src/auth.js';
 import {adminClient,config} from '../src/config.js';
+import {teamRoute} from '../src/team.js';
 const id=z.string().min(1).max(128);
 async function body(req:IncomingMessage):Promise<any>{
  // Vercel may have parsed req.body. Still enforce a small metadata-only API.
@@ -26,6 +27,7 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
   if(route==='generate'&&req.method==='GET'){const r=await generationStatus(who,url.searchParams.get('id')||'');if(!r.done)waitUntil(runWorker());return send(200,r);}
 
   if(route==='me'&&req.method==='GET')return send(200,{id:who.id,role:who.role});
+  if(route==='team'||route.startsWith('team/')){const result=await teamRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
   if(route.startsWith('brands')||route.startsWith('people')||(route==='requests'&&req.method==='POST')){const result=await libraryRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
   if(route==='jobs/cutout'&&req.method==='POST'){
    const b=z.object({group:z.uuid(),index:z.number().int().min(0),fileId:z.uuid()}).parse(await body(req));

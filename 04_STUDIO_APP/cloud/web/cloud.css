@@ -13,3 +13,14 @@ body:has(> #login:not([hidden])){overflow-y:auto}
  .pc-top,.pc-photo,.mk-head,.form-actions{flex-wrap:wrap;min-width:0}.mk-res{display:flex;flex-wrap:wrap;min-width:0}
  .deliv-row,.mk-photos{max-width:100%}.mk-person,.mk-sec{min-width:0;max-width:100%}
 }
+
+/* Equipo (solo administración) */
+.team-dlg{width:min(980px,96vw)}.team-body{display:grid;gap:14px;max-height:78vh;overflow:auto;padding-right:4px}
+.team-grid{display:grid;grid-template-columns:2fr 2fr 1fr;gap:10px}.team-grid .lbl{display:grid;gap:6px}
+.team-brands{display:flex;flex-wrap:wrap;gap:6px 14px}.team-brand{display:flex;align-items:center;gap:6px;font-size:14px}
+.team-row{display:grid;grid-template-columns:minmax(180px,1.4fr) 110px 150px minmax(160px,2fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.team-row.off{opacity:.55}.team-who{display:grid;gap:2px}.team-who small{color:var(--muted)}.team-limit{display:flex;align-items:center;gap:6px;font-size:13px}.team-limit input{width:72px}
+.team-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.team-link{border:1px solid #ecfe6e88;border-radius:8px;padding:12px}.team-link-row{display:flex;gap:8px}.team-link-row input{flex:1;min-width:0;font-family:var(--mono);font-size:12px}
+.team-ok{color:#9fd49f;margin:0}
+@media(max-width:800px){.team-grid,.team-row{grid-template-columns:1fr}.team-acts{justify-content:flex-start}}

@@ -30,6 +30,7 @@ MOTORES = {
 MOTOR_DEFECTO = 'nano_banana_pro'
 TAMANO_DEFECTO = '2k'
 GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview'
+GEMINI_TIMEOUT = 900       # Nano Banana Pro (preview) puede tardar más de 6 minutos por foto cuando Google está cargado
 REF_MAX_PX = 1600          # las fotos de referencia se reducen antes de enviarlas (peticiones más livianas y rápidas)
 
 def motor_key(id)
@@ -116,7 +117,8 @@ def gemini_image(prompt, refs, dest, tamano)
   body = { contents: [{ role: 'user', parts: parts }],
            generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '4:5', imageSize: tamano.upcase } } }
   code, data = http_post("https://generativelanguage.googleapis.com/v1beta/models/#{GEMINI_IMAGE_MODEL}:generateContent",
-                         { 'x-goog-api-key' => motor_key('nano_banana_pro'), 'Content-Type' => 'application/json' }, body)
+                         { 'x-goog-api-key' => motor_key('nano_banana_pro'), 'Content-Type' => 'application/json' }, body,
+                         GEMINI_TIMEOUT)
   raise "Google respondió #{code}: #{data.dig('error', 'message') || data['raw']}" unless code == 200
   cand = (data['candidates'] || []).first || {}
   img = (cand.dig('content', 'parts') || []).map { |p| p['inlineData'] || p['inline_data'] }.compact.first

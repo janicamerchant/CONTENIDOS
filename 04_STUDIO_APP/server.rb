@@ -125,6 +125,19 @@ require_relative 'imagen'
 
 # ---------- Claude: borrador de carrusel ----------
 
+# Diseño por bloques: ver BLOCK_TEMPLATES en public/app.js
+BLOCK_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object', additionalProperties: false, required: %w[style text zone align ancho punto],
+    properties: {
+      style: { type: 'string', enum: %w[titulo titulo-xl serif sans sans-grande etiqueta espaciado cifra fuente guardar firma linea] },
+      text: { type: 'string' }, zone: { type: 'string', enum: %w[arriba centro abajo izquierda derecha] },
+      align: { type: 'string', enum: %w[izq centro der] }, ancho: { type: 'string', enum: ['', 'medio'] }, punto: { type: 'boolean' }
+    }
+  }
+}.freeze
+
 SLIDE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -138,11 +151,13 @@ SLIDE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: %w[layout theme kicker title body number numberLabel items leftLabel leftItems rightLabel rightItems cta photo photoPrompt bw source],
+        required: %w[layout theme kicker title body number numberLabel items leftLabel leftItems rightLabel rightItems cta photo photoPrompt bw source template blocks],
         properties: {
           bw: { type: 'boolean' },
           source: { type: 'string' },
-          layout: { type: 'string', enum: %w[portada escena cifra frase lista comparar cta] },
+          layout: { type: 'string', enum: %w[portada escena cifra frase lista comparar cta bloques] },
+          template: { type: 'string', enum: ['', 'portada-subrayado', 'a-ti-si', 'cifra-resaltada', 'arriba-abajo', 'voz-interior', 'escalera', 'dato-centrado', 'cierre-guardar', 'remate-linea'] },
+          blocks: BLOCK_SCHEMA,
           theme: { type: 'string', enum: %w[dark light] },
           kicker: { type: 'string' },
           title: { type: 'string' },
@@ -172,8 +187,8 @@ DRAFT_RULES = <<~TXT
   - layout: portada (lámina 1, foto de la situación del titular con una cara humana), escena (foto a sangre completa con titular gigante encima), cifra (un número protagonista), frase (una afirmación fuerte sobre una foto), lista (checklist práctico), comparar (antes/después o dos columnas), cta (última lámina).
   - theme: dark o light. Alterna para dar ritmo; no todas iguales.
   - title: pocas palabras. Marca con *asteriscos* la palabra o frase que va en color de acento (máximo una por titular).
-  - body: una o dos frases cortas, o vacío.
-  - number y numberLabel solo en layout cifra. items solo en lista (3 a 5). leftLabel/leftItems/rightLabel/rightItems solo en comparar (3 ítems por lado). cta solo en la última.
+  - body: ver "Cantidad de texto" más abajo.
+  - number y numberLabel solo en layout cifra. items solo en lista (3). leftLabel/leftItems/rightLabel/rightItems solo en comparar (3 ítems por lado). cta solo en la última.
   - photo: dirección de arte en el idioma del brief. Describe una ESCENA que cuente la idea de esa lámina sin leer el texto: quién hace qué, dónde, con qué objeto o momento que lo prueba. Tienes libertad creativa para elegir protagonista: una de las personas aprobadas de la marca (lista abajo) haciendo algo relacionado (solo si su acción explica la idea), la figura pública de la noticia (foto real) u otra persona hiperrealista viviendo la situación. Objetos y lugares también pueden ser protagonistas. Nunca un retrato decorativo sin relación con el titular.
   - photoPrompt: el prompt en inglés para generar esa foto: sujeto, acción, lugar, emoción, encuadre, luz, y al final "hyperrealistic editorial photograph, natural skin texture, no text, no logos". Si la persona es una de las personas aprobadas, escribe su nombre completo y "use the approved <nombre> reference for the face". Compón la foto para que la persona u objeto quede de un lado y deje aire para el titular: el sujeto solo debe cruzar el borde del área del texto (así las letras pasan parcialmente por detrás de él sin perder la lectura). Fondo con textura o ambiente real, nunca un fondo plano de estudio.
   - Al menos 5 de cada 7 láminas llevan foto (photo y photoPrompt llenos). Como máximo una o dos pueden ser solo tipográficas, nunca dos seguidas. Varía encuadres: plano general, detalle de manos u objetos, primer plano, cenital.
@@ -181,6 +196,36 @@ DRAFT_RULES = <<~TXT
   - Deja vacíos ("" o []) los campos que no apliquen al layout.
   - caption: el texto del post para Instagram, con el CTA.
   - concept: la dirección creativa en 3 a 5 frases cortas: la idea central y el ángulo, el estilo visual (fotografía, paleta, tipografía), el tono y por qué la secuencia convence a la audiencia.
+
+  Cantidad de texto (regla dura: cada lámina se entiende en 3 segundos; lo que no quepa va al caption):
+  - Máximo 25 palabras por lámina sumando titular, antetítulo, texto de apoyo, ítems y botón (la fuente no cuenta). En layout bloques manda el máximo de su plantilla.
+  - title: 2 a 7 palabras.
+  - body: vacío o UNA sola frase de máximo 12 palabras. Déjalo vacío en al menos la mitad de las láminas. Nunca repitas en el body lo que ya dice el titular.
+  - items (lista): exactamente 3 ítems de máximo 5 palabras cada uno, y sin body.
+  - comparar: 3 ítems por lado de máximo 4 palabras cada uno.
+  - cifra: numberLabel de máximo 8 palabras; body vacío salvo que sea imprescindible (máximo 8 palabras).
+  - cta: titular de máximo 6 palabras, cta de máximo 6 palabras y body vacío.
+  - kicker: vacío salvo que aporte algo (máximo 3 palabras).
+  - Cada lámina dice UNA idea distinta: no repitas la misma cifra ni el mismo mensaje en dos láminas.
+  - La explicación, los ejemplos, los matices y el contexto van en el caption, nunca en las láminas.
+
+  Diseño por bloques (layout "bloques"; úsalo solo si las reglas de la marca lo piden):
+  - La lámina es una lista de bloques de texto en "blocks". Cada bloque tiene style, text, zone (arriba, centro, abajo; izquierda y derecha son columnas laterales estrechas solo para etiquetas cortas), align (izq, centro, der), ancho ("medio" para ocupar media lámina y dejar la otra mitad a la foto, o "") y punto (true solo si el bloque termina con un punto lima).
+  - style: titulo (titular serif), titulo-xl (remate gigante), serif (frase serif), sans (texto), sans-grande, etiqueta (versalitas espaciadas, 2 a 5 palabras), espaciado (frase corta espaciada en minúsculas), cifra, fuente (fuente del dato), guardar (CTA con icono de guardar), firma (nombre de la marca, text vacío), linea (línea lima, text vacío).
+  - Marcas dentro de text: *cursiva*, ==resaltador== (una cifra o un remate corto) y __subrayado__ (una o dos palabras). Máximo un resaltador y un subrayado por lámina. Enter (\n) para cortar líneas.
+  - template: el nombre de la plantilla usada. Plantillas (estructura · máximo de palabras de la lámina sin contar la fuente · foto):
+    · portada-subrayado: titulo-xl arriba izq ancho medio con una palabra __subrayada__ + sans corto + firma · 18 · la persona a la derecha.
+    · a-ti-si: 2 o 3 frases serif centradas arriba con *cursiva* + remate titulo-xl ==resaltado== + 2 etiquetas laterales (zone izquierda y derecha) · 45 · escena en la mitad inferior.
+    · cifra-resaltada: titulo arriba (MAYÚSCULAS + *cursiva*) + cifra ==resaltada== + serif en mayúsculas + serif corto + fuente · 25 · objetos en la mitad inferior.
+    · arriba-abajo: titulo arriba ancho medio con punto + sans ancho medio + titulo-xl abajo · 35 · objeto o espacio en el centro.
+    · voz-interior: arriba serif con *cursiva* + sans-grande + sans de 3 líneas cortas; abajo sans de 2 líneas + titulo-xl con __subrayado__ · 45 · la persona pensativa en el centro.
+    · escalera: arriba izq 3 pares (titulo corto en minúsculas + sans que lo completa); el tercero es titulo-xl con __subrayado__ · 40 · objetos abajo o a la derecha.
+    · dato-centrado: titulo centrado arriba + cifra ==resaltada== y sans (zone centro, align der, ancho medio) + serif centrado abajo con *cursiva* + fuente · 40 · objetos a la izquierda.
+    · cierre-guardar: arriba titulo + sans + etiqueta; abajo titulo-xl con *cursiva* y __subrayado__ + guardar + firma · 55 · última lámina, la persona a la derecha.
+    · remate-linea: arriba serif ancho medio + espaciado + titulo-xl + linea · 35 · escena a la derecha.
+  - En layout bloques deja vacíos title, body, kicker, number, numberLabel, items, leftLabel, leftItems, rightLabel, rightItems y cta: todo va en blocks (la fuente del dato va en un bloque fuente y también en source). Manda el máximo de palabras de la plantilla en lugar del límite general de 25.
+  - El photoPrompt deja una zona lisa y limpia (pared, cortina, piso) exactamente donde van los bloques de la plantilla, y pone el sujeto donde indica la plantilla.
+  - En las láminas que no son bloques, blocks es [] y template "".
 
   Post único (formato de 1 imagen): devuelve exactamente 1 lámina que cuente la idea completa por sí sola, sin depender de otras.
   - layout: portada, escena, cifra o frase (no uses lista, comparar ni cta). Titular fuerte y corto; body opcional de una frase.
