@@ -253,11 +253,12 @@ function factsHtml(list) {
 function refsHtml(list) {
   const on = list.filter((r) => r.active).length;
   return `<section class="mk-sec"><h2 class="sec-title">Referencias visuales · ${on} activas de ${list.length}</h2>
-    <p class="hint">Carruseles, fotos o composiciones que te gustan. Claude ve hasta ${8} activas (en orden alfabético) para entender el estilo; no copia sus textos ni caras. Se guardan como JPEG de 1600 px.</p>
+    <p class="hint">Carruseles, fotos o composiciones que te gustan. Claude ve hasta ${8} activas (en orden alfabético) para entender el estilo; no copia sus textos ni caras. Se guardan como JPEG de 1600 px. Marca <b>Lugar real</b> en fotos de la fachada o el local para que el motor de imagen reproduzca ese edificio exacto (hasta 2).</p>
     <div class="mk-refs">${list.map((r) => `<figure class="mk-ref ${r.active ? '' : 'off'}" data-path="${esc(r.path)}">
       <a href="${esc(r.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(r.url)}" alt="${esc(r.name)}"></a>
       <figcaption>
         <label class="mk-on"><input type="checkbox" data-res-active ${r.active ? 'checked' : ''}><span>${r.active ? 'Activa' : 'Inactiva'}</span></label>
+        <label class="mk-on" title="El motor de imagen recibe esta foto y reproduce este lugar exacto cuando la escena lo incluye"><input type="checkbox" data-res-place ${r.tags.includes('lugar') ? 'checked' : ''}><span>Lugar real · usar en fotos</span></label>
         <input class="inp sm mk-tags" data-res-tags value="${esc(r.tags.join(', '))}" placeholder="Etiquetas" aria-label="Etiquetas de ${esc(r.name)}">
         <span class="mk-ref-name" title="${esc(r.name)}">${esc(r.name)}</span>
         <button type="button" class="btn sm ghost danger" data-res-delete>Eliminar</button>
@@ -606,6 +607,10 @@ function bindBrands() {
     try {
       if (t.dataset.uploadKind) await uploadResources(id, t);
       else if (t.matches('[data-res-active]')) await applyDetail(await brandApi(id, 'update', { path, active: t.checked }), path.startsWith('vestuario/'));
+      else if (t.matches('[data-res-place]')) {
+        const tags = (mk.detail.resources.referencias.find((r) => r.path === path)?.tags || []).filter((x) => x !== 'lugar');
+        await applyDetail(await brandApi(id, 'update', { path, tags: t.checked ? [...tags, 'lugar'] : tags }));
+      }
       else if (t.matches('[data-res-tags]')) await applyDetail(await brandApi(id, 'update', { path, tags: t.value.split(',') }));
       else if (t.matches('[data-logo-key]')) {
         const slot = t.closest('[data-slot]').dataset.slot;
