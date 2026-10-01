@@ -9,7 +9,7 @@ import {readSite} from './sitio.js';
 // Google responde en la misma llamada y la versión preview puede tardar más de 6 minutos: la función tiene 800 s (vercel.json).
 const GEMINI_TIMEOUT=720000;   // 12 min: el worker empieza trabajos solo en sus primeros 40 s, así cabe en los 800 s
 const GEMINI_MODEL='gemini-3-pro-image-preview',GEMINI_USD:Record<string,number>={'1k':0.134,'2k':0.134,'4k':0.24};
-function engines(){const list:any[]=[];if(process.env.GEMINI_API_KEY)list.push({id:'nano_banana_pro',nombre:'Nano Banana Pro',proveedor:'Google',env:'GEMINI_API_KEY',disponible:true,tamanos:GEMINI_USD});if(process.env.HF_CREDENTIALS)list.push({id:'hf_flare',nombre:'GPT Image 2.5 Flare',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null,'4k':null}});return list;}
+function engines(){const list:any[]=[];if(process.env.GEMINI_API_KEY)list.push({id:'nano_banana_pro',nombre:'Nano Banana Pro',proveedor:'Google',env:'GEMINI_API_KEY',disponible:true,tamanos:GEMINI_USD});if(process.env.HF_CREDENTIALS)list.push({id:'hf_flare',nombre:'GPT Image 2.5 Flare',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null,'4k':null}});if(process.env.HF_CREDENTIALS)list.push({id:'hf_soul2',nombre:'Soul 2 · Soul ID',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null}});return list;}
 export function aiConfig(){const motores=engines();return {hasKey:!!process.env.ANTHROPIC_API_KEY,fromEnv:true,motores,motorDefecto:motores[0]?.id||'hf_flare',tamanoDefecto:'2k',reservationPerImage:2,reservationPerProposal:2};}
 const digest=(x:any)=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function childKey(group:string,index:number){const h=digest([group,index]).slice(0,32);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20)}`;}
@@ -33,7 +33,7 @@ class ProviderError extends Error{constructor(public status:number){super(`Prove
 async function jsonFetch(url:string,init:any,timeout=45000){const r=await fetch(url,{...init,signal:AbortSignal.timeout(timeout),redirect:'error'});if(!r.ok)throw new ProviderError(r.status);return r.json();}
 const hf=(path:string,b?:any)=>jsonFetch('https://api.higgsfield.ai/'+path,{method:b?'POST':'GET',headers:{Authorization:'Key '+process.env.HF_CREDENTIALS,'Content-Type':'application/json'},...(b?{body:JSON.stringify(b)}:{})});
 async function workerIdentity(j:any):Promise<Identity>{const db=adminClient();const m=checked(await db.from('miembros').select('*').eq('user_id',j.user_id).single());if(!m?.activo||!['admin','editor'].includes(m.rol))throw new HttpError(403,'Acceso revocado.');if(m.rol!=='admin'){const link=checked(await db.from('miembro_marca').select('*').eq('user_id',j.user_id).eq('marca_id',j.marca_id).maybeSingle());if(!link||j.marca_id==='_comun')throw new HttpError(403,'Acceso revocado.');}const brand=checked(await db.from('marcas').select('archivada').eq('id',j.marca_id).single());if(brand.archivada)throw new HttpError(403,'Marca archivada.');return {id:j.user_id,role:m.rol,db};}
-async function fileUrl(ref:string){if(!/^storage:\/\/[0-9a-f-]{36}$/.test(ref))throw new Error('Referencia inválida');const id=ref.slice(10);const f=checked(await adminClient().from('archivos').select('object_path,listo,eliminado_at').eq('id',id).single());if(!f.listo||f.eliminado_at)throw new Error('Archivo no disponible');return checked(await adminClient().storage.from('estudio').createSignedUrl(f.object_path,3600)).signedUrl;}
+async function fileUrl(ref:string,ttl=3600){if(!/^storage:\/\/[0-9a-f-]{36}$/.test(ref))throw new Error('Referencia inválida');const id=ref.slice(10);const f=checked(await adminClient().from('archivos').select('object_path,listo,eliminado_at').eq('id',id).single());if(!f.listo||f.eliminado_at)throw new Error('Archivo no disponible');return checked(await adminClient().storage.from('estudio').createSignedUrl(f.object_path,ttl)).signedUrl;}
 async function knowledge(w:Identity,brand:string){const all=[await brandDetail(w,brand)];if(brand!=='_comun')all.push(await brandDetail(w,'_comun'));let text='',remaining=80000;const media:any[]=[];let visualCount=0,pdfCount=0;
  for(const d of all){for(const ref of d.resources.referencias.filter((r:any)=>r.active)){if(visualCount>=6)break;if(ref.size<=4500000){media.push({type:'image',source:{type:'url',url:await fileUrl(ref.url)}});visualCount++;}}text+=`\nMarca: ${d.name}\nReglas: ${d.rules}\nDatos verificados: ${JSON.stringify(d.datos)}\nPersonas aprobadas: ${JSON.stringify(d.people.map((p:any)=>({id:p.id,name:p.name,descripcion:p.descripcion})))}`;
   for(const f of d.resources.conocimiento.filter((f:any)=>f.active)){if(remaining<=0)break;const file=checked(await w.db.from('archivos').select('*').eq('id',f.url.slice(10)).single());if(file.mime==='application/pdf'&&pdfCount<2&&file.bytes<1500000){const b=checked(await adminClient().storage.from('estudio').download(file.object_path));pdfCount++;media.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:Buffer.from(await b.arrayBuffer()).toString('base64')}});}else if(file.mime.startsWith('text/')&&file.bytes<500000){const b=checked(await adminClient().storage.from('estudio').download(file.object_path));const content=(await b.text()).slice(0,remaining);remaining-=content.length;text+=`\nDocumento ${f.name}:\n${content}`;}}
@@ -55,6 +55,10 @@ async function storeResult(j:any,bytes:Buffer,mime:string,coste:number|null){if(
  await saveJob(j,{estado:'succeeded',error:null,resultado:{url:'storage://'+id,cutout:'',full:!!j.resultado?.full,needsCutout:!!j.resultado?.needsCutout,motor:j.motor,tamano:j.payload.tamano},coste_usd:coste});}
 // Prompt y referencias (storage://) de la lámina, iguales para todos los motores
 async function imageRequest(j:any,w:Identity){const brand=await brandDetail(w,j.marca_id),p=j.payload,s=p.slide||{};const wanted=new Set((p.people||[]).map((x:any)=>typeof x==='string'?x:x.id));const mentioned=(p.prompt+' '+(s.photo||'')).toLowerCase();const people=brand.people.filter((x:any)=>wanted.has(x.id)||[x.name,...x.aliases].some((n:string)=>mentioned.includes(n.toLowerCase())));const refs:string[]=[];
+ // Soul 2 no recibe fotos: la identidad viene del Soul ID entrenado de la persona
+ if(j.motor==='hf_soul2'){const person=people.find((x:any)=>x.soul?.status==='completed');const others=people.filter((x:any)=>x!==person).map((x:any)=>x.lock);
+  const prompt=p.prompt+'\n'+(brand.look||'')+'\n'+others.join('\n')+'\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
+  return {prompt:prompt.slice(0,20000),refs,full:false,needsCutout:!!brand.cutout,soulId:person?.soul.id as string|undefined,soulStrength:Number(person?.soul.strength??1)};}
  for(const person of people.slice(0,2)){const photos=person.photos.filter((f:any)=>f.active);const preferred=s.basePhoto||person.fotos_base?.[s.layout]||person.fotos_base?.otras;photos.sort((a:any,b:any)=>Number(b.name===preferred||b.label===preferred)-Number(a.name===preferred||a.label===preferred));for(const f of photos.slice(0,2))refs.push(f.url);}
  // Referencias marcadas como lugar real (fachada, local): el motor las recibe para no inventar el edificio
  const places=brand.resources.referencias.filter((r:any)=>r.active&&r.tags.includes('lugar')).slice(0,2).map((r:any)=>r.url);const placeStart=refs.length;
@@ -66,7 +70,7 @@ async function imageRequest(j:any,w:Identity){const brand=await brandDetail(w,j.
  if(placeCount)prompt+=`\nReference image${placeCount>1?'s':''} ${Array.from({length:placeCount},(_,i)=>placeStart+i+1).join(' and ')} show${placeCount>1?'':'s'} the brand's real location. Whenever the scene shows the building, facade, showroom or lot, reproduce this exact place: same architecture, facade shape, colors, windows, entrance, signage placement and surroundings. Do not invent a different or generic building. Use these images for the location only, never for people.`;
  if(full){prompt+=`\nCreate a finished Spanish editorial Instagram slide. Render these exact texts with correct accents: ${JSON.stringify(s)}. Brand palette and type: ${JSON.stringify({colors:brand.colors,fonts:brand.fonts})}. Large readable title, polished editorial layout, 4:5 safe composition. No invented words or logos. Slide ${p.count||''}.`;const visual=brand.resources.referencias.filter((r:any)=>r.active).slice(0,2);for(const ref of visual)if(refs.length<6&&!refs.includes(ref.url))refs.push(ref.url);}
  else prompt+='\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
- return {prompt:prompt.slice(0,20000),refs,full,needsCutout:!!brand.cutout&&!full};
+ return {prompt:prompt.slice(0,20000),refs,full,needsCutout:!!brand.cutout&&!full,soulId:undefined as string|undefined,soulStrength:1};
 }
 // Google responde en la misma llamada: no hay id de proveedor ni consulta de estado.
 async function geminiJob(j:any,w:Identity){const req=await imageRequest(j,w);j.resultado={full:req.full,needsCutout:req.needsCutout};const parts:any[]=[];let total=0;
@@ -80,7 +84,8 @@ async function geminiJob(j:any,w:Identity){const req=await imageRequest(j,w);j.r
 async function imageJob(j:any,w:Identity){const db=adminClient();let data;
  if(j.motor==='nano_banana_pro')return geminiJob(j,w);
  if(!j.provider_id){const req=await imageRequest(j,w);const refs:string[]=[];for(const ref of req.refs)refs.push(await fileUrl(ref));const p=j.payload;
-  data=await hf('marketing-studio/image/flare',{prompt:req.prompt,resolution:p.tamano,aspect_ratio:'3:4',quality:'high',enhance_prompt:false,...(refs.length?{image_urls:refs}:{})});
+  data=j.motor==='hf_soul2'?await hf('higgsfield-ai/soul/v2/standard',{prompt:req.prompt,resolution:p.tamano==='1k'?'720p':'1080p',aspect_ratio:'3:4',batch_size:1,enhance_prompt:false,...(req.soulId?{custom_reference_id:req.soulId,custom_reference_strength:req.soulStrength}:{})})
+   :await hf('marketing-studio/image/flare',{prompt:req.prompt,resolution:p.tamano,aspect_ratio:'3:4',quality:'high',enhance_prompt:false,...(refs.length?{image_urls:refs}:{})});
   const requestId=z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/).parse(data.request_id);checked(await db.from('trabajos').update({provider_id:requestId,resultado:{full:req.full,needsCutout:req.needsCutout}}).eq('id',j.id).eq('lease_token',j.lease_token));j.provider_id=requestId;j.resultado={full:req.full,needsCutout:req.needsCutout};
  }else data=await hf('requests/'+encodeURIComponent(j.provider_id)+'/status');
  if(['failed','nsfw','canceled','cancelled'].includes(data.status)){await saveJob(j,{estado:'failed',error:'El proveedor no completó la imagen ('+data.status+').',coste_usd:0});return;}
@@ -89,6 +94,23 @@ async function imageJob(j:any,w:Identity){const db=adminClient();let data;
  // Only fetch provider-returned output, never a user-supplied URL.
  const r=await fetch(u,{signal:AbortSignal.timeout(45000),redirect:'error'});if(!r.ok)throw new Error('No se pudo descargar la imagen generada.');const bytes=Buffer.from(await r.arrayBuffer());const mime=r.headers.get('content-type')?.split(';')[0]||'image/png';
  await storeResult(j,bytes,mime,null);
+}
+// Soul ID (Higgsfield): entrena la identidad de una persona con sus fotos activas y consulta el estado del entrenamiento.
+export async function soulRoute(w:Identity,id:string,b:any){
+ adminOnly(w);if(!process.env.HF_CREDENTIALS)throw new HttpError(503,'Higgsfield no está configurado.');const db=adminClient();
+ const row=checked(await db.from('personas').select('*').eq('id',id).maybeSingle());if(!row)throw new HttpError(404,'Persona no encontrada.');const soul=row.identidad.soul||{};
+ const save=async(next:any)=>{checked(await db.from('personas').update({identidad:{...row.identidad,soul:next},updated_at:new Date().toISOString()}).eq('id',id));return next;};
+ const op=z.enum(['train','status','strength']).parse(b.op);
+ if(op==='strength')return save({...soul,strength:z.number().min(0).max(1).parse(b.strength)});
+ if(op==='status'){if(!soul.id)throw new HttpError(400,'Esta persona no tiene Soul ID.');let r;try{r=await hf('v1/custom-references/'+encodeURIComponent(soul.id));}catch{throw new HttpError(502,'Higgsfield no respondió. Prueba en un momento.');}return save({...soul,status:String(r.status||soul.status),revisado:new Date().toISOString()});}
+ if(soul.id&&!['completed','failed'].includes(soul.status))throw new HttpError(409,'Ya hay un entrenamiento en curso. Consulta su estado.');
+ const photos=checked(await db.from('persona_fotos').select('archivo_id,archivos(listo,eliminado_at,mime)').eq('persona_id',id).eq('activa',true).order('posicion')).filter((x:any)=>x.archivos?.listo&&!x.archivos.eliminado_at&&x.archivos.mime?.startsWith('image/'));
+ if(!photos.length)throw new HttpError(400,'Sube y activa al menos una foto de la cara.');
+ // Las URLs firmadas duran 24 h por si Higgsfield descarga las fotos después de aceptar el entrenamiento
+ const input_images=await Promise.all(photos.slice(0,100).map(async(x:any)=>({type:'image_url',image_url:await fileUrl('storage://'+x.archivo_id,86400)})));
+ let r;try{r=await hf('v1/custom-references',{name:String(row.identidad.name||id).slice(0,100),model_version:'v2',input_images});}catch(e){throw new HttpError(502,e instanceof ProviderError?`Higgsfield rechazó el entrenamiento (${e.status}). Revisa saldo y fotos.`:'Higgsfield no respondió.');}
+ const soulId=z.string().min(1).max(128).parse(r.id);
+ return save({id:soulId,status:String(r.status||'queued'),fotos:input_images.length,strength:soul.strength??1,creado:new Date().toISOString(),...(soul.id?{anterior:soul.id}:{})});
 }
 export async function runWorker(maxJobs=3){const started=Date.now();for(let i=0;i<maxJobs;i++){if(Date.now()-started>40000)return;const rows=checked(await adminClient().rpc('reclamar_trabajo'));const j=rows?.[0];if(!j)return;let submitted=!!j.provider_id;
  try{if(j.provider_id&&Date.now()-Date.parse(j.created_at)>86400000){await saveJob(j,{estado:'uncertain',error:'El proveedor lleva más de 24 horas sin resultado confirmado. Revisa el trabajo antes de repetir.',coste_usd:null});continue;}const w=await workerIdentity(j);submitted=true;if(j.tipo==='imagen')await imageJob(j,w);else await textJob(j,w);}

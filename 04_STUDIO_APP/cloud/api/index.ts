@@ -2,7 +2,7 @@ import type {IncomingMessage,ServerResponse} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {waitUntil} from '@vercel/functions';
-import {aiConfig,enqueue,generationStatus,runWorker,recoveredProject} from '../src/generation.js';
+import {aiConfig,enqueue,generationStatus,runWorker,recoveredProject,soulRoute} from '../src/generation.js';
 import {libraryRoute,adminOnly,checked,readyFile} from '../src/library.js';
 import {authenticate,authorizeBrand,databaseError,HttpError} from '../src/auth.js';
 import {adminClient,config} from '../src/config.js';
@@ -28,6 +28,7 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
 
   if(route==='me'&&req.method==='GET')return send(200,{id:who.id,role:who.role});
   if(route==='team'||route.startsWith('team/')){const result=await teamRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
+  const soul=/^people\/([a-z0-9-]{1,64})\/soul$/.exec(route);if(soul&&req.method==='POST')return send(200,await soulRoute(who,soul[1]!,await body(req)));
   if(route.startsWith('brands')||route.startsWith('people')||(route==='requests'&&req.method==='POST')){const result=await libraryRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
   if(route==='jobs/cutout'&&req.method==='POST'){
    const b=z.object({group:z.uuid(),index:z.number().int().min(0),fileId:z.uuid()}).parse(await body(req));

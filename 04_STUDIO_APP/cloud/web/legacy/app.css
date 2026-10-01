@@ -447,6 +447,13 @@ textarea.inp { resize: vertical; line-height: 1.4; }
 .mk-people-pick img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .mk-inline { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .mk-sec.mk-inline .inp { flex: 1; min-width: 200px; }
+.mk-soul { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin: 14px 0 4px; padding: 12px 14px; border: 1px solid var(--line, #3a3a3a); border-radius: 8px; }
+.mk-soul > div:first-child { flex: 1 1 320px; }
+.mk-soul-state { margin: 6px 0; font-weight: 600; }
+.mk-soul-state.ok { color: var(--accent, #ECFE6E); }
+.mk-soul-state.bad { color: #e8735c; }
+.mk-soul-acts { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.mk-soul-str { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .mk-photos { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .mk-photo { margin: 0; flex: none; width: 150px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; position: relative; }
 .mk-photo img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }

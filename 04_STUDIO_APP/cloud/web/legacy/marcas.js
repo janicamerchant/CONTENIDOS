@@ -353,11 +353,30 @@ function renderPeople() {
         <figcaption><label class="mk-on"><input type="checkbox" data-photo-active ${f.active ? 'checked' : ''}><span>${f.active ? 'Se envía' : 'No se envía'}</span></label>
           <span class="mk-acts"><button type="button" class="icon-btn" data-photo-move="-1" aria-label="Antes">←</button><button type="button" class="icon-btn" data-photo-move="1" aria-label="Después">→</button>
           <button type="button" class="btn sm ghost danger" data-photo-delete>Eliminar</button></span></figcaption></figure>`).join('') || '<p class="empty">Sin fotos: sube al menos una foto clara de la cara.</p>'}</div>
+      ${soulHtml(p)}
       <div class="form-actions">
         <label class="btn sm">Subir fotos<input type="file" data-person-upload accept="image/*" multiple hidden></label>
         <button type="submit" class="btn sm accent">Guardar</button>
         <button type="button" class="btn sm ghost danger" data-person-archive>Archivar persona</button>
       </div></form>`).join('')}`;
+}
+
+// Soul ID: identidad entrenada en Higgsfield para el motor Soul 2 (se entrena con las fotos marcadas "Se envía")
+const SOUL_STATUS = { completed: 'Listo', failed: 'Falló', queued: 'En cola', in_progress: 'Entrenando', not_ready: 'Entrenando' };
+function soulHtml(p) {
+  const s = p.soul || {};
+  const n = p.photos.filter((f) => f.active).length;
+  const busy = s.id && !['completed', 'failed'].includes(s.status);
+  const state = !s.id ? 'Sin entrenar' : `${SOUL_STATUS[s.status] || esc(s.status)} · ${s.fotos || '?'} fotos · ${new Date(s.creado).toLocaleDateString('es')}`;
+  return `<div class="mk-soul">
+    <div><span class="lbl">Soul ID · Higgsfield</span>
+      <p class="mk-soul-state ${s.status === 'completed' ? 'ok' : s.status === 'failed' ? 'bad' : ''}">${state}</p>
+      <p class="help">Entrena su cara una vez con las ${n} fotos marcadas "Se envía" (mejor 10–30, ángulos y luz variados, solo esta persona). Luego elige <b>Soul 2 · Soul ID</b> como motor de imagen. Soul 2 no recibe fotos de lugar: para la fachada real usa GPT Image 2.5 Flare. El entrenamiento consume créditos de Higgsfield.</p></div>
+    <div class="mk-soul-acts">
+      ${busy ? '<button type="button" class="btn sm" data-soul="status">Actualizar estado</button>'
+        : `<button type="button" class="btn sm" data-soul="train" ${n ? '' : 'disabled'}>${s.id ? 'Reentrenar' : 'Entrenar Soul ID'}</button>`}
+      ${s.status === 'completed' ? `<label class="mk-soul-str">Fuerza <input type="range" min="0" max="1" step="0.05" value="${Number(s.strength ?? 1)}" data-soul-strength><span>${Number(s.strength ?? 1).toFixed(2)}</span></label>` : ''}
+    </div></div>`;
 }
 
 async function reloadPeople() {
@@ -607,6 +626,11 @@ function bindBrands() {
     try {
       if (t.dataset.uploadKind) await uploadResources(id, t);
       else if (t.matches('[data-res-active]')) await applyDetail(await brandApi(id, 'update', { path, active: t.checked }), path.startsWith('vestuario/'));
+      else if (t.matches('[data-soul-strength]')) {
+        await api(`/api/people/${t.closest('[data-person]').dataset.person}/soul`, { op: 'strength', strength: Number(t.value) });
+        t.nextElementSibling.textContent = Number(t.value).toFixed(2);
+        mk.people = await api('/api/people');
+      }
       else if (t.matches('[data-res-place]')) {
         const tags = (mk.detail.resources.referencias.find((r) => r.path === path)?.tags || []).filter((x) => x !== 'lugar');
         await applyDetail(await brandApi(id, 'update', { path, tags: t.checked ? [...tags, 'lugar'] : tags }));
@@ -671,6 +695,16 @@ function bindBrands() {
         logos[b.dataset.logoUse] = { src: path };
         saveBrand({ logos }, true, 'Logo asignado.');
       } else if (b.matches('[data-goto-people]')) openSel({ type: 'people' });
+      else if (b.matches('[data-soul]')) {
+        const pid = b.closest('[data-person]').dataset.person;
+        const train = b.dataset.soul === 'train';
+        if (train && !confirm('Se envían sus fotos activas a Higgsfield para entrenar el Soul ID. Consume créditos y tarda unos minutos. ¿Continuar?')) return;
+        b.disabled = true;
+        let s;
+        try { s = await api(`/api/people/${pid}/soul`, { op: b.dataset.soul }); } finally { b.disabled = false; }
+        await reloadPeople();
+        toast(train ? 'Entrenamiento enviado. Pulsa "Actualizar estado" en unos minutos.' : `Soul ID: ${SOUL_STATUS[s.status] || s.status}.`);
+      }
       else if (b.id === 'mk-assist-go') assistBrand(b);
       else if (b.dataset.aiWrite) writeWithAI(b);
       else if (b.dataset.photoMove) {
