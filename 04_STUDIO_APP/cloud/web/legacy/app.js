@@ -346,7 +346,13 @@ function sampleProject() {
 
 // Los bloques que escribe Claude llegan sin id: se les pone uno para poder moverlos y editarlos
 const withBlockIds = (s) => { (s.blocks || []).forEach((b) => { b.id ||= uid(); }); return s; };
+// Claude a veces escribe los textos en bloques pero deja otro diseño (Portada, Frase…): sin esto la lámina y Crear se ven vacías
+function fixBlocks(s) {
+  if (s && s.layout !== 'bloques' && (s.blocks || []).some((b) => String(b.text || '').trim()) && ![s.kicker, s.title, s.body, s.number].some((v) => String(v || '').trim())) s.layout = 'bloques';
+  return s;
+}
 function normalizeProject(p) {
+  (p.slides || []).forEach(fixBlocks);
   p.slides = (p.slides || []).map((s) => withBlockIds(blankSlide(s.layout || 'frase', p.brand, s)));
   if (!p.slides.length) p.slides.push(blankSlide('portada', p.brand));
   p.caption = p.caption || '';
@@ -1949,6 +1955,7 @@ function propCard(s, i) {
 
 function renderProposal() {
   const d = state.draft;
+  (d.slides || []).forEach(fixBlocks);
   $('#d-name').value = d.name || '';
   $('#d-concept').value = d.concept || '';
   $('#d-caption').value = d.caption || '';

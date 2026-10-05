@@ -181,7 +181,7 @@ export async function buildLayers(img:Buffer,mime:string,expected:string[],brand
 // Textos que la lámina debía mostrar (la lista exacta que recibió el motor)
 export function slideTexts(s:any):string[]{
  const one=(v:any)=>String(v||'').replace(/[*_=]/g,'').trim();
- return [s.kicker,s.title,s.number,s.numberLabel,s.body,...(s.items||[]),s.leftLabel,...(s.leftItems||[]),s.rightLabel,...(s.rightItems||[]),s.cta,s.source].map(one).filter(Boolean);
+ return [s.kicker,s.title,s.number,s.numberLabel,s.body,...(s.items||[]),s.leftLabel,...(s.leftItems||[]),s.rightLabel,...(s.rightItems||[]),s.cta,s.source,...(s.blocks||[]).filter((b:any)=>!['linea','firma'].includes(b.style)).map((b:any)=>b.text)].map(one).filter(Boolean);
 }
 // Solo para las pruebas (tests/layers.test.ts)
 export const internals={register,composite,overlap};
