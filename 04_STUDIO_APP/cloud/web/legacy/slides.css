@@ -594,7 +594,8 @@
 .b-base .acc { padding: 0 .06em; }
 
 /* Lámina completa: la imagen generada ya trae la tipografía (ver lamina_completa.rb) */
-.slide.full .s-full { position: absolute; inset: 0; z-index: 2; }
+/* Ocupa siempre la lámina entera: anula el alto/ancho de la foto de cada plantilla (Portada 76%, Lista 42%…) y de cada diseño */
+.slide.full .s-photo.s-full { position: absolute; inset: 0 !important; width: auto !important; height: auto !important; margin: 0 !important; clip-path: none !important; border-radius: 0 !important; z-index: 2; }
 
 /* ==========================================================================
    Diseño por bloques (layout "bloques"): pila de textos por zona con su estilo.
