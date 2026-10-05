@@ -52,6 +52,10 @@ function vehiclesIn(list:any[],text:string){const toks=norm(text).split(/[^a-z0-
  return [...best.values()].sort((a,b)=>b.score-a.score).map(x=>x.v);}
 // La lámina muestra el lugar real solo si la escena lo nombra; en un escenario o estudio la fachada confunde al motor
 const PLACE=/(dealership|dealer\b|showroom|facade|fachada|concesionari|storefront|building|edificio|car lot|sales lot|parking lot|estacionamiento|sucursal|agencia|\bstore\b|tienda|local\b)/;
+// Largo máximo del prompt por motor (Flare lo valida y responde 400 "is too long")
+const PROMPT_MAX:Record<string,number>={hf_flare:5000,hf_soul2:5000};
+// Corta en el último final de frase (o coma) antes de n caracteres
+const recortar=(t:string,n:number)=>{if(t.length<=n)return t;const c=t.slice(0,n),k=Math.max(c.lastIndexOf('. '),c.lastIndexOf('.\n'));return k>n*0.6?c.slice(0,k+1):c.slice(0,Math.max(c.lastIndexOf(', '),n*0.8)|0)+'.';};
 // Rutas de archivo que Claude a veces escribe (assets/x.png): el motor las imprimiría como texto
 const sinRutas=(t:string)=>t.replace(/['"]?(?:[\w-]+\/)*[\w-]+\.(?:png|jpe?g|webp|svg)['"]?/gi,m=>/logo/i.test(m)?'the supplied official logo':'the supplied reference photos');
 async function knowledge(w:Identity,brand:string){const all=[await brandDetail(w,brand)];if(brand!=='_comun')all.push(await brandDetail(w,'_comun'));let text='',remaining=80000;const media:any[]=[];let visualCount=0,pdfCount=0;
@@ -117,9 +121,13 @@ export async function imageRequest(j:any,w:Identity){const brand=await brandDeta
   const sistema=sinRutas(String(brand.sistema_visual||p.visualSystem||'').trim())||`Instagram editorial carousel, 4:5 vertical. Premium magazine-cover aesthetic for ${brand.name}. Palette: ${JSON.stringify(brand.colors||{})}. Typography: giant condensed uppercase headlines in a ${brand.fonts?.display||'bold condensed grotesque'} style, the key word or number in the accent color, supporting text in clean ${brand.fonts?.body||'sans-serif'}. ${brand.look||''} All slides must feel like one cohesive campaign.`;
   const evitar=String(brand.evitar||p.avoid||'').trim()||'Misspelled or malformed letters, extra or invented text, invented or distorted logos, a face different from the reference, plastic or airbrushed skin, deformed hands or bodies, stock-photo look, clutter, oversaturation, watermarks.';
   const nunca='Every word visible in the image must come from the exact text list, each line exactly once: never repeat a word or line, never print slide numbers or counters (such as "2 of 7"), reference numbers, captions, or technical words from these instructions (HUD, UI, slide, kicker, label, logo).';
-  prompt=`[VISUAL SYSTEM — identical on every slide]\n${sistema}\n\n${legend?`[REFERENCE IMAGES, in order]\n${legend}\n\n`:''}${identidad}${sinRutas(p.prompt)}\n\n[EXACT TEXT ON THIS SLIDE — Spanish, render letter by letter with every accent; this list wins if anything above differs]\n${texts||'(no text)'}${accent?`\nAccent-color word: "${accent}"`:''}\n\n[AVOID]\n${evitar} ${nunca}`;}
+  const armar=(vs:string,sl:string,ev:string)=>`[VISUAL SYSTEM — identical on every slide]\n${vs}\n\n${legend?`[REFERENCE IMAGES, in order]\n${legend}\n\n`:''}${identidad}${sl}\n\n[EXACT TEXT ON THIS SLIDE — Spanish, render letter by letter with every accent; this list wins if anything above differs]\n${texts||'(no text)'}${accent?`\nAccent-color word: "${accent}"`:''}\n\n[AVOID]\n${ev} ${nunca}`;
+  // Flare (Higgsfield) rechaza prompts de más de 5.000 caracteres: se recorta primero el AVOID, luego el VISUAL SYSTEM y al final el bloque de la lámina, siempre en un final de frase
+  let vs=sistema,sl=sinRutas(p.prompt),ev=evitar;const max=PROMPT_MAX[j.motor]??20000;
+  for(const [get,set,min] of [[()=>ev,(t:string)=>ev=t,300],[()=>vs,(t:string)=>vs=t,700],[()=>sl,(t:string)=>sl=t,600]] as const){const over=armar(vs,sl,ev).length-max;if(over<=0)break;set(recortar(get(),Math.max(min,get().length-over)));}
+  prompt=armar(vs,sl,ev);}
  else prompt+='\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
- return {prompt:prompt.slice(0,20000),refs,full,needsCutout:!!brand.cutout&&!full,soulId:undefined as string|undefined,soulStrength:1};
+ return {prompt:prompt.slice(0,PROMPT_MAX[j.motor]??20000),refs,full,needsCutout:!!brand.cutout&&!full,soulId:undefined as string|undefined,soulStrength:1};
 }
 // Google responde en la misma llamada: no hay id de proveedor ni consulta de estado.
 async function geminiJob(j:any,w:Identity){const req=await imageRequest(j,w);j.resultado={full:req.full,needsCutout:req.needsCutout};const parts:any[]=[];let total=0;
