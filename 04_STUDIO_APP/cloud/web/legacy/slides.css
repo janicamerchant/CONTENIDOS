@@ -596,6 +596,9 @@
 /* Lámina completa: la imagen generada ya trae la tipografía (ver lamina_completa.rb) */
 /* Ocupa siempre la lámina entera: anula el alto/ancho de la foto de cada plantilla (Portada 76%, Lista 42%…) y de cada diseño */
 .slide.full .s-photo.s-full { position: absolute; inset: 0 !important; width: auto !important; height: auto !important; margin: 0 !important; clip-path: none !important; border-radius: 0 !important; z-index: 2; }
+.slide.full .s-full img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.slide.full .s-full .s-full-img { object-fit: contain; }
+.slide.full .s-full .s-full-bg { object-fit: cover; transform: scale(1.15); filter: blur(28px) brightness(.85); }
 
 /* ==========================================================================
    Diseño por bloques (layout "bloques"): pila de textos por zona con su estilo.

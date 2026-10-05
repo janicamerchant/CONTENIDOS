@@ -661,7 +661,8 @@ function buildSlide(p, s, i, n) {
   // Lámina completa: la imagen ya trae la tipografía; no se dibuja nada encima.
   if (s.full && s.image) {
     el.classList.add('full');
-    el.innerHTML = `<div class="s-photo s-full"><img src="${esc(s.image)}" alt=""></div><div class="s-safe"></div>`;
+    // La imagen entra completa (Flare la entrega en 3:4, la lámina es 4:5); el sobrante se rellena con la misma imagen desenfocada.
+    el.innerHTML = `<div class="s-photo s-full"><img class="s-full-bg" src="${esc(s.image)}" alt="" aria-hidden="true"><img class="s-full-img" src="${esc(s.image)}" alt=""></div><div class="s-safe"></div>`;
     return el;
   }
   const tab = tabClip(hash(s.id + 'tab')), tabEdge = tabClip(hash(s.id + 'tabe'));
@@ -1080,7 +1081,7 @@ function renderInspector() {
       ${s.prevImage ? `<button type="button" class="btn sm ghost" id="undo-photo">Volver a la foto anterior</button>` : ''}
       ${imgSlot('image', 'Foto', s.image)}
       ${s.image ? `<p class="help">Arrastra la foto en la lámina (en una zona sin texto) para moverla; doble clic la centra. Foto y recorte se mueven juntos.</p>`
-        + range('Horizontal', 'dx', -100, 100, 1, '%') + range('Vertical', 'dy', -100, 100, 1, '%') + range('Zoom', 'iz', 1, 2.5, 0.02, '×')
+        + range('Horizontal', 'dx', -100, 100, 1, '%') + range('Vertical', 'dy', -100, 100, 1, '%') + range('Zoom', 'iz', s.full ? 0.5 : 1, 2.5, 0.02, '×')
         + `<details class="fine"><summary>Encuadre dentro de la foto</summary>${range('Recorte horizontal', 'ix', 0, 100, 1, '%')}${range('Recorte vertical', 'iy', 0, 100, 1, '%')}</details>` : ''}
       ${s.image ? imgSlot('cutout', 'Recorte', s.cutout, 'La misma foto sin fondo (PNG). Se pone encima del titular para que las letras queden detrás de la persona u objeto. Revisa que la palabra clave se siga leyendo.') : ''}
       ${s.image && !s.cutout ? '<button type="button" class="btn sm" id="auto-cut">Recorte automático</button><p class="help">Con el recorte puedes poner la persona delante o detrás del texto.</p>' : ''}
