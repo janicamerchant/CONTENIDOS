@@ -6,6 +6,7 @@ import {adminOnly,checked,brandDetail,storeFile} from './library.js';
 import {prompts} from './prompts.js';
 import {readSite} from './sitio.js';
 import {reelsJob} from './reels.js';
+import {buildLayers,slideTexts,LAYERS_USD} from './layers.js';
 // Nano Banana Pro (Gemini 3 Pro Image) por la API de Google. Precio aproximado por imagen, solo para el panel de costos.
 // Google responde en la misma llamada y la versión preview puede tardar más de 6 minutos: la función tiene 800 s (vercel.json).
 const GEMINI_TIMEOUT=720000;   // 12 min: el worker empieza trabajos solo en sus primeros 40 s, así cabe en los 800 s
@@ -23,7 +24,13 @@ export async function enqueue(w:Identity,route:string,b:any){
   const available=engines().map(m=>m.id);if(!available.length)throw new HttpError(503,'El proveedor de imágenes no está configurado.');const motor=b.motor||available[0];if(!available.includes(motor))throw new HttpError(400,'Ese motor de imagen no está conectado en este Estudio.');
   const p=checked(await w.db.from('proyectos').select('*').eq('id',z.string().max(128).parse(b.projectId)).maybeSingle());if(!p)throw new HttpError(404,'Guarda primero el proyecto.');brand=p.marca_id;await authorizeBrand(w,brand,true);
   const items=z.array(z.object({index:z.number().int().min(0).max(29),prompt:z.string().max(12000),people:z.array(z.any()).optional(),slide:z.record(z.string(),z.any()).optional(),count:z.string().max(20).optional()}).passthrough()).min(1).max(10).parse(b.items);if(new Set(items.map(i=>i.index)).size!==items.length)throw new HttpError(400,'Láminas duplicadas.');
-  for(const item of items){const slide=p.documento.slides[item.index];if(!slide)throw new HttpError(400,'Lámina inválida.');const payload={...item,originalImage:slide.image||'',tamano:z.enum(['1k','2k','4k']).parse(b.tamano||'2k'),slide:{...slide,...item.slide},visualSystem:String(p.documento.visualSystem||'').slice(0,8000),modo:['completa','foto'].includes(p.documento.modo)?p.documento.modo:'',avoid:String(p.documento.avoid||'').slice(0,4000)};jobs.push({tipo:'imagen',motor,payload,key:childKey(key,item.index),hash:digest(payload),reserva:2,proyecto:p.id,lamina:String(item.index),version:p.version});}
+  for(const item of items){const slide=p.documento.slides[item.index];if(!slide)throw new HttpError(400,'Lámina inválida.');const payload={...item,originalImage:slide.image||'',tamano:z.enum(['1k','2k','4k']).parse(b.tamano||'2k'),slide:{...slide,...item.slide},visualSystem:String(p.documento.visualSystem||'').slice(0,8000),modo:['completa','editable','foto'].includes(p.documento.modo)?p.documento.modo:'',avoid:String(p.documento.avoid||'').slice(0,4000)};jobs.push({tipo:'imagen',motor,payload,key:childKey(key,item.index),hash:digest(payload),reserva:2,proyecto:p.id,lamina:String(item.index),version:p.version});}
+ }else if(route==='layers'){
+  if(!process.env.GEMINI_API_KEY)throw new HttpError(503,'Separar capas usa la API de Google, que no está configurada.');
+  const p=checked(await w.db.from('proyectos').select('*').eq('id',z.string().max(128).parse(b.projectId)).maybeSingle());if(!p)throw new HttpError(404,'Guarda primero el proyecto.');brand=p.marca_id;await authorizeBrand(w,brand,true);
+  const index=z.number().int().min(0).max(29).parse(b.index),slide=p.documento.slides[index];
+  if(!slide?.full||!/^storage:\/\/[0-9a-f-]{36}$/.test(slide.image||''))throw new HttpError(400,'Solo una lámina completa ya generada se puede separar en capas.');
+  const payload={index,image:slide.image,originalImage:slide.image,slide,tamano:'2k'};jobs.push({tipo:'imagen',motor:'capas',payload,key:childKey(key,index),hash:digest(payload),reserva:0.5,proyecto:p.id,lamina:String(index),version:p.version});
  }else{
   if(!process.env.ANTHROPIC_API_KEY)throw new HttpError(503,'Anthropic no está configurado.');if(route==='brands/_draft'){adminOnly(w);brand='_comun';}else brand=z.string().min(1).parse((b.brief||b).marca);
   await authorizeBrand(w,brand,true);const {idempotencyKey,...payload}=b;if(JSON.stringify(payload).length>20000)throw new HttpError(400,'El brief es demasiado largo.');
@@ -66,7 +73,7 @@ async function knowledge(w:Identity,brand:string){const all=[await brandDetail(w
 }
 async function textJob(j:any,w:Identity){const profile=j.tipo==='perfil',k=await knowledge(w,j.marca_id),brief=j.payload.brief||j.payload;const schema=profile?prompts.brand_schema:prompts.draft_schema;
  // Lámina completa: Claude escribe cada lámina como bloque [SLIDE n OF N] para el motor; el VISUAL SYSTEM y el AVOID fijos de la marca mandan.
- let full='';if(!profile){const id=checked(await adminClient().from('marcas').select('identidad').eq('id',j.marca_id).single()).identidad||{};if(((brief.modo==='completa'||brief.modo==='foto')?brief.modo:id.modo)==='completa')full='\n\n'+prompts.full_rules+(id.sistema_visual?`\n\n  La marca tiene un VISUAL SYSTEM fijo (deja visualSystem vacío y escribe las láminas para que encajen con él):\n${id.sistema_visual}`:'')+(id.evitar?`\n\n  La marca tiene un AVOID fijo (deja avoid vacío):\n${id.evitar}`:'');else full='\n\n  Deja visualSystem y avoid vacíos (esta marca no usa lámina completa).';}
+ let full='';if(!profile){const id=checked(await adminClient().from('marcas').select('identidad').eq('id',j.marca_id).single()).identidad||{};if(['completa','editable'].includes(['completa','editable','foto'].includes(brief.modo)?brief.modo:id.modo))full='\n\n'+prompts.full_rules+(id.sistema_visual?`\n\n  La marca tiene un VISUAL SYSTEM fijo (deja visualSystem vacío y escribe las láminas para que encajen con él):\n${id.sistema_visual}`:'')+(id.evitar?`\n\n  La marca tiene un AVOID fijo (deja avoid vacío):\n${id.evitar}`:'');else full='\n\n  Deja visualSystem y avoid vacíos (esta marca no usa lámina completa).';}
  // Perfil de marca nueva con sitio web: se lee el sitio (colores, tipografías, logo, textos) antes de llamar a Claude
  let site:any=null,siteText='';if(profile&&typeof brief.website==='string'&&brief.website.trim()){try{const r=await readSite(brief.website.trim());site=r.site;siteText=`\n\nIdentidad leída directamente del sitio web (datos reales: úsalos para colores, tipografías, tono y oferta; el color de acento sale de los colores más usados que no son neutros):\n${r.summary}`;}catch(e){siteText=`\n\nNo se pudo leer el sitio web (${e instanceof Error?e.message:'error'}): usa la búsqueda web si hace falta.`;}}
  const messages=[{role:'user',content:[...k.media,{type:'text',text:`Fecha: ${new Date().toISOString().slice(0,10)}\nBrief: ${JSON.stringify(brief)}${siteText}\nInvestiga solo si necesitas verificar hechos o el sitio web indicado. Nunca inventes cifras ni afirmes que has consultado fuentes que no consultaste. Devuelve el contenido con el esquema solicitado.`}]}];
@@ -77,10 +84,24 @@ async function textJob(j:any,w:Identity){const profile=j.tipo==='perfil',k=await
 }
 // Bytes de un archivo de Storage (Google recibe las referencias dentro de la petición, no por URL)
 export async function fileBytes(ref:string){if(!/^storage:\/\/[0-9a-f-]{36}$/.test(ref))throw new Error('Referencia inválida');const f=checked(await adminClient().from('archivos').select('object_path,mime,listo,eliminado_at').eq('id',ref.slice(10)).single());if(!f.listo||f.eliminado_at)throw new Error('Archivo no disponible');const b=checked(await adminClient().storage.from('estudio').download(f.object_path));return {mime:f.mime as string,bytes:Buffer.from(await b.arrayBuffer())};}
-async function storeResult(j:any,bytes:Buffer,mime:string,coste:number|null){if(!['image/png','image/jpeg','image/webp'].includes(mime))throw new Error('Formato inesperado.');const id=await storeFile(j.marca_id,bytes,mime,'generada-'+j.id+(mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg'));
- await saveJob(j,{estado:'succeeded',error:null,resultado:{url:'storage://'+id,cutout:'',full:!!j.resultado?.full,needsCutout:!!j.resultado?.needsCutout,motor:j.motor,tamano:j.payload.tamano},coste_usd:coste});}
+async function storeResult(j:any,bytes:Buffer,mime:string,coste:number|null,w?:Identity){if(!['image/png','image/jpeg','image/webp'].includes(mime))throw new Error('Formato inesperado.');const id=await storeFile(j.marca_id,bytes,mime,'generada-'+j.id+(mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg'));
+ // Completa editable: la lámina terminada se separa en capas en el mismo trabajo; si falla, queda la lámina completa
+ let layers=null,qa='';if(w&&j.payload.modo==='editable'&&j.resultado?.full){try{layers=await makeLayers(j,w,bytes,mime);if(coste!=null)coste+=LAYERS_USD;}catch(e){qa='La lámina está lista, pero no se pudo separar en capas: '+(e instanceof Error?e.message:'error')+' Usa "Hacer editable" en el Editor.';}}
+ await saveJob(j,{estado:'succeeded',error:null,resultado:{url:'storage://'+id,cutout:'',full:!!j.resultado?.full,needsCutout:!!j.resultado?.needsCutout,motor:j.motor,tamano:j.payload.tamano,...(layers?{layers}:{}),...(qa?{qa}:{})},coste_usd:coste});}
+// Separa la lámina en fondo limpio + capas de texto + logos (ver layers.ts) y guarda el fondo
+async function makeLayers(j:any,w:Identity,bytes:Buffer,mime:string){
+ const brand=await brandDetail(w,j.marca_id);
+ const L=await buildLayers(bytes,mime,slideTexts(j.payload.slide||{}),{name:brand.name,fonts:brand.fonts,hasLogo:!!(brand.logos?.dark?.url||brand.logos?.light?.url)});
+ const plate=await storeFile(j.marca_id,L.plate,'image/jpeg','capas-'+j.id+'.jpg');
+ return {on:true,plate:'storage://'+plate,cutout:'',w:L.width,h:L.height,texts:L.texts,logos:L.logos};
+}
+// Trabajo "capas": separa una lámina completa ya generada (botón Hacer editable del Editor)
+async function layersJob(j:any,w:Identity){
+ let layers;try{const f=await fileBytes(j.payload.image);layers=await makeLayers(j,w,f.bytes,f.mime);}
+ catch(e){await saveJob(j,{estado:'failed',error:'No se pudo separar en capas: '+(e instanceof Error?e.message:'error'),coste_usd:LAYERS_USD});return;}
+ await saveJob(j,{estado:'succeeded',error:null,resultado:{url:j.payload.image,cutout:'',full:true,layers,motor:'capas',tamano:j.payload.tamano},coste_usd:LAYERS_USD});}
 // Prompt y referencias (storage://) de la lámina, iguales para todos los motores
-export async function imageRequest(j:any,w:Identity){const brand=await brandDetail(w,j.marca_id),p=j.payload,s=p.slide||{};const modo=p.modo||brand.modo;const wanted=new Set((p.people||[]).map((x:any)=>typeof x==='string'?x:x.id));const mentioned=(p.prompt+' '+(s.photo||'')).toLowerCase();const people=brand.people.filter((x:any)=>wanted.has(x.id)||[x.name,...x.aliases].some((n:string)=>mentioned.includes(n.toLowerCase())));const refs:string[]=[];
+export async function imageRequest(j:any,w:Identity){const brand=await brandDetail(w,j.marca_id),p=j.payload,s=p.slide||{};const modo=(p.modo==='editable'?'completa':p.modo)||brand.modo;const wanted=new Set((p.people||[]).map((x:any)=>typeof x==='string'?x:x.id));const mentioned=(p.prompt+' '+(s.photo||'')).toLowerCase();const people=brand.people.filter((x:any)=>wanted.has(x.id)||[x.name,...x.aliases].some((n:string)=>mentioned.includes(n.toLowerCase())));const refs:string[]=[];
  // Soul 2 no recibe fotos: la identidad viene del Soul ID entrenado de la persona
  if(j.motor==='hf_soul2'){const person=people.find((x:any)=>x.soul?.status==='completed');const others=people.filter((x:any)=>x!==person).map((x:any)=>x.lock);
   const prompt=p.prompt+'\n'+(brand.look||'')+'\n'+others.join('\n')+'\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
@@ -136,9 +157,10 @@ async function geminiJob(j:any,w:Identity){const req=await imageRequest(j,w);j.r
  const data=await jsonFetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS[j.motor]||GEMINI_MODEL}:generateContent`,{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY!,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseModalities:['IMAGE'],imageConfig:{aspectRatio:'4:5',imageSize:String(j.payload.tamano).toUpperCase()}}})},GEMINI_TIMEOUT);
  const cand=data.candidates?.[0];const img=(cand?.content?.parts||[]).map((x:any)=>x.inlineData||x.inline_data).find(Boolean);
  if(!img){await saveJob(j,{estado:'failed',error:`Google no devolvió imagen (${cand?.finishReason||data.promptFeedback?.blockReason||'sin motivo'}). Cambia la escena o el prompt.`,coste_usd:0});return;}
- await storeResult(j,Buffer.from(img.data,'base64'),img.mimeType||img.mime_type||'image/png',(j.motor==='nano_banana_pro'?GEMINI_USD:NB2_USD)[j.payload.tamano]??null);
+ await storeResult(j,Buffer.from(img.data,'base64'),img.mimeType||img.mime_type||'image/png',(j.motor==='nano_banana_pro'?GEMINI_USD:NB2_USD)[j.payload.tamano]??null,w);
 }
 async function imageJob(j:any,w:Identity){const db=adminClient();let data;
+ if(j.motor==='capas')return layersJob(j,w);
  if(j.motor in GEMINI_MODELS)return geminiJob(j,w);
  if(!j.provider_id){const req=await imageRequest(j,w);const refs:string[]=[];for(const ref of req.refs)refs.push(await fileUrl(ref));const p=j.payload;
   data=j.motor==='hf_soul2'?await hf('higgsfield-ai/soul/v2/standard',{prompt:req.prompt,resolution:p.tamano==='1k'?'720p':'1080p',aspect_ratio:'3:4',batch_size:1,enhance_prompt:false,...(req.soulId?{custom_reference_id:req.soulId,custom_reference_strength:req.soulStrength}:{})})
@@ -150,7 +172,7 @@ async function imageJob(j:any,w:Identity){const db=adminClient();let data;
  const src=data.images?.[0]?.url||data.output?.images?.[0]?.url;const u=new URL(z.url().parse(src));if(u.protocol!=='https:')throw new Error('URL de proveedor inválida');
  // Only fetch provider-returned output, never a user-supplied URL.
  const r=await fetch(u,{signal:AbortSignal.timeout(45000),redirect:'error'});if(!r.ok)throw new Error('No se pudo descargar la imagen generada.');const bytes=Buffer.from(await r.arrayBuffer());const mime=r.headers.get('content-type')?.split(';')[0]||'image/png';
- await storeResult(j,bytes,mime,null);
+ await storeResult(j,bytes,mime,null,w);
 }
 // Soul ID (Higgsfield): entrena la identidad de una persona con sus fotos activas y consulta el estado del entrenamiento.
 export async function soulRoute(w:Identity,id:string,b:any){
@@ -175,8 +197,10 @@ export async function runWorker(maxJobs=3){const started=Date.now();for(let i=0;
   // Google (Nano Banana) responde en la misma llamada: un 429/500/503 no entrega imagen ni se cobra; se reintenta hasta 3 veces en vez de quedar incierto
   if(j.tipo==='imagen'&&j.motor in GEMINI_MODELS&&e instanceof ProviderError&&[429,500,502,503,504].includes(e.status)){const again=j.intentos<3;await saveJob(j,{estado:again?'queued':'failed',error:again?`Google ocupado (${e.status}); se reintenta solo.`:`Google estuvo ocupado (${e.status}) en 3 intentos. Prueba de nuevo en unos minutos o con otro motor.`,coste_usd:again?null:0,next_run_at:new Date(Date.now()+30000*j.intentos).toISOString()});continue;}
   const latest=checked(await adminClient().from('trabajos').select('provider_id').eq('id',j.id).single());const providerId=latest?.provider_id;const rejected=e instanceof ProviderError&&e.status>=400&&e.status<500&&e.status!==408;
- const safe=(e instanceof HttpError||rejected)&&!providerId;const waiting=!!providerId&&!(e instanceof HttpError);const error=e instanceof HttpError?e.message:rejected?`El proveedor rechazó la solicitud (${(e as ProviderError).status}). Revisa saldo y acceso del proveedor.`:waiting?'Esperando resultado del proveedor.':'Ejecución incierta. No se reenviará para evitar un cobro duplicado; revisa el proveedor.';
+ const safe=(e instanceof HttpError||rejected)&&!providerId;const waiting=!!providerId&&!(e instanceof HttpError);const error=e instanceof HttpError?e.message:rejected?((e as ProviderError).status===402?'El proveedor no tiene saldo (402). Si es Nano Banana, recarga la cuenta de Google en AI Studio (ai.studio/projects).':`El proveedor rechazó la solicitud (${(e as ProviderError).status}). Revisa saldo y acceso del proveedor.`):waiting?'Esperando resultado del proveedor.':'Ejecución incierta. No se reenviará para evitar un cobro duplicado; revisa el proveedor.';
  await saveJob(j,{estado:waiting?'waiting':safe||!submitted?'failed':'uncertain',error,coste_usd:safe||!submitted?0:null,next_run_at:new Date(Date.now()+15000).toISOString()});}
  }}
 // Recover completed images on reopen without overwriting a slide the user has replaced.
-export async function recoveredProject(w:Identity,row:any){const jobs=checked(await w.db.from('trabajos').select('lamina_id,payload,resultado').eq('proyecto_id',row.id).eq('estado','succeeded').eq('tipo','imagen').order('created_at',{ascending:false}));const doc=structuredClone(row.documento),seen=new Set();for(const j of jobs){const i=Number(j.lamina_id);if(seen.has(i))continue;seen.add(i);const s=doc.slides?.[i];if(s&&(s.image||'')===(j.payload.originalImage||'')&&j.resultado?.url)Object.assign(s,{...j.resultado,image:j.resultado.url});}return {...doc,version:row.version};}
+export async function recoveredProject(w:Identity,row:any){const jobs=checked(await w.db.from('trabajos').select('lamina_id,motor,payload,resultado').eq('proyecto_id',row.id).eq('estado','succeeded').eq('tipo','imagen').order('created_at',{ascending:false}));const doc=structuredClone(row.documento),seen=new Set();for(const j of jobs){const i=Number(j.lamina_id);if(seen.has(i))continue;seen.add(i);const s=doc.slides?.[i];if(!s||(s.image||'')!==(j.payload.originalImage||'')||!j.resultado?.url)continue;
+ // Capas: solo si la lámina aún no las tiene (no pisa lo que se editó después)
+ if(j.motor==='capas'){if(!s.layers)s.layers=j.resultado.layers;}else Object.assign(s,{...j.resultado,image:j.resultado.url});}return {...doc,version:row.version};}

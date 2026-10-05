@@ -24,7 +24,7 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
   if(route==='public-config'&&req.method==='GET'){const c=config();return send(200,{url:c.SUPABASE_URL,publishableKey:c.SUPABASE_PUBLISHABLE_KEY,signup:false});}
   if(route==='worker'){if(!process.env.CRON_SECRET||req.headers.authorization!=='Bearer '+process.env.CRON_SECRET)throw new HttpError(401,'No autorizado.');await runWorker(8);return send(200,{ok:true});}
   const who=await authenticate(req.headers.authorization);
-  if(['propose','draft','generate','brands/_draft'].includes(route)&&req.method==='POST'){const r=await enqueue(who,route,await body(req));waitUntil(runWorker());return send(202,r);}
+  if(['propose','draft','generate','layers','brands/_draft'].includes(route)&&req.method==='POST'){const r=await enqueue(who,route,await body(req));waitUntil(runWorker());return send(202,r);}
   if(route==='generate'&&req.method==='GET'){const r=await generationStatus(who,url.searchParams.get('id')||'');if(!r.done)waitUntil(runWorker());return send(200,r);}
 
   if(route.startsWith('reels/')){const r=await reelsRoute(who,route,req.method,url,req.method==='POST'?await body(req):undefined);if(r?.grupo||(route==='reels/trabajos'&&!r.done))waitUntil(runWorker());return send(200,r);}
@@ -33,10 +33,11 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
   const soul=/^people\/([a-z0-9-]{1,64})\/soul$/.exec(route);if(soul&&req.method==='POST')return send(200,await soulRoute(who,soul[1]!,await body(req)));
   if(route.startsWith('brands')||route.startsWith('people')||(route==='requests'&&req.method==='POST')){const result=await libraryRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
   if(route==='jobs/cutout'&&req.method==='POST'){
-   const b=z.object({group:z.uuid(),index:z.number().int().min(0),fileId:z.uuid()}).parse(await body(req));
+   const b=z.object({group:z.uuid(),index:z.number().int().min(0),fileId:z.uuid(),layers:z.boolean().optional()}).parse(await body(req));
    const j=checked(await who.db.from('trabajos').select('*').eq('grupo_id',b.group).eq('lamina_id',String(b.index)).eq('estado','succeeded').single());
    await authorizeBrand(who,j.marca_id,true);await readyFile(who,b.fileId,j.marca_id);
-   checked(await adminClient().from('trabajos').update({resultado:{...j.resultado,cutout:'storage://'+b.fileId}}).eq('id',j.id).eq('estado','succeeded'));return send(200,{ok:true});
+   // Con capas, el recorte es de la persona sobre el fondo limpio
+   checked(await adminClient().from('trabajos').update({resultado:b.layers&&j.resultado.layers?{...j.resultado,layers:{...j.resultado.layers,cutout:'storage://'+b.fileId}}:{...j.resultado,cutout:'storage://'+b.fileId}}).eq('id',j.id).eq('estado','succeeded'));return send(200,{ok:true});
   }
   if(route==='projects'){
    if(req.method==='GET'){

@@ -47,7 +47,7 @@ const designOf = (p) => brandFor(p).design || 'base';
 // Marcas en modo "lámina completa": el motor genera foto + tipografía juntas (ver lamina_completa.rb)
 const fullMode = (id) => brandOf(id).modo === 'completa';
 // Tipo de lámina del carrusel (propuesta o proyecto): se elige en Crear; si no trae, manda el de la marca
-const isFull = (x) => (x?.modo ? x.modo === 'completa' : fullMode(x?.brand));
+const isFull = (x) => (x?.modo ? ['completa', 'editable'].includes(x.modo) : fullMode(x?.brand));
 
 // ---------------------------------------------------------------- motores de imagen (imagen.rb)
 // Todos por API key. Cada marca tiene su motor por defecto; Crear y el Editor pueden cambiarlo.
@@ -663,6 +663,12 @@ function buildSlide(p, s, i, n) {
   // Lámina completa: la imagen ya trae la tipografía; no se dibuja nada encima.
   if (s.full && s.image) {
     el.classList.add('full');
+    if (s.layers?.on && s.layers.plate) {
+      el.classList.add('layered');
+      el.innerHTML = layeredHtml(p, s);
+      applyMoves(el, s);
+      return el;
+    }
     // La imagen entra completa (Flare la entrega en 3:4, la lámina es 4:5); el sobrante se rellena con la misma imagen desenfocada.
     el.innerHTML = `<div class="s-photo s-full"><img class="s-full-bg" src="${esc(s.image)}" alt="" aria-hidden="true"><img class="s-full-img" src="${esc(s.image)}" alt=""></div><div class="s-safe"></div>`;
     return el;
@@ -693,6 +699,74 @@ function buildSlide(p, s, i, n) {
   return el;
 }
 
+// Lámina completa en capas: fondo limpio + textos reales + recorte de la persona + logo oficial.
+// La caja .ly-box tiene la proporción de la imagen (cabe entera en la lámina); cada capa se ubica en % de esa caja.
+const LY_SPACING = { tight: -0.01, normal: 0, wide: 0.16 };
+// Familias de un solo grosor: pedirles negrita la deforma (negrita falsa)
+const LY_SINGLE = new Set(['Anton', 'Archivo Black', 'Bebas Neue', 'Dancing Script']);
+// Fuentes de las capas: Google rechaza la hoja si se piden grosores que la familia no tiene, así que se prueba de más a menos
+const layerFonts = new Set();
+function loadLayerFont(family) {
+  const f = String(family || '').trim();
+  if (!f || layerFonts.has(f)) return;
+  layerFonts.add(f);
+  const fam = encodeURIComponent(f).replace(/%20/g, '+');
+  const urls = [`https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,400;0,500;0,700;0,800;0,900;1,400;1,700;1,900&display=swap`,
+    `https://fonts.googleapis.com/css2?family=${fam}:wght@400;700;900&display=swap`, `https://fonts.googleapis.com/css2?family=${fam}&display=swap`];
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.crossOrigin = 'anonymous';
+  let i = 0;
+  link.href = urls[0];
+  link.onerror = () => { if (++i < urls.length) link.href = urls[i]; };
+  // La hoja no descarga la fuente hasta que se usa: se pide y, al llegar, se vuelve a medir y dibujar
+  link.onload = () => Promise.all([400, 700, 900].map((w) => document.fonts.load(`${w} 40px '${f}'`))).catch(() => {}).then(() => {
+    if (state.p && state.view === 'editor') { renderStage(); state.p.slides.forEach((_, i) => renderThumb(i)); }
+  });
+  document.head.appendChild(link);
+}
+const LY_FX = { shadow: 'ly-shadow', glow: 'ly-glow', outline: 'ly-outline', '3d': 'ly-3d', gradient: 'ly-shadow' };
+function layeredHtml(p, s) {
+  const L = s.layers, r = (L.w || 4) / (L.h || 5), R = 1080 / 1350;
+  const bw = r < R ? (r / R) * 100 : 100, bh = r < R ? 100 : (R / r) * 100;
+  const pos = (b) => `left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%`;
+  const text = (t) => {
+    loadLayerFont(t.font);
+    const ls = LY_SPACING[t.spacing] || 0;
+    const body = esc(t.text).replace(/\*([^*]+)\*/g, '<b class="ly-acc">$1</b>');
+    return `<div class="ly-t ${LY_FX[t.effect] || ''}" data-ly="${esc(t.id)}" data-ls="${ls}" data-al="${esc(t.align)}" style="${pos(t.box)};--c:${esc(t.color)};--a:${esc(t.accent || t.color)};font-family:'${esc(t.font)}', 'Archivo', sans-serif;font-weight:${LY_SINGLE.has(t.font) ? 400 : +t.weight || 700};font-style:${t.italic ? 'italic' : 'normal'};text-transform:${t.upper ? 'uppercase' : 'none'};letter-spacing:${ls}em"><span>${body}</span></div>`;
+  };
+  const id = brandFor(p).id;
+  const logos = (L.logos || []).map((g) => { const src = logo(id, g.bg === 'light' ? 'light' : 'dark') || logo(id, g.bg === 'light' ? 'dark' : 'light'); return src ? `<img class="ly-logo" data-ly="${esc(g.id)}" src="${src}" alt="" style="${pos(g.box)}">` : ''; }).join('');
+  const back = (L.texts || []).filter((t) => layerOf(s, 'l:' + t.id) === 'back'), front = (L.texts || []).filter((t) => layerOf(s, 'l:' + t.id) !== 'back');
+  return `<div class="s-photo s-full"><img class="s-full-bg" src="${esc(L.plate)}" alt="" aria-hidden="true"></div>
+    <div class="ly-box" style="left:${(100 - bw) / 2}%;top:${(100 - bh) / 2}%;width:${bw}%;height:${bh}%">
+      <img class="ly-plate" src="${esc(L.plate)}" alt="">${back.map(text).join('')}${L.cutout ? `<img class="ly-cut" src="${esc(L.cutout)}" alt="">` : ''}${front.map(text).join('')}${logos}
+    </div><div class="s-safe"></div>`;
+}
+// Tamaño de cada texto: llena el ancho o el alto de su caja (lo que llegue primero) y queda centrado en vertical
+const lyCtx = document.createElement('canvas').getContext('2d');
+function fitLayers(el) {
+  $$('.ly-t', el).forEach((box) => {
+    const span = box.firstElementChild, W = box.offsetWidth, H = box.offsetHeight;
+    if (!span || !W || !H) return;
+    const cs = getComputedStyle(span);
+    const txt = cs.textTransform === 'uppercase' ? span.textContent.toUpperCase() : span.textContent;
+    lyCtx.font = `${cs.fontStyle} ${cs.fontWeight} 100px ${cs.fontFamily}`;
+    const m = lyCtx.measureText(txt || ' ');
+    const inkW = (m.actualBoundingBoxLeft + m.actualBoundingBoxRight) + (+box.dataset.ls || 0) * 100 * Math.max(0, txt.length - 1);
+    const inkA = m.actualBoundingBoxAscent, inkH = inkA + m.actualBoundingBoxDescent;
+    const fA = m.fontBoundingBoxAscent || inkA, fD = m.fontBoundingBoxDescent || 0;
+    const k = Math.max(0.04, Math.min(W / Math.max(1, inkW), H / Math.max(1, inkH)));
+    span.style.fontSize = (100 * k) + 'px';
+    span.style.top = ((H - inkH * k) / 2 - ((100 * k - (fA + fD) * k) / 2 + (fA - inkA) * k)) + 'px';
+    const al = box.dataset.al;
+    span.style.left = al === 'center' ? '50%' : al === 'right' ? 'auto' : (-m.actualBoundingBoxLeft * k) + 'px';
+    span.style.right = al === 'right' ? '0' : 'auto';
+    span.style.transform = al === 'center' ? 'translateX(-50%)' : '';
+  });
+}
+
 // Elementos que se pueden arrastrar en el Editor. Cada uno guarda su desplazamiento en s.move[clave] = [x, y]
 // (px de la lámina de 1080). Se aplica con la propiedad translate, que no choca con los transform del diseño.
 const MOVABLE = [
@@ -709,6 +783,7 @@ function applyMoves(el, s) {
   const parts = [];
   MOVABLE.forEach(([k, sel]) => $$(sel, el).forEach((n) => parts.push([k, n])));
   $$('[data-block]', el).forEach((n) => parts.push(['b:' + n.dataset.block, n]));   // los bloques mandan sobre los selectores genéricos
+  $$('[data-ly]', el).forEach((n) => parts.push(['l:' + n.dataset.ly, n]));            // capas de la lámina completa editable
   parts.forEach(([k, n]) => {
     n.classList.add('mv');
     n.dataset.mv = k;
@@ -716,9 +791,11 @@ function applyMoves(el, s) {
     const f = s.fx?.[k] || {};
     n.style.translate = m ? `${m[0]}px ${m[1]}px` : '';
     n.style.scale = f.scale && f.scale !== 1 ? String(f.scale) : '';
-    n.style.fontFamily = f.font ? `'${f.font}', serif` : '';
-    n.style.fontWeight = f.weight || '';
-    n.style.fontStyle = f.italic === 'si' ? 'italic' : f.italic === 'no' ? 'normal' : '';
+    // Las capas traen su propia letra en línea: solo se pisa si se eligió otra en el panel
+    const keep = !!n.dataset.ly;
+    if (f.font || !keep) n.style.fontFamily = f.font ? `'${f.font}', serif` : '';
+    if (f.weight || !keep) n.style.fontWeight = f.weight || '';
+    if (f.italic || !keep) n.style.fontStyle = f.italic === 'si' ? 'italic' : f.italic === 'no' ? 'normal' : '';
     if (f.font) loadFontFull(f.font);
     // Capa respecto a la persona (solo con recorte): la copia de encima (.over) se muestra u oculta
     if (n.closest('.over')) {
@@ -728,8 +805,8 @@ function applyMoves(el, s) {
   });
 }
 // Por defecto (slides.css) solo el titular y la cifra pasan detrás de la persona
-const layerOf = (s, k) => s.layer?.[k] || ((['title', 'number'].includes(k) || (k.startsWith('b:') && ['titulo', 'titulo-xl', 'cifra'].includes((s.blocks || []).find((b) => 'b:' + b.id === k)?.style))) ? 'back' : 'front');
-const partLabel = (s, k) => (k.startsWith('b:') ? `Bloque · ${BLOCK_STYLES[(s.blocks || []).find((b) => 'b:' + b.id === k)?.style] || ''}` : PART_LABEL[k] || k);
+const layerOf = (s, k) => s.layer?.[k] || (k.startsWith('l:') ? ((s.layers?.texts || []).find((t) => 'l:' + t.id === k)?.behind ? 'back' : 'front') : null) || ((['title', 'number'].includes(k) || (k.startsWith('b:') && ['titulo', 'titulo-xl', 'cifra'].includes((s.blocks || []).find((b) => 'b:' + b.id === k)?.style))) ? 'back' : 'front');
+const partLabel = (s, k) => (k.startsWith('l:') ? (() => { const t = (s.layers?.texts || []).find((x) => 'l:' + x.id === k); return t ? `Texto · ${String(t.text).replace(/\*/g, '').slice(0, 24)}` : 'Logo'; })() : k.startsWith('b:') ? `Bloque · ${BLOCK_STYLES[(s.blocks || []).find((b) => 'b:' + b.id === k)?.style] || ''}` : PART_LABEL[k] || k);
 
 // Reduce el texto hasta que quepa en su caja (el slider de titular sigue mandando)
 function fitSlide(el) {
@@ -745,6 +822,7 @@ function fitSlide(el) {
       box.style.setProperty('--fit', k.toFixed(3));
     }
   });
+  fitLayers(el);
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
 }
 
@@ -884,7 +962,7 @@ function bindPhotoDrag() {
   inner.addEventListener('pointerdown', (e) => {
     const s = state.p && cur();
     const slide = inner.firstElementChild;
-    if (!s || !slide || e.button !== 0 || slide.classList.contains('full')) return;
+    if (!s || !slide || e.button !== 0 || (slide.classList.contains('full') && !slide.classList.contains('layered'))) return;
     if (e.target.id === 'sel-handle' && state.part) {
       // Tamaño: distancia al centro del elemento
       const main = nodesOf(slide, state.part).find((n) => !n.closest('.over'));
@@ -982,7 +1060,7 @@ function partPanel(s) {
       <label class="lbl" for="fx-font">Tipo de letra</label>
       <select id="fx-font" class="inp" data-fx="font">${o('', f.font, 'Del diseño')}${EDIT_FONTS().map((x) => o(x, f.font, x)).join('')}</select>
       <span class="lbl">Capa</span>
-      ${s.image && s.cutout ? `<div class="seg" role="group" aria-label="Capa">
+      ${(s.layers?.on ? s.layers.cutout && k.startsWith('l:t') : s.image && s.cutout) ? `<div class="seg" role="group" aria-label="Capa">
         <button type="button" data-layer="front" aria-pressed="${layerOf(s, k) === 'front'}">Delante de la persona</button>
         <button type="button" data-layer="back" aria-pressed="${layerOf(s, k) === 'back'}">Detrás de la persona</button></div>`
       : `<p class="help">Para poner el texto detrás de la persona, la foto necesita su <b>Recorte</b> (sección Foto → Recorte automático).</p>`}
@@ -1004,8 +1082,17 @@ function refreshSlide() {
   scheduleSave();
 }
 
+// Lámina en capas sin recorte (p. ej. recuperada al abrir el proyecto): se recorta la persona del fondo limpio una vez
+const cutting = new Set();
+function ensureLayerCut(s) {
+  if (!s?.layers?.on || s.layers.cutout || !s.layers.plate || cutting.has(s.layers.plate)) return;
+  const L = s.layers;
+  cutting.add(L.plate);
+  api('/api/cutout', { url: L.plate }).then((r) => { if (s.layers === L) { L.cutout = r.cutout; refreshSlide(); renderInspector(); } }).catch(() => cutting.delete(L.plate));
+}
 function select(i) {
   state.sel = Math.max(0, Math.min(state.p.slides.length - 1, i));
+  ensureLayerCut(state.p.slides[state.sel]);
   state.part = null;
   $$('#strip .thumb').forEach((t) => t.setAttribute('aria-current', String(+t.dataset.i === state.sel)));
   renderStage();
@@ -1014,6 +1101,71 @@ function select(i) {
 }
 
 // ---------------------------------------------------------------- inspector
+// Lámina completa: botón para separarla en capas o, si ya lo está, la lista de textos editables
+function layersPanel(s) {
+  const L = s.layers, busy = state.lgen && state.lgen.index === state.sel && state.lgen.projectId === state.p.id;
+  if (!L) return `<div class="photo-status ${s.qa ? 'low' : 'ok'}"><b>Lámina completa</b> · el texto está dentro de la imagen y no se puede mover.${s.qa ? `<div class="missing">Revisión: ${esc(s.qa)}</div>` : ''}</div>
+    <div class="form-actions"><button type="button" class="btn sm accent" id="ly-make" ${state.lgen ? 'disabled' : ''}>${busy ? 'Separando capas… (30–60 s)' : 'Hacer editable'}</button></div>
+    <p class="help">Separa el texto y el logo de la imagen: después puedes moverlos, cambiarlos y corregirlos sin tocar la foto. ~US$0,10 por lámina.</p>`;
+  return `<div class="photo-status ok"><b>Lámina en capas</b> · haz clic en un texto de la lámina para moverlo o agrandarlo. Aquí cambias lo que dice y su color.</div>
+    <label class="ly-orig"><input type="checkbox" id="ly-orig" ${L.on ? '' : 'checked'}> Ver la lámina original (sin capas)</label>
+    ${L.on ? `<div class="ly-list">${(L.texts || []).map((t, i) => `<div class="ly-item ${state.part === 'l:' + t.id ? 'sel' : ''}" data-li="${i}">
+        <textarea class="inp" rows="1" data-lf="text" aria-label="Texto ${i + 1}">${esc(t.text)}</textarea>
+        <div class="ly-row">
+          <label>Color <input type="color" data-lf="color" value="${esc(t.color)}"></label>
+          ${String(t.text).includes('*') ? `<label>Acento <input type="color" data-lf="accent" value="${esc(t.accent || t.color)}"></label>` : ''}
+          <label><input type="checkbox" data-lf="upper" ${t.upper ? 'checked' : ''}> Mayúsculas</label>
+          <button type="button" class="btn sm ghost danger" data-ldel="${i}">Quitar</button>
+        </div></div>`).join('')}</div>
+    <div class="form-actions">
+      <button type="button" class="btn sm" id="ly-add">Agregar texto</button>
+      ${!L.cutout ? `<button type="button" class="btn sm ghost" id="ly-cut">Recortar persona</button>` : ''}
+      <button type="button" class="btn sm ghost" id="ly-redo" ${state.lgen ? 'disabled' : ''}>${busy ? 'Separando…' : 'Volver a separar'}</button>
+    </div>
+    <p class="help">Color de acento con <code>*asteriscos*</code>. Para cambiar letra, grosor o poner un texto detrás de la persona, selecciónalo en la lámina.${L.cutout ? '' : ' Para poner texto detrás de la persona falta el recorte.'}</p>` : ''}`;
+}
+
+// Movimientos y estilos guardados de las capas anteriores (claves l:…): no sirven para capas nuevas; el resto se conserva
+const dropLayerKeys = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => !k.startsWith('l:')));
+
+// Separa la lámina en capas en el servidor (fondo limpio + textos + logo) y la deja editable
+async function makeLayersInEditor(i) {
+  const p = state.p;
+  clearTimeout(state.saveTimer);
+  if (await saveProject() === false) return;
+  try {
+    const r = await api('/api/layers', { projectId: p.id, index: i });
+    state.lgen = { id: r.id, index: i, projectId: p.id };
+    renderInspector();
+    toast('Separando la lámina en capas… tarda entre 30 y 60 segundos.');
+    pollLayers();
+  } catch (e) { toast(e.message, true); }
+}
+async function pollLayers() {
+  const g = state.lgen;
+  if (!g) return;
+  try {
+    const job = await api('/api/generate?id=' + encodeURIComponent(g.id));
+    if (!job.done) { setTimeout(pollLayers, 3000); return; }
+    const x = job.items[0] || {};
+    state.lgen = null;
+    if (x.status === 'completed' && x.layers && state.p?.id === g.projectId) {
+      const s = state.p.slides[g.index];
+      // Los movimientos y estilos guardados eran de otras capas
+      Object.assign(s, { layers: x.layers, move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer) });
+      renderThumb(g.index);
+      if (state.sel === g.index) renderStage();
+      scheduleSave();
+      toast(`Lámina ${g.index + 1} en capas: ya puedes mover y cambiar sus textos.`);
+    } else if (x.status !== 'completed') toast(x.error || 'No se pudo separar en capas.', true);
+    if (state.view === 'editor') renderInspector();
+  } catch (e) {
+    state.lgen = null;
+    toast(e.message, true);
+    if (state.view === 'editor') renderInspector();
+  }
+}
+
 function field(label, key, type = 'text', rows = 2, help = '') {
   const s = cur();
   const id = 'f-' + key;
@@ -1057,7 +1209,7 @@ function renderInspector() {
     ${partPanel(s)}
     <section class="sec">
       <h3 class="sec-title">Texto</h3>
-      ${s.full && s.image ? `<div class="photo-status ${s.qa ? 'low' : 'ok'}"><b>Lámina completa</b> · el texto está dentro de la imagen. Si cambias algo aquí, pulsa <b>Regenerar lámina completa</b>.${s.qa ? `<div class="missing">Revisión: ${esc(s.qa)}</div>` : ''}</div>` : ''}
+      ${s.full && s.image ? layersPanel(s) : ''}
       ${L === 'bloques' ? blocksEditor(s) : `${field('Antetítulo', 'kicker')}
       ${titled ? field('Titular', 'title', 'textarea', 3, 'Marca en color de acento con <code>*asteriscos*</code>. Enter = salto de línea.') : ''}
       ${specific}
@@ -1111,6 +1263,11 @@ function bindInspector() {
   ins.addEventListener('input', (e) => {
     const t = e.target;
     const s = cur();
+    if (t.dataset.lf && t.dataset.lf !== 'upper' && s.layers) {
+      s.layers.texts[+t.closest('[data-li]').dataset.li][t.dataset.lf] = t.value;
+      refreshSlide();
+      return;
+    }
     if (t.dataset.bf === 'text') {
       const bi = +t.closest('[data-bi]').dataset.bi;
       s.blocks[bi].text = t.value;
@@ -1141,6 +1298,8 @@ function bindInspector() {
   });
   ins.addEventListener('change', (e) => {
     const t = e.target;
+    if (t.id === 'ly-orig' && cur().layers) { cur().layers.on = !t.checked; state.part = null; refreshSlide(); renderInspector(); return; }
+    if (t.dataset.lf === 'upper' && cur().layers) { cur().layers.texts[+t.closest('[data-li]').dataset.li].upper = t.checked; refreshSlide(); return; }
     if (t.dataset.c) { cur()[t.dataset.c] = t.checked; refreshSlide(); }
     if (t.id === 'base-photo') { cur().basePhoto = t.value; scheduleSave(); renderInspector(); }
     if (t.id === 'outfit') { cur().outfit = t.value; scheduleSave(); renderInspector(); }
@@ -1178,6 +1337,25 @@ function bindInspector() {
       if (b.dataset.bdel !== undefined) s.blocks.splice(i, 1);
       else { const j = i + +b.dataset.bmove; if (j >= 0 && j < s.blocks.length) [s.blocks[i], s.blocks[j]] = [s.blocks[j], s.blocks[i]]; }
       refreshSlide(); renderInspector(); return;
+    }
+    if (b.id === 'ly-make' || b.id === 'ly-redo') { makeLayersInEditor(state.sel); return; }
+    if (b.id === 'ly-add' && s.layers) {
+      const br = brandFor(state.p);
+      s.layers.texts.push({ id: 't' + Date.now().toString(36), text: 'Texto nuevo', box: [0.1, 0.44, 0.8, 0.07], color: '#FFFFFF', accent: br.colors?.accent || '#FFFFFF',
+        font: br.fonts?.display || 'Anton', weight: 800, italic: false, upper: true, align: 'center', spacing: 'normal', behind: false, effect: 'shadow' });
+      refreshSlide(); renderInspector(); return;
+    }
+    if (b.dataset.ldel !== undefined && s.layers) {
+      const [t] = s.layers.texts.splice(+b.dataset.ldel, 1);
+      if (state.part === 'l:' + t.id) state.part = null;
+      refreshSlide(); renderInspector(); return;
+    }
+    if (b.id === 'ly-cut' && s.layers) {
+      b.disabled = true; b.textContent = 'Recortando…';
+      api('/api/cutout', { url: s.layers.plate })
+        .then((r) => { s.layers.cutout = r.cutout; refreshSlide(); renderInspector(); toast('Recorte listo: ya puedes poner texto detrás de la persona.'); })
+        .catch((err) => { toast(err.message, true); b.disabled = false; b.textContent = 'Recortar persona'; });
+      return;
     }
     if (b.id === 'blk-add') { (s.blocks ||= []).push({ ...bk('sans', 'Texto nuevo'), id: uid() }); refreshSlide(); renderInspector(); return; }
     if (b.id === 'reset-moves') { s.move = {}; s.fx = {}; s.layer = {}; refreshSlide(); renderInspector(); return; }
@@ -1293,7 +1471,7 @@ async function pollEditorGen() {
     if (x.status === 'completed' && state.p?.id === g.projectId) {
       const s = state.p.slides[g.index];
       if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
-      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '' });
+      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '', layers: x.layers || null, move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer) });
       renderThumb(g.index);
       if (state.sel === g.index) renderStage();
       scheduleSave();
@@ -1371,7 +1549,7 @@ async function renderForExport(i) {
   await Promise.all($$('img', el).map((img) => (img.complete ? Promise.resolve() : new Promise((r) => { img.onload = img.onerror = r; }))));
   await document.fonts.ready;
   fitSlide(el);
-  const fk = state.p.brand + '|' + [...new Set(state.p.slides.flatMap((x) => Object.values(x.fx || {}).map((f) => f.font).filter(Boolean)))].sort().join(',');
+  const fk = state.p.brand + '|' + [...new Set(state.p.slides.flatMap((x) => [...Object.values(x.fx || {}).map((f) => f.font), ...(x.layers?.on ? x.layers.texts.map((t) => t.font) : [])].filter(Boolean)))].sort().join(',');
   if (fontCSS[fk] === undefined) {
     try { fontCSS[fk] = await htmlToImage.getFontEmbedCSS(el); } catch (e) { console.warn('Fuentes sin incrustar', e); fontCSS[fk] = ''; }
   }
@@ -1687,7 +1865,7 @@ async function propose(brief, btn) {
     const d = await api('/api/propose', brief);
     const spent = (state.draft?.claudeUsd || 0) + (d.usage?.usd || 0);
     state.draft = {
-      brief, brand: brief.marca, modo: brief.modo || (fullMode(brief.marca) ? 'completa' : 'foto'), name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
+      brief, brand: brief.marca, modo: brief.modo || (fullMode(brief.marca) ? 'editable' : 'foto'), name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
       slides: (d.slides || []).map((s) => ({ ...s, gen: isFull({ modo: brief.modo, brand: brief.marca }) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
       research: d.research || '', missingModels: d.missingModels || [], usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
     };
@@ -1830,6 +2008,8 @@ function renderCost() {
     ${photos ? motorPicker('crear', sel, !!(g && !g.done)) : ''}
     <div class="line"><b>Reserva · ${esc(prov)}</b><span class="v">${imgUsd == null ? '—' : money(imgUsd)}</span>
       <small>${photos} foto${photos === 1 ? '' : 's'} × ${usdLabel(per)} con ${esc(motorLabel(sel.motor, sel.tamano))}.${withPeople ? ` ${withPeople} con la cara de una persona aprobada como referencia.` : ''} Precio aproximado del proveedor. El Estudio reserva hasta US$2 por foto para controlar el presupuesto; una ejecución incierta conserva la reserva hasta revisarse.</small></div>
+    ${photos && d.modo === 'editable' ? `<div class="line"><b>Separar en capas · Google</b><span class="v">≈ ${money(photos * 0.11)}</span>
+      <small>Completa editable: después de generar, cada lámina se separa en fondo limpio + textos + logo para moverlos en el Editor (~US$0,11 y 30–60 s por lámina). Usa la cuenta de Google aunque el motor sea otro.</small></div>` : ''}
     <div class="line"><b>Claude · propuesta</b><span class="v">${money(d.claudeUsd || 0)}</span>
       <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Sonnet 4.6${u.input_tokens ? ` (última: investigación con ${u.web_searches || u.server_tool_use?.web_search_requests || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
     <div class="line total"><b>Falta por gastar</b><span class="v">${imgUsd == null ? '—' : `≈ ${money(imgUsd)}`}</span>
@@ -1886,7 +2066,7 @@ async function pollGeneration() {
         if (x.url && s && s.image !== x.url) {
           if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
           const ds = d.slides[x.index] || {};
-          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '', photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
+          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '', layers: x.layers || null, move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer), photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
         }
       });
     }
@@ -1909,7 +2089,7 @@ function pickIdeaBrand(b) {
   ideaBrand = b;
   renderBrandPick($('#i-brand'), ideaBrand, pickIdeaBrand);
   $('#i-cta').placeholder = brandOf(b).defaults?.cta || '';
-  $('#i-modo').value = fullMode(b) ? 'completa' : 'foto';
+  $('#i-modo').value = fullMode(b) ? 'editable' : 'foto';
   renderOutfits();
 }
 

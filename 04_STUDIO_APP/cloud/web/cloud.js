@@ -45,12 +45,12 @@ function persistent(value){if(typeof value==='string')return reverse.get(value)?
 const versions=new Map(),cutouts=new Map(),brandVersions=new Map();
 window.cloudApi=async(path,body)=>{
  if(body)body=persistent(body);
- if(['/api/propose','/api/draft','/api/brands/_draft','/api/generate'].includes(path)&&body){
+ if(['/api/propose','/api/draft','/api/brands/_draft','/api/generate','/api/layers'].includes(path)&&body){
   const fingerprint=JSON.stringify([path,body]);const pendingKey=window.cloudStorageKey('pending-ai');let pending;try{pending=JSON.parse(sessionStorage.getItem(pendingKey));}catch{}
   const key=pending?.fingerprint===fingerprint?pending.key:crypto.randomUUID();sessionStorage.setItem(pendingKey,JSON.stringify({fingerprint,key}));
   let active;try{active=JSON.parse(sessionStorage.getItem(window.cloudStorageKey('active-ai')));}catch{}
   const submitted=active?.fingerprint===fingerprint?{id:active.id}:await request(path,{...body,idempotencyKey:key});sessionStorage.removeItem(pendingKey);
-  if(path==='/api/generate')return submitted;
+  if(path==='/api/generate'||path==='/api/layers')return submitted;
   const activeKey=window.cloudStorageKey('active-ai');sessionStorage.setItem(activeKey,JSON.stringify({path,id:submitted.id,body,fingerprint}));
   for(;;){await new Promise(r=>setTimeout(r,3000));const job=await request('/api/generate?id='+submitted.id);if(job.done){sessionStorage.removeItem(activeKey);if(job.error)throw new Error(job.error);return resolve(job.result);}}
  }
@@ -75,6 +75,11 @@ window.cloudApi=async(path,body)=>{
  if(path.startsWith('/api/generate?id=')&&data.items){for(const item of data.items){if(item.status==='completed'&&item.needsCutout&&!item.cutout&&item.url){
   if(!cutouts.has(item.url))cutouts.set(item.url,(async()=>{const blob=await cutoutPerson(await resolve(item.url));const id=await uploadBlob(blob,'recorte.png',{brand:window.cloudCurrentBrand()});await request('/api/jobs/cutout',{group:data.id,index:item.index,fileId:id});return 'storage://'+id;})().catch(e=>{cutouts.delete(item.url);throw e;}));
   try{item.cutout=await cutouts.get(item.url);}catch{item.qa='La foto está lista. Puedes repetir el recorte desde el Editor.';}
+ }
+ // Lámina en capas: la persona se recorta del fondo limpio (sin letras encima) para poder poner texto detrás
+ if(item.status==='completed'&&item.layers?.plate&&!item.layers.cutout){const ref=item.layers.plate;
+  if(!cutouts.has(ref))cutouts.set(ref,(async()=>{const blob=await cutoutPerson(await resolve(ref));const id=await uploadBlob(blob,'recorte.png',{brand:window.cloudCurrentBrand()});await request('/api/jobs/cutout',{group:data.id,index:item.index,fileId:id,layers:true});return 'storage://'+id;})().catch(e=>{cutouts.delete(ref);throw e;}));
+  try{item.layers.cutout=await cutouts.get(ref);}catch{}
  }}}
 
  if(path.startsWith('/api/projects?id=')&&data.id)versions.set(data.id,data.version);

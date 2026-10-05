@@ -640,3 +640,16 @@ mark.hl { background: var(--lime); color: inherit; padding: 0 .1em; -webkit-box-
 .t-dark .blk:not(.blk-linea) { text-shadow: 0 1px 22px rgba(0,0,0,.3); }
 /* La copia de encima del recorte no repite los fondos de resaltador */
 .over mark.hl { background: none; }
+
+/* Lámina completa en capas: fondo limpio + textos reales + recorte + logo oficial (app.js · layeredHtml) */
+.slide.layered .ly-box { position: absolute; z-index: 3; transform: translate(var(--dx), var(--dy)) scale(var(--iz)); transform-origin: center; }
+.slide.layered .ly-box > .ly-plate, .slide.layered .ly-box > .ly-cut { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill; }
+.slide.layered .ly-cut { pointer-events: none; }
+.slide.layered .ly-t { position: absolute; color: var(--c); line-height: 1; }
+.slide.layered .ly-t > span { position: absolute; white-space: nowrap; line-height: 1; }
+.slide.layered .ly-t .ly-acc { color: var(--a); font: inherit; }
+.slide.layered .ly-box > .ly-logo { position: absolute; display: block; object-fit: contain; }
+.slide.layered .ly-shadow { text-shadow: 0 .03em .14em rgba(0,0,0,.45); }
+.slide.layered .ly-glow { text-shadow: 0 0 .18em color-mix(in srgb, var(--c) 70%, transparent), 0 .02em .1em rgba(0,0,0,.4); }
+.slide.layered .ly-outline { -webkit-text-stroke: .025em rgba(0,0,0,.55); }
+.slide.layered .ly-3d { text-shadow: .02em .02em 0 rgba(0,0,0,.5), .04em .04em 0 rgba(0,0,0,.35), 0 .06em .2em rgba(0,0,0,.4); }
