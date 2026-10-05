@@ -16,7 +16,8 @@ html=html.replace('<script src="marcas.js"></script>\n<script src="app.js"></scr
 html=html.replace('<button class="tab" data-view="brands" role="tab">Marcas</button>','<button class="tab" data-view="brands" role="tab">Marcas</button>\n    <button class="tab" data-view="reels" role="tab">Reels</button>').replace('</div>\n<script type="module" src="/cloud.js"></script>','<main class="view" id="view-reels" hidden></main>\n</div>\n<script type="module" src="/cloud.js"></script>').replace('</head>','<link rel="stylesheet" href="reels.css">\n</head>');
 if(!html.includes('data-view="reels"')||!html.includes('id="view-reels"'))throw new Error('No se pudo añadir la pestaña Reels: revisar index.html.');
 await writeFile('dist/index.html',html);await copyFile('web/cloud.css','dist/cloud.css');await copyFile('web/reels.css','dist/reels.css');
-await build({entryPoints:['web/cloud.js'],outfile:'dist/cloud.js',bundle:true,format:'esm',minify:true,target:'es2022'});
+// Con splitting, lo que se importa bajo demanda (p. ej. la librería de Word de Reels) sale en dist/chunks/.
+await build({entryPoints:['web/cloud.js'],outdir:'dist',entryNames:'[name]',chunkNames:'chunks/[name]-[hash]',splitting:true,bundle:true,format:'esm',minify:true,target:'es2022'});
 console.log('Interfaz compilada sin modificar el Estudio local.');
 await copyFile('web/password.html','dist/password.html');
 await build({entryPoints:['web/password.js'],outfile:'dist/password.js',bundle:true,format:'esm',minify:true,target:'es2022'});

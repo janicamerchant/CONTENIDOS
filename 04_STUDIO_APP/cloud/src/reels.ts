@@ -56,7 +56,7 @@ Tu trabajo:
 4. Mantener la sustancia fiel a lo que se dijo en el video; no atribuyas al invitado cosas que no dijo. Puedes reformular para que funcione en formato corto.
 5. Escribir en el idioma del video salvo que la marca o las instrucciones pidan otro.
 
-En "guion" escribe el guion completo con los encabezados de cada sección del estilo, en texto plano con saltos de línea.
+En "guion" escribe solo lo que se dice en cámara, en texto plano: sigue el orden y las reglas de las secciones del estilo, pero sin escribir sus encabezados, nombres de sección ni tiempos (nada de "GANCHO (0-3 s):"). Separa cada sección con una línea en blanco.
 En "cita" copia textualmente la frase del video que sostiene ese punto.`;
 const ESTRUCTURA_ENTREGABLE_BASE=`1. TÍTULO: promesa clara del resultado que obtendrá quien lo siga.
 2. INTRODUCCIÓN (2-3 frases): el problema y por qué importa.
@@ -139,6 +139,16 @@ async function actualizarProyecto(pid:string,cambio:(doc:any)=>void){
   const saved=checked(await db.from('reels_proyectos').update({documento:doc,titulo:doc.info?.titulo||row.titulo,version:row.version+1,updated_at:new Date().toISOString()}).eq('id',pid).eq('version',row.version).select('id'));
   if(saved.length)return doc;await new Promise(r=>setTimeout(r,150+Math.random()*400));}
  throw new Error('No se pudo guardar el proyecto (demasiados cambios simultáneos).');
+}
+// Quita los pretítulos de sección ("GANCHO (0-3 s):", "2. DESARROLLO:", "[CTA]"…). Misma regla que web/reels.js.
+const PRETITULOS=[
+ /^\s*(?:\d+[.)]\s*)?\**[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ0-9 /&+-]{2,40}(?:\s*\([^)\n]{0,30}\))?\**\s*:\**\s*/,
+ /^\s*(?:\d+[.)]\s*)?\**(?:gancho|hook|contexto|desarrollo|giro(?:\s*\/\s*remate)?|remate|cierre|cta|llamado a la acci[oó]n)(?:\s*\([^)\n]{0,30}\))?\**\s*:\**\s*/i,
+ /^\s*\[[^\]\n]{2,40}\]\s*/];
+export function sinPretitulos(t:string){
+ const out:string[]=[];
+ for(const l of String(t||'').split('\n')){const re=PRETITULOS.find(r=>r.test(l));const x=re?l.replace(re,''):l;if(re&&!x.trim())continue;if(!x.trim()&&!out.at(-1)?.trim())continue;out.push(x);}
+ return out.join('\n').trim();
 }
 function transcripcionConTiempos(t:any){
  if(!t.parrafos?.length)return t.texto||'';
@@ -277,7 +287,7 @@ async function guionesJob(j:any){
  const r=await claudeJson({system:SISTEMA,content:pedido.join('\n'),schema:ESQUEMA,maxTokens:64000,effort:'high',timeout:600000});
  if(r.refusal){await saveJob(j,{estado:'failed',error:'Claude rechazó generar contenido para esta transcripción.',coste_usd:r.usd});return;}
  const resultado=r.data;const porNombre=new Map(estilos.map((e:any)=>[e.nombre.trim().toLowerCase(),e]));
- for(const g of resultado.guiones){const e:any=porNombre.get(String(g.estilo).trim().toLowerCase())||(estilos.length===1?estilos[0]:null);g.estilo_id=e?.id||'';if(e)g.estilo=e.nombre;g.cliente_id=cliente.id;g.cliente=cliente.nombre;g.id=randomUUID().slice(0,8);}
+ for(const g of resultado.guiones){g.guion=sinPretitulos(g.guion);const e:any=porNombre.get(String(g.estilo).trim().toLowerCase())||(estilos.length===1?estilos[0]:null);g.estilo_id=e?.id||'';if(e)g.estilo=e.nombre;g.cliente_id=cliente.id;g.cliente=cliente.nombre;g.id=randomUUID().slice(0,8);}
  const nuevos=resultado.guiones.map((g:any)=>g.id);
  await actualizarProyecto(op.proyecto,doc=>{
   if(op.agregar&&doc.analisis){doc.analisis.guiones.push(...resultado.guiones);const titulos=new Set(doc.analisis.puntos_clave.map((k:any)=>k.titulo));doc.analisis.puntos_clave.push(...resultado.puntos_clave.filter((k:any)=>!titulos.has(k.titulo)));}
@@ -295,7 +305,7 @@ async function guionesJob(j:any){
 async function generarEntregable(p:any,cliente:any,guiones:any[],guia:string,instrucciones:string){
  const estructura=(guia||'').trim()||cliente.estructura_entregable.trim()||ESTRUCTURA_ENTREGABLE_BASE;
  const pedido=[`<marca nombre="${cliente.nombre}">`,cliente.contexto||'(sin descripción)','</marca>','','<estructura_entregable>',estructura,'</estructura_entregable>','',
-  `Título del video: ${p.info?.titulo||''}`,'','<guiones>',guiones.map(g=>`${g.titulo}\n${g.guion}`).join('\n\n'),'</guiones>','','<transcripcion>',transcripcionConTiempos(p.transcripcion),'</transcripcion>',''];
+  `Título del video: ${p.info?.titulo||''}`,'','<guiones>',guiones.map(g=>`${g.titulo}\n${sinPretitulos(g.guion)}`).join('\n\n'),'</guiones>','','<transcripcion>',transcripcionConTiempos(p.transcripcion),'</transcripcion>',''];
  if(guiones.length===1)pedido.push('<caption_del_reel>',guiones[0].caption||'','</caption_del_reel>','','Este PDF es el lead magnet de ESTE reel: es lo que recibe quien comenta o responde al llamado a la acción. Si el guion o el caption prometen algo concreto (un calendario, una guía, una plantilla, un checklist…), el PDF debe ser exactamente eso, con ese mismo nombre, y centrado solo en el tema de este reel.');
  else pedido.push('Escribe el entregable PDF (accionable paso a paso) que acompaña a este conjunto de guiones.');
  if((instrucciones||'').trim())pedido.push(`Instrucciones adicionales:\n${instrucciones.trim()}`);

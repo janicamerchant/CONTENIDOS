@@ -6,6 +6,18 @@ const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get(k){try{return localStorage.getItem(window.cloudStorageKey('reels-'+k))||'';}catch{return '';}},set(k,v){try{localStorage.setItem(window.cloudStorageKey('reels-'+k),v);}catch{}}};
+// Quita los pretítulos de sección de un guion ("GANCHO (0-3 s):", "2. DESARROLLO:", "[CTA]"…): queda solo lo que se dice.
+// Pretítulo = etiqueta en MAYÚSCULAS o nombre de sección conocido, al inicio de la línea y seguido de ":" (o entre corchetes).
+// Si la línea era solo el pretítulo se elimina; si el texto seguía en la misma línea, se conserva el texto.
+const PRETITULOS=[
+ /^\s*(?:\d+[.)]\s*)?\**[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ0-9 /&+-]{2,40}(?:\s*\([^)\n]{0,30}\))?\**\s*:\**\s*/,
+ /^\s*(?:\d+[.)]\s*)?\**(?:gancho|hook|contexto|desarrollo|giro(?:\s*\/\s*remate)?|remate|cierre|cta|llamado a la acci[oó]n)(?:\s*\([^)\n]{0,30}\))?\**\s*:\**\s*/i,
+ /^\s*\[[^\]\n]{2,40}\]\s*/];
+export function sinPretitulos(t){
+ const out=[];
+ for(const l of String(t||'').split('\n')){const re=PRETITULOS.find(r=>r.test(l));const x=re?l.replace(re,''):l;if(re&&!x.trim())continue;if(!x.trim()&&!out.at(-1)?.trim())continue;out.push(x);}
+ return out.join('\n').trim();
+}
 const nombreCliente=id=>(CLIENTES.find(c=>c.id===id)||{}).nombre||'';
 async function cargarClientes(){CLIENTES=await request('/api/reels/clientes');return CLIENTES;}
 const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa'};
@@ -330,6 +342,26 @@ async function cargarLista(){
 const aSegundos=tc=>String(tc).split(':').map(Number).reduce((a,n)=>a*60+n,0);
 function enlaceTiempo(url,tc){if(!url||!/youtu/.test(url))return `<span class="rl-tc">${esc(tc)}</span>`;return `<a class="rl-tc" target="_blank" rel="noopener" href="${esc(url+(url.includes('?')?'&':'?')+'t='+aSegundos(tc))}">${esc(tc)}</a>`;}
 function copiar(texto,boton){navigator.clipboard.writeText(texto);const antes=boton.textContent;boton.textContent='Copiado ✓';setTimeout(()=>{boton.textContent=antes;},1500);}
+// Word (.docx) con los guiones visibles: título, datos del video y, por guion, su texto limpio y el caption.
+async function descargarWord(p,guiones,boton){
+ const antes=boton.textContent;boton.disabled=true;boton.textContent='Armando Word…';
+ try{
+  // La librería de Word se carga solo al descargar.
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=await import('docx');
+  const parrafos=t=>String(t||'').split('\n').map(l=>new Paragraph({children:[new TextRun(l)],spacing:{after:80}}));
+  const hijos=[new Paragraph({text:p.info?.titulo||'Guiones',heading:HeadingLevel.TITLE}),
+   new Paragraph({children:[new TextRun({text:[nombreCliente(p.marca)||p.marca,p.info?.autor,p.creado].filter(Boolean).join(' · '),color:'666666'})],spacing:{after:240}})];
+  guiones.forEach((g,n)=>{
+   hijos.push(new Paragraph({text:`${n+1}. ${g.titulo}`,heading:HeadingLevel.HEADING_1,pageBreakBefore:n>0}),
+    new Paragraph({children:[new TextRun({text:[g.estilo,g.punto_clave&&`Basado en: ${g.punto_clave}`,g.inicio&&`${g.inicio} – ${g.fin}`].filter(Boolean).join(' · '),color:'666666',size:20})],spacing:{after:200}}),
+    ...parrafos(sinPretitulos(g.guion)),
+    new Paragraph({children:[new TextRun({text:'Caption',bold:true})],spacing:{before:240,after:80}}),...parrafos(g.caption));
+  });
+  const blob=await Packer.toBlob(new Document({creator:'Estudio · Nika Media',title:p.info?.titulo||'Guiones',styles:{default:{document:{run:{font:'Calibri',size:24}}}},sections:[{children:hijos}]}));
+  const u=URL.createObjectURL(blob),l=document.createElement('a');l.href=u;l.download=((p.info?.titulo||'guiones').replace(/[^\p{L}\p{N} _-]+/gu,'').trim().slice(0,70)||'guiones')+' - guiones.docx';l.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
+ }catch(e){alert('No se pudo armar el Word: '+e.message);}
+ finally{boton.disabled=false;boton.textContent=antes;}
+}
 async function verProyecto(pid,filtro={}){
  let p;try{await cargarClientes();p=await request('/api/reels/proyectos?id='+encodeURIComponent(pid));}catch(e){aviso(e.message);return;}
  $$('#view-reels .rl-panel').forEach(s=>{s.hidden=true;});$$('.rl-nav button').forEach(b=>b.classList.remove('on'));
@@ -348,10 +380,10 @@ async function verProyecto(pid,filtro={}){
   h+=`<div class="rl-panel"><h2 class="h2">Guiones (${visibles.length}${visibles.length!==a.guiones.length?' de '+a.guiones.length:''})</h2>
    <div class="rl-filtros">${clientesG.length>1?`<select class="inp sm" id="rl-f-cliente"><option value="">Todos los clientes</option>${clientesG.map(x=>`<option ${x===filtro.cliente?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
     ${estilosG.length>1?`<select class="inp sm" id="rl-f-estilo"><option value="">Todos los estilos</option>${estilosG.map(x=>`<option ${x===filtro.estilo?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
-    <button class="btn ghost sm" id="rl-copiar-todos">Copiar ${visibles.length===a.guiones.length?'todos':'estos'}</button></div>
+    <button class="btn ghost sm" id="rl-copiar-todos">Copiar ${visibles.length===a.guiones.length?'todos':'estos'}</button><button class="btn ghost sm" id="rl-word">Descargar Word</button></div>
    ${visibles.map(({g,i},n)=>`<div class="rl-card"><div class="rl-cab-punto"><h3>${n+1}. ${esc(g.titulo)}</h3>${etiqueta(g)?`<span class="rl-tag cli">${esc(etiqueta(g))}</span>`:''}</div>
     <div class="rl-meta">Basado en: ${esc(g.punto_clave)} · ${enlaceTiempo(url,g.inicio)} – ${esc(g.fin)}</div>
-    <div class="rl-guion">${esc(g.guion)}</div><div class="rl-meta" style="margin-top:10px"><b>Caption:</b> ${esc(g.caption)}</div>
+    <div class="rl-guion">${esc(sinPretitulos(g.guion))}</div><div class="rl-meta" style="margin-top:10px"><b>Caption:</b> ${esc(g.caption)}</div>
     <div class="rl-acciones"><button class="btn ghost sm" data-copiar-guion="${i}">Copiar guion</button><button class="btn ghost sm" data-copiar-caption="${i}">Copiar caption</button></div>
     <div class="rl-entregable-g">${g.entregable?`<div><b>Entregable PDF:</b> ${esc(g.entregable.titulo)} <span class="rl-meta">· ${g.entregable.paginas?g.entregable.paginas+' pág.':''} · ${esc(g.entregable.creado||'')}</span></div>
       <div class="rl-acciones">${g.entregable.pdf?`<button class="btn accent sm" data-pdf-ver="${esc(g.entregable.pdf)}">Ver PDF</button><button class="btn ghost sm" data-pdf-bajar="${esc(g.entregable.pdf)}" data-nombre="${esc(g.entregable.titulo)}">Descargar PDF</button>`:''}
@@ -366,13 +398,13 @@ async function verProyecto(pid,filtro={}){
     <div class="rl-jobs" id="rl-entregable-jobs"></div></div>`;
  }
  if(p.tipo==='largo'){
-  h+=`<div class="rl-panel"><h2 class="h2">${a?'Generar más guiones':'Generar guiones'}</h2>
+  h+=`<${a?'details':'div'} class="rl-panel">${a?'<summary class="h2">Generar más guiones de este video <span class="rl-meta">(opcional)</span></summary>':'<h2 class="h2">Generar guiones</h2>'}
    <p class="rl-meta">${a?'Elige el cliente y los estilos. Sirve para los dos botones: "Generar más" y los de cada punto clave de abajo.':'Este video se transcribió sin guiones. Elige el cliente y los estilos para escribirlos ahora.'}</p>
    <div id="rl-sel-proyecto"></div>
    <div class="rl-row"><div><label class="lbl">Guiones por estilo</label><input class="inp" type="number" id="rl-mas-cantidad" value="${a?3:5}" min="1" max="20"></div>
     <div class="rl-span2"><label class="lbl">Instrucciones (opcional)</label><input class="inp" id="rl-mas-instrucciones" value="${esc(p.instrucciones||'')}"></div></div>
-   <label class="rl-chip" style="margin-top:12px"><input type="checkbox" id="rl-mas-entregable" ${p.con_entregables?'checked':''}> Crear también el PDF entregable de cada guion nuevo</label>
-   <button class="btn accent" id="rl-mas">${a?'Generar más guiones de este video':'Generar guiones'}</button><div class="rl-jobs" id="rl-mas-jobs"></div></div>`;
+   <label class="rl-chip" style="margin-top:12px"><input type="checkbox" id="rl-mas-entregable"> Crear también el PDF entregable de cada guion nuevo</label>
+   <button class="btn accent" id="rl-mas">${a?'Generar más guiones de este video':'Generar guiones'}</button><div class="rl-jobs" id="rl-mas-jobs"></div></${a?'details':'div'}>`;
  }
  if(a)h+=`<div class="rl-panel" id="rl-panel-puntos"><h2 class="h2">Puntos clave del video (${a.puntos_clave.length})</h2>
    <p class="rl-meta">Crea un guion de cualquier punto con su botón, o marca varios y créalos juntos. Se usan el cliente y los estilos elegidos arriba.</p>
@@ -406,9 +438,10 @@ async function verProyecto(pid,filtro={}){
  const refiltrar=()=>verProyecto(pid,{cliente:$('#rl-f-cliente')?.value||'',estilo:$('#rl-f-estilo')?.value||'',mantenerScroll:true});
  if($('#rl-f-cliente'))$('#rl-f-cliente').onchange=()=>{if($('#rl-f-estilo'))$('#rl-f-estilo').value='';refiltrar();};
  if($('#rl-f-estilo'))$('#rl-f-estilo').onchange=refiltrar;
- $$('[data-copiar-guion]',v).forEach(b=>b.onclick=()=>copiar(a.guiones[b.dataset.copiarGuion].guion,b));
+ $$('[data-copiar-guion]',v).forEach(b=>b.onclick=()=>copiar(sinPretitulos(a.guiones[b.dataset.copiarGuion].guion),b));
  $$('[data-copiar-caption]',v).forEach(b=>b.onclick=()=>copiar(a.guiones[b.dataset.copiarCaption].caption,b));
- $('#rl-copiar-todos').onclick=e=>copiar(visibles.map(({g},n)=>`${n+1}. ${g.titulo}${g.estilo?' ['+g.estilo+']':''}\n\n${g.guion}\n\nCaption: ${g.caption}`).join('\n\n——————\n\n'),e.target);
+ $('#rl-word').onclick=e=>descargarWord(p,visibles.map(x=>x.g),e.target);
+ $('#rl-copiar-todos').onclick=e=>copiar(visibles.map(({g},n)=>`${n+1}. ${g.titulo}${g.estilo?' ['+g.estilo+']':''}\n\n${sinPretitulos(g.guion)}\n\nCaption: ${g.caption}`).join('\n\n——————\n\n'),e.target);
  const marcados=()=>$$('[data-punto]:checked',v).map(c=>+c.dataset.punto);
  $$('[data-punto]',v).forEach(c=>c.onchange=()=>{const n=marcados().length;$('#rl-crear-marcados').disabled=!n;$('#rl-crear-marcados').textContent=`Crear guiones de los marcados (${n})`;});
  $('#rl-crear-marcados').onclick=e=>pedir({puntos:marcados()},e.target,$('#rl-puntos-jobs'));
