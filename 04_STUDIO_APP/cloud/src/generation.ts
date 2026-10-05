@@ -10,9 +10,10 @@ import {reelsJob} from './reels.js';
 // Google responde en la misma llamada y la versión preview puede tardar más de 6 minutos: la función tiene 800 s (vercel.json).
 const GEMINI_TIMEOUT=720000;   // 12 min: el worker empieza trabajos solo en sus primeros 40 s, así cabe en los 800 s
 const GEMINI_MODEL='gemini-3-pro-image-preview',GEMINI_USD:Record<string,number>={'1k':0.134,'2k':0.134,'4k':0.24};
-// Nano Banana 2 (Gemini 3.1 Flash Image): mismo API de Google; precio sin medir todavía en el Estudio
+// Nano Banana 2 (Gemini 3.1 Flash Image): mismo API de Google, precio por imagen publicado por Google
+const NB2_USD:Record<string,number>={'1k':0.067,'2k':0.101,'4k':0.151};
 const GEMINI_MODELS:Record<string,string>={nano_banana_pro:GEMINI_MODEL,nano_banana_2:'gemini-3.1-flash-image'};
-function engines(){const list:any[]=[];if(process.env.GEMINI_API_KEY)list.push({id:'nano_banana_pro',nombre:'Nano Banana Pro',proveedor:'Google',env:'GEMINI_API_KEY',disponible:true,tamanos:GEMINI_USD},{id:'nano_banana_2',nombre:'Nano Banana 2',proveedor:'Google',env:'GEMINI_API_KEY',disponible:true,tamanos:{'1k':null,'2k':null,'4k':null}});if(process.env.HF_CREDENTIALS)list.push({id:'hf_flare',nombre:'GPT Image 2.5 Flare',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null,'4k':null}});if(process.env.HF_CREDENTIALS)list.push({id:'hf_soul2',nombre:'Soul 2 · Soul ID',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null}});return list;}
+function engines(){const list:any[]=[];if(process.env.GEMINI_API_KEY)list.push({id:'nano_banana_pro',nombre:'Nano Banana Pro',proveedor:'Google',env:'GEMINI_API_KEY',disponible:true,tamanos:GEMINI_USD},{id:'nano_banana_2',nombre:'Nano Banana 2',proveedor:'Google',env:'GEMINI_API_KEY',disponible:true,tamanos:NB2_USD});if(process.env.HF_CREDENTIALS)list.push({id:'hf_flare',nombre:'GPT Image 2.5 Flare',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null,'4k':null}});if(process.env.HF_CREDENTIALS)list.push({id:'hf_soul2',nombre:'Soul 2 · Soul ID',proveedor:'Higgsfield',env:'HF_CREDENTIALS',disponible:true,tamanos:{'1k':null,'2k':null}});return list;}
 export function aiConfig(){const motores=engines();return {hasKey:!!process.env.ANTHROPIC_API_KEY,fromEnv:true,motores,motorDefecto:motores[0]?.id||'hf_flare',tamanoDefecto:'2k',reservationPerImage:2,reservationPerProposal:2};}
 const digest=(x:any)=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function childKey(group:string,index:number){const h=digest([group,index]).slice(0,32);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20)}`;}
@@ -115,7 +116,7 @@ async function geminiJob(j:any,w:Identity){const req=await imageRequest(j,w);j.r
  const data=await jsonFetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS[j.motor]||GEMINI_MODEL}:generateContent`,{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY!,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseModalities:['IMAGE'],imageConfig:{aspectRatio:'4:5',imageSize:String(j.payload.tamano).toUpperCase()}}})},GEMINI_TIMEOUT);
  const cand=data.candidates?.[0];const img=(cand?.content?.parts||[]).map((x:any)=>x.inlineData||x.inline_data).find(Boolean);
  if(!img){await saveJob(j,{estado:'failed',error:`Google no devolvió imagen (${cand?.finishReason||data.promptFeedback?.blockReason||'sin motivo'}). Cambia la escena o el prompt.`,coste_usd:0});return;}
- await storeResult(j,Buffer.from(img.data,'base64'),img.mimeType||img.mime_type||'image/png',(j.motor==='nano_banana_pro'?GEMINI_USD[j.payload.tamano]??null:null));
+ await storeResult(j,Buffer.from(img.data,'base64'),img.mimeType||img.mime_type||'image/png',(j.motor==='nano_banana_pro'?GEMINI_USD:NB2_USD)[j.payload.tamano]??null);
 }
 async function imageJob(j:any,w:Identity){const db=adminClient();let data;
  if(j.motor in GEMINI_MODELS)return geminiJob(j,w);

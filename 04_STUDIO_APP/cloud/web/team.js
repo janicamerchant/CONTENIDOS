@@ -20,7 +20,7 @@ function render(note = '') {
       <div class="team-grid">
         <label class="lbl">Email<input class="inp" name="email" type="email" required placeholder="nombre@empresa.com"></label>
         <label class="lbl">Rol<select class="inp" name="rol">${Object.entries(ROLES).map(([v, l]) => `<option value="${v}" ${v === 'editor' ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
-        <label class="lbl">Límite mensual (USD)<input class="inp" name="limite" type="number" min="0" max="10000" step="1" value="25"></label>
+        <label class="lbl">Límite mensual (USD)<input class="inp" name="limite" type="number" min="0" max="10000" step="1" value="10000"></label>
       </div>
       <span class="lbl">Marcas a las que tiene acceso</span>
       <div class="team-brands" data-invite-brands>${brandChecks('marca', [], false)}</div>

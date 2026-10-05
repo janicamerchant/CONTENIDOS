@@ -61,7 +61,7 @@ export async function teamRoute(w:Identity,route:string,method:string,body:any){
  }
  const brandList=z.array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)).max(50);
  if(route==='team/invite'&&method==='POST'){
-  const b=z.object({email:z.email().max(254),rol:z.enum(ROLES),marcas:brandList.default([]),limite:z.number().min(0).max(10000).default(25)}).parse(body);
+  const b=z.object({email:z.email().max(254),rol:z.enum(ROLES),marcas:brandList.default([]),limite:z.number().min(0).max(10000).default(10000)}).parse(body);
   const email=b.email.trim().toLowerCase();
   let user=await findUser(email);
   if(user){const already=checked(await db.from('miembros').select('user_id').eq('user_id',user.id).maybeSingle());if(already)throw new HttpError(409,'Esa persona ya está en el equipo. Usa "Nuevo enlace" en su fila.');}
