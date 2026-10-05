@@ -1686,7 +1686,7 @@ async function propose(brief, btn) {
     state.draft = {
       brief, brand: brief.marca, name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
       slides: (d.slides || []).map((s) => ({ ...s, gen: fullMode(brief.marca) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
-      research: d.research || '', usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
+      research: d.research || '', missingModels: d.missingModels || [], usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
     };
     saveDraft();
     renderCreate();
@@ -1775,6 +1775,9 @@ function renderProposal() {
   $('#d-avoid').value = d.avoid || '';
   $('#d-visual-box').hidden = !(d.visualSystem || d.avoid);
   $('#d-research-box').hidden = !d.research;
+  const missing = d.missingModels || [];
+  $('#d-missing').hidden = !missing.length;
+  $('#d-missing').textContent = missing.length ? `Sin foto de referencia: ${missing.join(', ')}. Súbela en Marcas → Referencias visuales y márcala «Vehículo / producto»; si no, el motor dibuja el modelo de memoria y puede salir de otro año.` : '';
   $('#d-research').innerHTML = esc(d.research || '')
     .replace(/(https?:\/\/[^\s<)\]]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
     .replace(/\n/g, '<br>');

@@ -256,12 +256,13 @@ function factsHtml(list) {
 function refsHtml(list) {
   const on = list.filter((r) => r.active).length;
   return `<section class="mk-sec"><h2 class="sec-title">Referencias visuales · ${on} activas de ${list.length}</h2>
-    <p class="hint">Carruseles, fotos o composiciones que te gustan. Claude ve hasta ${8} activas (en orden alfabético) para entender el estilo; no copia sus textos ni caras. Se guardan como JPEG de 1600 px. Marca <b>Lugar real</b> en fotos de la fachada o el local para que el motor de imagen reproduzca ese edificio exacto (hasta 2).</p>
+    <p class="hint">Carruseles, fotos o composiciones que te gustan. Claude ve hasta 6 activas (en orden alfabético) para entender el estilo; no copia sus textos ni caras. Se guardan como JPEG de 1600 px. Marca <b>Lugar real</b> en fotos de la fachada o el local para que el motor de imagen reproduzca ese edificio exacto (hasta 2). Marca <b>Vehículo / producto</b> en fotos de un modelo y escribe en Etiquetas su nombre con el año (ej. Kia Sportage 2026): Claude solo usa esos modelos y años, y el motor recibe la foto del modelo en cada lámina donde aparece.</p>
     <div class="mk-refs">${list.map((r) => `<figure class="mk-ref ${r.active ? '' : 'off'}" data-path="${esc(r.path)}">
       <a href="${esc(r.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(r.url)}" alt="${esc(r.name)}"></a>
       <figcaption>
         <label class="mk-on"><input type="checkbox" data-res-active ${r.active ? 'checked' : ''}><span>${r.active ? 'Activa' : 'Inactiva'}</span></label>
         <label class="mk-on" title="El motor de imagen recibe esta foto y reproduce este lugar exacto cuando la escena lo incluye"><input type="checkbox" data-res-place ${r.tags.includes('lugar') ? 'checked' : ''}><span>Lugar real · usar en fotos</span></label>
+        <label class="mk-on" title="Claude usa este modelo con el nombre y año de sus etiquetas, y el motor de imagen recibe esta foto en las láminas donde aparece"><input type="checkbox" data-res-car ${r.tags.includes('vehiculo') ? 'checked' : ''}><span>Vehículo / producto</span></label>
         <input class="inp sm mk-tags" data-res-tags value="${esc(r.tags.join(', '))}" placeholder="Etiquetas" aria-label="Etiquetas de ${esc(r.name)}">
         <span class="mk-ref-name" title="${esc(r.name)}">${esc(r.name)}</span>
         <button type="button" class="btn sm ghost danger" data-res-delete>Eliminar</button>
@@ -637,6 +638,10 @@ function bindBrands() {
       else if (t.matches('[data-res-place]')) {
         const tags = (mk.detail.resources.referencias.find((r) => r.path === path)?.tags || []).filter((x) => x !== 'lugar');
         await applyDetail(await brandApi(id, 'update', { path, tags: t.checked ? [...tags, 'lugar'] : tags }));
+      }
+      else if (t.matches('[data-res-car]')) {
+        const tags = (mk.detail.resources.referencias.find((r) => r.path === path)?.tags || []).filter((x) => x !== 'vehiculo');
+        await applyDetail(await brandApi(id, 'update', { path, tags: t.checked ? [...tags, 'vehiculo'] : tags }));
       }
       else if (t.matches('[data-res-tags]')) await applyDetail(await brandApi(id, 'update', { path, tags: t.value.split(',') }));
       else if (t.matches('[data-logo-key]')) {
