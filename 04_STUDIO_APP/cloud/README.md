@@ -16,6 +16,17 @@ El frontend está en `web/legacy/` con su adaptación en `web/cloud.js`. El serv
 - Subidas directas a Storage; archivos grandes usan TUS con firma. Galerías con URLs firmadas y carga diferida, sin descargar todos los originales antes de mostrar la página.
 - Recorte de personas en el navegador con MediaPipe; no necesita una clave ni envía la imagen a un servicio de recorte.
 - Exportación PNG y entregas en Storage privado.
+- **Reels** (pestaña Reels, portada del Generador de Reels en Python): video largo → transcripción → puntos clave y guiones con Claude Opus 5.5 en los estilos de cada cliente, con opción **Solo transcribir**; reels → transcripción; clientes y estilos; historial; PDF entregable (lead magnet) por guion, máximo 4 páginas, con el branding del cliente y director de arte con Claude. Ver más abajo.
+
+## Reels
+
+- **Clientes = marcas del Estudio.** La configuración de Reels de cada marca (perfil, estilos de guion, estructura del copy y del PDF, branding del PDF) vive en `reels_marcas`; los proyectos en `reels_proyectos`. Mismos permisos por marca que el resto del Estudio. Un cliente nuevo crea una marca (solo administración).
+- **Enlaces**: Apify baja el audio (YouTube: `dami_studio/youtube-video-downloader`; Instagram: `apify/instagram-scraper`; TikTok: `clockworks/tiktok-scraper`; se cambian con `APIFY_ACTOR_YOUTUBE`, `APIFY_ACTOR_INSTAGRAM`, `APIFY_ACTOR_TIKTOK`) y el audio pasa en flujo a Deepgram (nova-3, diarización): no se guarda. Un enlace directo a un archivo de audio/video va directo a Deepgram.
+- **Archivos subidos** (hasta 50 MB, bucket privado `reels-media`): Deepgram los lee con una URL firmada y se borran al terminar.
+- **Cola**: trabajos `tipo='reels'` con `payload.op` = `transcribir` → `guiones` → `entregable` (uno por guion), `sugerir` y `muestra`. Reserva por trabajo: 1 / 3 / 2 / 0,5 / 1 US$; al terminar se registra el coste calculado (Apify según el run, Deepgram estimado por minuto, Claude por uso).
+- **PDF**: HTML de `src/reels-pdf.ts` impreso con Chromium (`@sparticuz/chromium` en Vercel, Chrome de la Mac en local). Se guarda en Storage como archivo de la marca.
+- `npx tsx scripts/reels-smoke.ts <enlace>`: prueba real Apify + Deepgram sin base de datos (consume centavos).
+- `npx tsx scripts/import-reels.ts [--crear-marcas] [--general=<marca>] [--map=<idCliente>=<marca>]`: plan de importación del Generador local; `--aplicar` escribe.
 
 ## Seguridad y presupuesto
 
@@ -27,7 +38,7 @@ Un trabajo `uncertain` requiere revisar su ID y el historial del proveedor antes
 
 ## Variables de producción
 
-Configurar en Vercel: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ANTHROPIC_API_KEY`, `HF_CREDENTIALS` y `CRON_SECRET`. Las cuatro últimas son secretos. No subir `.env` ni `SUPABASE_ACCESS_TOKEN`.
+Configurar en Vercel: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ANTHROPIC_API_KEY`, `HF_CREDENTIALS`, `CRON_SECRET`, `DEEPGRAM_API_KEY` y `APIFY_TOKEN`. Todas salvo las dos primeras son secretos. No subir `.env` ni `SUPABASE_ACCESS_TOKEN`.
 
 Solo se muestran motores conectados: Google y OpenAI directos no están configurados en esta instalación. No se requieren para el motor Higgsfield disponible.
 

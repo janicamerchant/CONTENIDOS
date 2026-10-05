@@ -7,6 +7,7 @@ import {libraryRoute,adminOnly,checked,readyFile} from '../src/library.js';
 import {authenticate,authorizeBrand,databaseError,HttpError} from '../src/auth.js';
 import {adminClient,config} from '../src/config.js';
 import {teamRoute} from '../src/team.js';
+import {reelsRoute} from '../src/reels.js';
 const id=z.string().min(1).max(128);
 async function body(req:IncomingMessage):Promise<any>{
  // Vercel may have parsed req.body. Still enforce a small metadata-only API.
@@ -26,6 +27,7 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
   if(['propose','draft','generate','brands/_draft'].includes(route)&&req.method==='POST'){const r=await enqueue(who,route,await body(req));waitUntil(runWorker());return send(202,r);}
   if(route==='generate'&&req.method==='GET'){const r=await generationStatus(who,url.searchParams.get('id')||'');if(!r.done)waitUntil(runWorker());return send(200,r);}
 
+  if(route.startsWith('reels/')){const r=await reelsRoute(who,route,req.method,url,req.method==='POST'?await body(req):undefined);if(r?.grupo||(route==='reels/trabajos'&&!r.done))waitUntil(runWorker());return send(200,r);}
   if(route==='me'&&req.method==='GET')return send(200,{id:who.id,role:who.role});
   if(route==='team'||route.startsWith('team/')){const result=await teamRoute(who,route,req.method,req.method==='POST'?await body(req):undefined);if(result!==undefined)return send(200,result);}
   const soul=/^people\/([a-z0-9-]{1,64})\/soul$/.exec(route);if(soul&&req.method==='POST')return send(200,await soulRoute(who,soul[1]!,await body(req)));

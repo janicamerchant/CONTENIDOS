@@ -1,6 +1,7 @@
 import {Upload} from 'tus-js-client';
 import {cutoutPerson} from './cutout.js';
 import {openTeam} from './team.js';
+import {setupReels} from './reels.js';
 import {createClient} from '@supabase/supabase-js';
 let client,me,storageEndpoint;const reverse=new Map();let saveQueue=Promise.resolve();
 export async function request(path,body){
@@ -19,14 +20,17 @@ async function referenceImage(blob){
  if(!blob.type.startsWith('image/'))return blob;
  const img=await createImageBitmap(blob);const scale=Math.min(1,1600/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);img.close();return new Promise(r=>c.toBlob(r,'image/jpeg',.9));
 }
+// Sube a una ruta firmada de un solo uso: TUS (por partes) para archivos grandes, una sola petición para los pequeños.
+async function uploadSigned(blob,{bucket='estudio',path,token,mime}){
+ if(blob.size>512000){
+  const {data:{session}}=await client.auth.getSession();
+  await new Promise((resolve,reject)=>{const upload=new Upload(blob,{endpoint:storageEndpoint,retryDelays:[0,1000,3000],chunkSize:6*1024*1024,uploadDataDuringCreation:false,removeFingerprintOnSuccess:true,headers:{authorization:'Bearer '+session.access_token,'x-signature':token},metadata:{bucketName:bucket,objectName:path,contentType:mime,cacheControl:'3600'},onBeforeRequest:req=>{const xhr=req.getUnderlyingObject();if(xhr instanceof XMLHttpRequest)xhr.timeout=45000;},onError:()=>reject(new Error('La subida se interrumpió. Revisa tu conexión e inténtalo de nuevo.')),onSuccess:resolve});upload.start();});
+ }else{const upload=await client.storage.from(bucket).uploadToSignedUrl(path,token,blob,{contentType:mime});if(upload.error)throw new Error('No se pudo subir el archivo: '+upload.error.message);}
+}
 async function uploadBlob(blob,name,scope){
  const mime=blob.type||(/\.md$/i.test(name)?'text/markdown':/\.txt$/i.test(name)?'text/plain':'application/octet-stream');
  const item=await request('/api/assets/upload',{...scope,name,mime,bytes:blob.size});
- if(blob.size>512000){
-  const {data:{session}}=await client.auth.getSession();
-  await new Promise((resolve,reject)=>{const upload=new Upload(blob,{endpoint:storageEndpoint,retryDelays:[0,1000,3000],chunkSize:6*1024*1024,uploadDataDuringCreation:false,removeFingerprintOnSuccess:true,headers:{authorization:'Bearer '+session.access_token,'x-signature':item.token},metadata:{bucketName:'estudio',objectName:item.path,contentType:mime,cacheControl:'3600'},onBeforeRequest:req=>{const xhr=req.getUnderlyingObject();if(xhr instanceof XMLHttpRequest)xhr.timeout=45000;},onError:()=>reject(new Error('La subida se interrumpió. Revisa tu conexión e inténtalo de nuevo.')),onSuccess:resolve});upload.start();});
- }else{const upload=await client.storage.from('estudio').uploadToSignedUrl(item.path,item.token,blob,{contentType:mime});if(upload.error)throw new Error('No se pudo subir el archivo: '+upload.error.message);}
-
+ await uploadSigned(blob,{path:item.path,token:item.token,mime});
  await request('/api/assets/finalize',{id:item.id});return item.id;
 }
 window.cloudRefreshImages=async()=>{
@@ -93,6 +97,7 @@ async function start(){
   client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')location.reload();});
   if(!new URLSearchParams(location.search).has('view'))history.replaceState(null,'','?view=editor');
   await script('/marcas.js');await script('/app.js');
+  setupReels({request,uploadBlob,uploadSigned,resolve,role:me.role});
   let active;try{active=JSON.parse(sessionStorage.getItem(window.cloudStorageKey('active-ai')));}catch{}
   if(active){const resume=document.createElement('button');resume.className='btn';resume.textContent='Recuperar propuesta pendiente';resume.onclick=async()=>{resume.disabled=true;try{const result=await window.cloudApi(active.path,active.body);window.cloudRecoverProposal(active.body.brief||active.body,result);resume.remove();}catch(e){resume.textContent=e.message;resume.disabled=false;}};document.querySelector('.top').append(resume);}
 
