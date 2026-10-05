@@ -46,6 +46,8 @@ const brandFor = (p) => p.brandData || brandOf(p.brand);
 const designOf = (p) => brandFor(p).design || 'base';
 // Marcas en modo "lámina completa": el motor genera foto + tipografía juntas (ver lamina_completa.rb)
 const fullMode = (id) => brandOf(id).modo === 'completa';
+// Tipo de lámina del carrusel (propuesta o proyecto): se elige en Crear; si no trae, manda el de la marca
+const isFull = (x) => (x?.modo ? x.modo === 'completa' : fullMode(x?.brand));
 
 // ---------------------------------------------------------------- motores de imagen (imagen.rb)
 // Todos por API key. Cada marca tiene su motor por defecto; Crear y el Editor pueden cambiarlo.
@@ -1072,10 +1074,10 @@ function renderInspector() {
       ${field('Escena de la foto', 'photo', 'textarea', 3, 'Qué pasa en la foto y por qué cuenta el titular: quién hace qué, dónde, con qué objeto. Una persona aprobada de la marca solo si su acción explica la idea.')}
       ${field('Prompt para generar (inglés)', 'photoPrompt', 'textarea', 4, 'Es lo que se envía al motor de imagen al generar o regenerar. Si lo dejas vacío, se arma desde la escena.')}
       ${s.image && s.motor ? `<p class="help">Foto actual hecha con ${esc(motorLabel(s.motor, s.tamano))}.</p>` : ''}
-      ${s.photo || s.photoPrompt || fullMode(p.brand) ? motorPicker('editor', editorMotor(), !!state.egen) : ''}
+      ${s.photo || s.photoPrompt || isFull(p) ? motorPicker('editor', editorMotor(), !!state.egen) : ''}
       <div class="form-actions">
         <button type="button" class="btn sm ghost" id="copy-prompt">Copiar prompt</button>
-        ${s.photo || s.photoPrompt || fullMode(p.brand) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen || !motorReady(editorMotor()) ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? (state.egen.status || 'Generando…') : editorMotor().motor === 'hf_soul' ? (s.image ? 'Regenerar foto con Soul' : 'Generar foto con Soul') : realPerson(p.brand, s) ? (s.image ? 'Regenerar escena con tu foto real' : 'Crear escena con tu foto real') : fullMode(p.brand) ? (s.image ? 'Regenerar lámina completa' : 'Generar lámina completa') : s.image ? 'Regenerar foto' : 'Generar foto'}</button>` : ''}
+        ${s.photo || s.photoPrompt || isFull(p) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen || !motorReady(editorMotor()) ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? (state.egen.status || 'Generando…') : editorMotor().motor === 'hf_soul' ? (s.image ? 'Regenerar foto con Soul' : 'Generar foto con Soul') : realPerson(p.brand, s) ? (s.image ? 'Regenerar escena con tu foto real' : 'Crear escena con tu foto real') : isFull(p) ? (s.image ? 'Regenerar lámina completa' : 'Generar lámina completa') : s.image ? 'Regenerar foto' : 'Generar foto'}</button>` : ''}
       </div>
       ${s.photo || s.photoPrompt ? `<p class="help">${usdLabel(motorUsd(editorMotor().motor, editorMotor().tamano))}. Usa el prompt de arriba${peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`).map((id) => ` y la cara de ${esc(personName(p.brand, id))}`).join('')}; la foto actual queda guardada.</p>` : ''}
       ${s.prevImage ? `<button type="button" class="btn sm ghost" id="undo-photo">Volver a la foto anterior</button>` : ''}
@@ -1093,7 +1095,7 @@ function renderInspector() {
       ${basePhotoPicker(p, s)}
       <div class="checks">
         <label><input type="checkbox" data-c="bw" ${s.bw ? 'checked' : ''}> Blanco y negro</label>
-        ${s.image && !s.soul && (s.full || fullMode(p.brand)) ? `<label title="Apagado: muestra la foto con la plantilla y el texto editable encima"><input type="checkbox" data-c="full" ${s.full ? 'checked' : ''}> Lámina completa (texto dentro de la imagen)</label>` : ''}
+        ${s.image && !s.soul && (s.full || isFull(p)) ? `<label title="Apagado: muestra la foto con la plantilla y el texto editable encima"><input type="checkbox" data-c="full" ${s.full ? 'checked' : ''}> Lámina completa (texto dentro de la imagen)</label>` : ''}
       </div>
     </section>
 
@@ -1670,7 +1672,7 @@ function renderCreate() {
 function readIdea() {
   const d = brandOf(ideaBrand).defaults || {};
   return {
-    marca: ideaBrand, idea: $('#i-idea').value.trim(), laminas: $('#i-laminas').value,
+    marca: ideaBrand, idea: $('#i-idea').value.trim(), laminas: $('#i-laminas').value, modo: $('#i-modo').value,
     cta: $('#i-cta').value.trim() || d.cta, notas: $('#i-notas').value.trim(),
     objetivo: d.objetivo, audiencia: d.audiencia, idioma: d.idioma,
   };
@@ -1685,8 +1687,8 @@ async function propose(brief, btn) {
     const d = await api('/api/propose', brief);
     const spent = (state.draft?.claudeUsd || 0) + (d.usage?.usd || 0);
     state.draft = {
-      brief, brand: brief.marca, name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
-      slides: (d.slides || []).map((s) => ({ ...s, gen: fullMode(brief.marca) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
+      brief, brand: brief.marca, modo: brief.modo || (fullMode(brief.marca) ? 'completa' : 'foto'), name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
+      slides: (d.slides || []).map((s) => ({ ...s, gen: isFull({ modo: brief.modo, brand: brief.marca }) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
       research: d.research || '', missingModels: d.missingModels || [], usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
     };
     saveDraft();
@@ -1801,7 +1803,7 @@ function renderCost() {
   const d = state.draft;
   const sel = draftMotor();
   const per = motorUsd(sel.motor, sel.tamano);
-  const photos = d.slides.filter((s) => s.gen && (s.photoPrompt || s.photo || fullMode(d.brand))).length;
+  const photos = d.slides.filter((s) => s.gen && (s.photoPrompt || s.photo || isFull(d))).length;
   const withPeople = d.slides.filter((s) => s.gen && slidePeople(s).length).length;
   const imgUsd = photos * (state.cfg?.reservationPerImage || 2);
   const ready = motorReady(sel);
@@ -1840,7 +1842,7 @@ function renderCost() {
 function draftToProject() {
   const d = state.draft;
   return normalizeProject({
-    id: d.projectId || 'p' + Date.now(), brand: d.brand, name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
+    id: d.projectId || 'p' + Date.now(), brand: d.brand, modo: d.modo || '', name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
     slides: d.slides.map(({ gen, janica, people, ...s }) => ({ ...s, image: '', bw: !!s.bw })),
   });
 }
@@ -1855,7 +1857,7 @@ async function approve(indices = null) {
     d.projectId = state.p.id;
   }
   const want = indices && new Set(indices);
-  const items = d.slides.map((s, i) => (s.gen && (s.photoPrompt || s.photo || fullMode(d.brand)) && (!want || want.has(i))
+  const items = d.slides.map((s, i) => (s.gen && (s.photoPrompt || s.photo || isFull(d)) && (!want || want.has(i))
     ? { index: i, prompt: promptFor(s, d.brand), people: slidePeople(s), photo: s.photo, photoPrompt: s.photoPrompt,
       slide: slidePayload(s), count: `${i + 1}/${d.slides.length}` } : null)).filter(Boolean);
   if (!items.length) { d.gen = d.gen || { done: true, items: [] }; saveDraft(); renderCreate(); return; }
@@ -1907,6 +1909,7 @@ function pickIdeaBrand(b) {
   ideaBrand = b;
   renderBrandPick($('#i-brand'), ideaBrand, pickIdeaBrand);
   $('#i-cta').placeholder = brandOf(b).defaults?.cta || '';
+  $('#i-modo').value = fullMode(b) ? 'completa' : 'foto';
   renderOutfits();
 }
 
@@ -1972,6 +1975,7 @@ function bindCreate() {
       $('#i-cta').value = d.gen ? '' : d.brief.cta;
       $('#i-notas').value = d.gen ? '' : d.brief.notas;
       pickIdeaBrand(d.brand);
+      if (d.brief.modo) $('#i-modo').value = d.brief.modo;
     }
     if (d?.gen) { state.draft = null; saveDraft(); } else if (d) { d.slides = null; saveDraft(); }
     renderCreate();
