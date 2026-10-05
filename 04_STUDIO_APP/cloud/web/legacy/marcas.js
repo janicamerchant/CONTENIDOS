@@ -155,6 +155,9 @@ function imageEngineFields(b) {
   return `
       <div class="field"><label class="lbl" for="mk-motor">Motor de imagen por defecto</label><select id="mk-motor" class="inp" name="motor_imagen">${list.map((m) => `<option value="${esc(m.id)}" ${m.id === motor ? 'selected' : ''}>${esc(m.nombre)} · ${esc(m.proveedor)}${m.disponible ? '' : ` (falta ${esc(m.env)})`}</option>`).join('')}</select></div>
       <div class="field"><label class="lbl" for="mk-tamano">Tamaño por defecto</label><select id="mk-tamano" class="inp" name="tamano">${sizes.map((t) => opt(t, b.tamano || cur.tamano, t.toUpperCase())).join('')}</select></div>
+      <div class="field"><label class="lbl" for="mk-modo">Tipo de lámina</label><select id="mk-modo" class="inp" name="modo">${opt('completa', b.modo === 'completa' ? 'completa' : 'foto', 'Lámina completa: la IA genera foto + tipografía + logos (nivel revista)')}${opt('foto', b.modo === 'completa' ? 'completa' : 'foto', 'Foto + plantilla del Estudio con texto editable')}</select></div>
+      <div class="field full"><label class="lbl" for="mk-sistema">VISUAL SYSTEM de la lámina completa (inglés, igual en todas las láminas; vacío = Claude lo escribe en cada carrusel)</label><textarea id="mk-sistema" class="inp" name="sistema_visual" rows="7" placeholder="Instagram editorial carousel, 4:5 vertical. Premium … aesthetic. Dominant … palette …">${esc(b.sistema_visual || '')}</textarea></div>
+      <div class="field full"><label class="lbl" for="mk-evitar">AVOID (inglés; vacío = Claude lo escribe)</label><textarea id="mk-evitar" class="inp" name="evitar" rows="3" placeholder="Misspelled text, invented logos, plastic skin, …">${esc(b.evitar || '')}</textarea></div>
       <div class="field full"><label class="lbl" for="mk-mpersona">Fotos con personas aprobadas</label><select id="mk-mpersona" class="inp" name="motor_persona">${opt('foto_real', b.motor_persona || 'referencia', 'Partir de su foto real (la cara no se genera; solo cambia lugar, luz y vestuario)')}${opt('referencia', b.motor_persona === 'foto_real' ? '' : 'referencia', 'Generar la foto usando sus fotos de cara como referencia')}</select></div>`;
 }
 
@@ -176,7 +179,7 @@ function readIdentity(form, prev = {}) {
     out.titleCase = form.elements.titleCase.checked ? 'upper' : 'none';
   }
   if (form.elements.swatch) out.swatch = v('swatch');
-  if (form.elements.motor_imagen) Object.assign(out, { motor_imagen: v('motor_imagen'), tamano: v('tamano'), motor_persona: v('motor_persona') });
+  if (form.elements.motor_imagen) Object.assign(out, { motor_imagen: v('motor_imagen'), tamano: v('tamano'), motor_persona: v('motor_persona'), modo: v('modo'), sistema_visual: form.elements.sistema_visual.value.trim(), evitar: form.elements.evitar.value.trim() });
   return { ...prev, ...out };
 }
 

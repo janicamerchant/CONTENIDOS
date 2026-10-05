@@ -1684,7 +1684,7 @@ async function propose(brief, btn) {
     const d = await api('/api/propose', brief);
     const spent = (state.draft?.claudeUsd || 0) + (d.usage?.usd || 0);
     state.draft = {
-      brief, brand: brief.marca, name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '',
+      brief, brand: brief.marca, name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
       slides: (d.slides || []).map((s) => ({ ...s, gen: fullMode(brief.marca) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
       research: d.research || '', usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
     };
@@ -1771,13 +1771,16 @@ function renderProposal() {
   $('#d-name').value = d.name || '';
   $('#d-concept').value = d.concept || '';
   $('#d-caption').value = d.caption || '';
+  $('#d-visual').value = d.visualSystem || '';
+  $('#d-avoid').value = d.avoid || '';
+  $('#d-visual-box').hidden = !(d.visualSystem || d.avoid);
   $('#d-research-box').hidden = !d.research;
   $('#d-research').innerHTML = esc(d.research || '')
     .replace(/(https?:\/\/[^\s<)\]]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
     .replace(/\n/g, '<br>');
   $('#prop-slides').innerHTML = d.slides.map(propCard).join('');
   const locked = !!d.gen;
-  ['#d-name', '#d-concept', '#d-caption'].forEach((s) => { $(s).readOnly = locked; });
+  ['#d-name', '#d-concept', '#d-caption', '#d-visual', '#d-avoid'].forEach((s) => { $(s).readOnly = locked; });
   $('#btn-repropose').disabled = locked || !state.hasKey;
   $('#btn-back-idea').textContent = locked ? '+ Nueva idea' : '← Cambiar idea';
 }
@@ -1833,7 +1836,7 @@ function renderCost() {
 function draftToProject() {
   const d = state.draft;
   return normalizeProject({
-    id: d.projectId || 'p' + Date.now(), brand: d.brand, name: d.name, caption: d.caption, concept: d.concept,
+    id: d.projectId || 'p' + Date.now(), brand: d.brand, name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
     slides: d.slides.map(({ gen, janica, people, ...s }) => ({ ...s, image: '', bw: !!s.bw })),
   });
 }
@@ -1973,6 +1976,8 @@ function bindCreate() {
   $('#d-name').addEventListener('input', (e) => { state.draft.name = e.target.value; saveDraft(); });
   $('#d-concept').addEventListener('input', (e) => { state.draft.concept = e.target.value; saveDraft(); });
   $('#d-caption').addEventListener('input', (e) => { state.draft.caption = e.target.value; saveDraft(); });
+  $('#d-visual').addEventListener('input', (e) => { state.draft.visualSystem = e.target.value; saveDraft(); });
+  $('#d-avoid').addEventListener('input', (e) => { state.draft.avoid = e.target.value; saveDraft(); });
 
   const list = $('#prop-slides');
   list.addEventListener('input', (e) => {
