@@ -56,7 +56,7 @@ const motorInfo = (id) => motores().find((m) => m.id === id);
 // El de la marca; si su API key no está en .env, el primero conectado (Soul solo si no hay otro)
 const brandMotor = (brandId) => {
   const b = brandOf(brandId);
-  let id = motorInfo(b.motor_imagen) ? b.motor_imagen : state.cfg?.motorDefecto || 'nano_banana_pro';
+  let id = motorInfo(b.motor_imagen) ? b.motor_imagen : state.cfg?.motorDefecto || 'hf_flare';
   if (!motorInfo(id)?.disponible) {
     const ok = motores().filter((m) => m.disponible);
     id = (ok.find((m) => m.id !== 'hf_soul') || ok[0] || { id }).id;
