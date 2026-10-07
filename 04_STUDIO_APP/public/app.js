@@ -553,9 +553,10 @@ function blockHtml(p, b) {
 }
 function blocksInner(p, s) {
   const zones = {};
-  (s.blocks || []).forEach((b) => { (zones[b.zone || 'arriba'] ||= []).push(b); });
+  const lastHeading = s.template === 'escalera' ? (s.blocks || []).findLast((b) => ['titulo', 'titulo-xl'].includes(b.style)) : null;
+  (s.blocks || []).forEach((b) => { (zones[b.zone || 'arriba'] ||= []).push(b === lastHeading ? { ...b, style: 'titulo-xl' } : b); });
   return `${photo(s, false)}<div class="j-wash"></div>
-    ${Object.entries(zones).map(([z, list]) => `<div class="s-blocks z-${z} front">${list.map((b) => blockHtml(p, b)).join('')}</div>`).join('')}
+    ${Object.entries(zones).map(([z, list]) => `<div class="s-blocks z-${z} front" data-template="${esc(s.template || '')}">${list.map((b) => blockHtml(p, b)).join('')}</div>`).join('')}
     ${cut(s)}`;
 }
 // Editor de bloques (panel derecho)
@@ -738,6 +739,24 @@ function fitSlide(el) {
       k *= 0.94;
       box.style.setProperty('--fit', k.toFixed(3));
     }
+  });
+  // Constrain block zones before measuring; top and bottom must not collide.
+  const zones = $$('.s-blocks:not(.over)', el);
+  zones.forEach((box) => { box.style.setProperty('--fit', 1); box.style.maxHeight = ''; });
+  const bottom = zones.find((box) => box.classList.contains('z-abajo'));
+  zones.forEach((box) => {
+    const top = box.offsetTop;
+    const end = box.classList.contains('z-arriba') && bottom ? bottom.offsetTop - 48 : 1250;
+    const limit = box.classList.contains('z-abajo') ? (zones.some((b) => b.classList.contains('z-arriba')) ? 540 : 1150)
+      : box.classList.contains('z-centro') ? 540 : Math.max(120, end - top);
+    box.style.maxHeight = limit + 'px';
+    let k = 1;
+    while ((box.scrollHeight > limit + 2 || box.scrollWidth > box.clientWidth + 2) && k > 0.55) {
+      k = Math.max(0.55, k - 0.025);
+      box.style.setProperty('--fit', k.toFixed(3));
+    }
+    $$('.s-blocks.over', el).filter((copy) => copy.className.replace(' over', '') === box.className)
+      .forEach((copy) => { copy.style.setProperty('--fit', k.toFixed(3)); copy.style.maxHeight = box.style.maxHeight; });
   });
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
 }

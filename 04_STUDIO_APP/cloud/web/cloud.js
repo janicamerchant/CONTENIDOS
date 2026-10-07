@@ -104,7 +104,7 @@ async function start(){
   await script('/marcas.js');await script('/app.js');
   setupReels({request,uploadBlob,uploadSigned,resolve,role:me.role});
   let active;try{active=JSON.parse(sessionStorage.getItem(window.cloudStorageKey('active-ai')));}catch{}
-  if(active){const resume=document.createElement('button');resume.className='btn';resume.textContent='Recuperar propuesta pendiente';resume.onclick=async()=>{resume.disabled=true;try{const result=await window.cloudApi(active.path,active.body);window.cloudRecoverProposal(active.body.brief||active.body,result);resume.remove();}catch(e){resume.textContent=e.message;resume.disabled=false;}};document.querySelector('.top').append(resume);}
+  if(active){const resume=document.createElement('button');resume.className='btn';resume.textContent='Recuperar propuesta pendiente';resume.onclick=async()=>{resume.disabled=true;try{const result=await window.cloudApi(active.path,active.body);await window.cloudRecoverProposal(active.body.brief||active.body,result);resume.remove();}catch(e){resume.textContent=e.message;resume.disabled=false;}};document.querySelector('.top').append(resume);}
 
  }catch(e){status.textContent=e.message;if(client)document.querySelector('#login-form button').disabled=false;}
 }

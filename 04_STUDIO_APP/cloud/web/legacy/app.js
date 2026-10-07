@@ -562,9 +562,10 @@ function blockHtml(p, b) {
 }
 function blocksInner(p, s) {
   const zones = {};
-  (s.blocks || []).forEach((b) => { (zones[b.zone || 'arriba'] ||= []).push(b); });
+  const lastHeading = s.template === 'escalera' ? (s.blocks || []).findLast((b) => ['titulo', 'titulo-xl'].includes(b.style)) : null;
+  (s.blocks || []).forEach((b) => { (zones[b.zone || 'arriba'] ||= []).push(b === lastHeading ? { ...b, style: 'titulo-xl' } : b); });
   return `${photo(s, false)}<div class="j-wash"></div>
-    ${Object.entries(zones).map(([z, list]) => `<div class="s-blocks z-${z} front">${list.map((b) => blockHtml(p, b)).join('')}</div>`).join('')}
+    ${Object.entries(zones).map(([z, list]) => `<div class="s-blocks z-${z} front" data-template="${esc(s.template || '')}">${list.map((b) => blockHtml(p, b)).join('')}</div>`).join('')}
     ${cut(s)}`;
 }
 // Editor de bloques (panel derecho)
@@ -827,6 +828,24 @@ function fitSlide(el) {
       k *= 0.94;
       box.style.setProperty('--fit', k.toFixed(3));
     }
+  });
+  // Constrain block zones before measuring; top and bottom must not collide.
+  const zones = $$('.s-blocks:not(.over)', el);
+  zones.forEach((box) => { box.style.setProperty('--fit', 1); box.style.maxHeight = ''; });
+  const bottom = zones.find((box) => box.classList.contains('z-abajo'));
+  zones.forEach((box) => {
+    const top = box.offsetTop;
+    const end = box.classList.contains('z-arriba') && bottom ? bottom.offsetTop - 48 : 1250;
+    const limit = box.classList.contains('z-abajo') ? (zones.some((b) => b.classList.contains('z-arriba')) ? 540 : 1150)
+      : box.classList.contains('z-centro') ? 540 : Math.max(120, end - top);
+    box.style.maxHeight = limit + 'px';
+    let k = 1;
+    while ((box.scrollHeight > limit + 2 || box.scrollWidth > box.clientWidth + 2) && k > 0.55) {
+      k = Math.max(0.55, k - 0.025);
+      box.style.setProperty('--fit', k.toFixed(3));
+    }
+    $$('.s-blocks.over', el).filter((copy) => copy.className.replace(' over', '') === box.className)
+      .forEach((copy) => { copy.style.setProperty('--fit', k.toFixed(3)); copy.style.maxHeight = box.style.maxHeight; });
   });
   fitLayers(el);
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
@@ -1697,8 +1716,8 @@ function renderRequests() {
       <div class="meta"><span>${esc(BRANDS[b.marca]?.name || b.marca)}</span><span>${esc(b.laminas)} láminas</span><span>${esc(b.idioma)}</span>
         ${b.entrega ? `<span>Entrega ${esc(b.entrega)}</span>` : ''}${b.solicitante ? `<span>${esc(b.solicitante)}</span>` : ''}</div>
       <div class="acts">
-        ${r.projectId ? '<button type="button" class="btn sm" data-act="open">Abrir carrusel</button>' : '<button type="button" class="btn sm" data-act="skeleton">Crear carrusel</button>'}
-        <button type="button" class="btn sm ghost" data-act="draft" ${state.hasKey ? '' : 'disabled title="Agrega la API key en Ajustes"'}>Borrador IA</button>
+        ${r.projectId ? '<button type="button" class="btn sm" data-act="open">Abrir carrusel</button>' : '<button type="button" class="btn sm" data-act="skeleton">Crear estructura sin imágenes</button>'}
+        <button type="button" class="btn sm ghost" data-act="draft" ${state.hasKey ? '' : 'disabled title="Agrega la API key en Ajustes"'}>Generar carrusel con imágenes</button>
         <button type="button" class="btn sm ghost" data-act="copy">Copiar brief</button>
       </div>
     </article>`;
@@ -1713,28 +1732,46 @@ async function saveRequest(r) {
   return saved;
 }
 
+async function createRequestCarousel(r, d, brief) {
+  if (!d.slides?.length) throw new Error('La IA no devolvió láminas. La solicitud sigue guardada; puedes volver a intentarlo.');
+  state.draft = {
+    brief: { ...brief, idea: brief.tema }, requestId: r.id, brand: brief.marca, modo: brief.modo,
+    name: d.name || brief.tema, concept: d.concept || '', caption: d.caption || '',
+    visualSystem: d.visualSystem || '', avoid: d.avoid || '',
+    slides: d.slides.map((s) => ({ ...s, gen: isFull({ modo: brief.modo, brand: brief.marca }) || !!(s.photoPrompt || s.photo),
+      people: peopleIn(brief.marca, `${s.photo || ''} ${s.photoPrompt || ''}`) })),
+    research: d.research || '', missingModels: d.missingModels || [], usage: d.usage, claudeUsd: d.usage?.usd || 0, calls: 1,
+  };
+  saveDraft();
+  state.p = draftToProject();
+  state.sel = 0;
+  if (await saveProject() === false) return;
+  state.draft.projectId = state.p.id;
+  saveDraft();
+  // Link the saved project before enqueueing images so a failure remains recoverable.
+  await saveRequest({ ...r, projectId: state.p.id, status: 'produccion' });
+  showView('create');
+  renderCreate();
+  await approve();
+}
+
 async function draftFromRequest(r, btn) {
+  if (state.requestBusy) { toast('Ya se está creando un carrusel desde Solicitudes.'); return; }
+  if (state.draft?.gen && !state.draft.gen.done) { toast('Espera a que termine la generación en Crear antes de iniciar otra solicitud.', true); return; }
   const label = btn?.textContent;
-  if (btn) { btn.disabled = true; btn.textContent = 'Claude está escribiendo…'; }
-  $('#draft-hint').textContent = 'Esto tarda entre 30 segundos y un par de minutos.';
+  state.requestBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparando carrusel…'; }
+  $('#draft-hint').textContent = 'Escribiendo las láminas; después se generan las imágenes con el motor de la marca.';
   try {
-    const d = await api('/api/draft', { brief: r.brief });
-    const p = normalizeProject({
-      id: 'p' + Date.now(), brand: r.brief.marca, name: d.name || r.brief.tema, caption: d.caption || '', requestId: r.id,
-      slides: (d.slides || []).map((s) => ({ ...s, image: '', bw: !!s.bw })),
-    });
-    state.p = p;
-    state.sel = 0;
-    if (await saveProject() === false) return;
-    r.projectId = p.id;
-    r.status = 'produccion';
-    await saveRequest(r);
-    showView('editor');
-    renderEditor();
-    toast('Borrador listo. Revisa las cifras y sus fuentes antes de publicar.');
+    const motor = brandMotor(r.brief.marca);
+    if (!motorReady(motor)) throw new Error('No hay un motor de imágenes conectado para esta marca.');
+    const brief = { ...r.brief, requestId: r.id, modo: r.brief.modo || (fullMode(r.brief.marca) ? 'completa' : 'foto') };
+    const d = await api('/api/draft', { brief });
+    await createRequestCarousel(r, d, brief);
   } catch (e) {
     toast(e.message, true);
   } finally {
+    state.requestBusy = false;
     if (btn) { btn.disabled = false; btn.textContent = label; }
     $('#draft-hint').textContent = '';
   }
@@ -2029,7 +2066,7 @@ function renderCost() {
 function draftToProject() {
   const d = state.draft;
   return normalizeProject({
-    id: d.projectId || 'p' + Date.now(), brand: d.brand, modo: d.modo || '', name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
+    id: d.projectId || 'p' + Date.now(), requestId: d.requestId || '', brand: d.brand, modo: d.modo || '', name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
     slides: d.slides.map(({ gen, janica, people, ...s }) => ({ ...s, image: '', bw: !!s.bw })),
   });
 }
@@ -2079,6 +2116,7 @@ async function pollGeneration() {
     }
     saveDraft();
     if (state.view === 'create') { renderProposal(); renderCost(); }
+    if (state.view === 'editor' && state.p?.id === d.projectId) renderEditor();
     if (job.done) {
       if (state.p?.id === d.projectId) if (await saveProject() === false) return;
       const bad = job.items.filter((x) => x.status === 'failed').length;
@@ -2344,7 +2382,7 @@ function bindGlobal() {
     if (!brief.tema) { toast('Escribe el tema u oferta.', true); $('#r-tema').focus(); return; }
     try {
       const r = await saveRequest({ brief, status: 'pendiente' });
-      toast('Solicitud guardada en 05_SOLICITUDES');
+      toast('Solicitud guardada.');
       $('#r-tema').value = ''; $('#r-referencias').value = ''; $('#r-notas').value = '';
       if (mode === 'draft') await draftFromRequest(r, e.submitter);
     } catch (err) { toast(err.message, true); }
