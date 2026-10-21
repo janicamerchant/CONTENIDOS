@@ -69,11 +69,17 @@ const sinRutas=(t:string)=>t.replace(/['"]?(?:[\w-]+\/)*[\w-]+\.(?:png|jpe?g|web
 // Etiquetas de las referencias de estilo con significado fijo: le dicen a Claude para qué sirve cada imagen
 const PURPOSE:Record<string,string>={diagramacion:'cómo se acomodan texto e imagen en la lámina',estilo:'luz, paleta y tratamiento de la foto',tono:'la voz y el tipo de frase (nunca el texto en sí)',portada:'láminas de portada',cierre:'láminas de cierre o llamado a la acción',cifra:'láminas con una cifra protagonista',lista:'láminas con lista o pasos',frase:'láminas con una frase o cita'};
 // Hasta n referencias de estilo para este pedido: primero las que tienen etiquetas que coinciden con el brief, luego las que
-// tienen etiqueta de uso; los empates se reparten distinto en cada pedido (no siempre las primeras del alfabeto)
+// tienen etiqueta de uso; los empates se reparten distinto en cada pedido (no siempre las primeras del alfabeto).
+// Se toman por turnos de cada grupo de etiquetas para que no lleguen siempre seis ejemplos del mismo carrusel.
+const GENERIC=new Set(['carrusel','carruseles','aprobado','aprobada','aprobados','referencia','solo','para','con','del','las','los','una','que']);
 function pickRefs(refs:any[],brief:string,n:number){
- const words=new Set(norm(brief).split(/[^a-z0-9]+/).filter(x=>x.length>2));
- return refs.map(r=>{const tags=r.tags.map(norm);const hit=tags.filter((t:string)=>t.split(/[^a-z0-9]+/).some(x=>words.has(x))).length;
-  return {r,score:hit*3+(tags.some((t:string)=>t in PURPOSE)?1:0),tie:digest([brief,r.id])};}).sort((a,b)=>b.score-a.score||a.tie.localeCompare(b.tie)).slice(0,n).map(x=>x.r);}
+ const words=new Set(norm(brief).split(/[^a-z0-9]+/).filter(x=>x.length>2&&!GENERIC.has(x)));
+ const ranked=refs.map(r=>{const tags=r.tags.map(norm);const hit=tags.filter((t:string)=>t.split(/[^a-z0-9]+/).some(x=>words.has(x))).length;
+  return {r,score:hit*3+(tags.some((t:string)=>t in PURPOSE)?1:0),tie:digest([brief,r.id]),group:[...tags].sort().join('|')};}).sort((a,b)=>b.score-a.score||a.tie.localeCompare(b.tie));
+ const groups=new Map<string,any[]>();for(const x of ranked)(groups.get(x.group)||groups.set(x.group,[]).get(x.group)!).push(x);
+ const queues=[...groups.values()],out:any[]=[];
+ while(out.length<n&&queues.some(q=>q.length))for(const q of queues){const x=q.shift();if(x&&out.length<n)out.push(x.r);}
+ return out;}
 async function knowledge(w:Identity,brand:string,brief=''){const all=[await brandDetail(w,brand)];if(brand!=='_comun')all.push(await brandDetail(w,'_comun'));let text='',remaining=80000;const media:any[]=[];let pdfCount=0;
  const ok=(r:any)=>r.active&&r.size<=4500000,style=all.flatMap(d=>d.resources.referencias.filter((r:any)=>ok(r)&&!r.tags.includes('lugar')&&!r.tags.includes('vehiculo')));
  const picked=pickRefs(style,brief,6);
@@ -82,7 +88,7 @@ async function knowledge(w:Identity,brand:string,brief=''){const all=[await bran
  // Fotos de los vehículos o productos que nombra el pedido (Claude ve cómo son; el motor recibe la misma foto)
  const cars=all.flatMap(d=>vehiclesIn(vehicles(d),brief)).slice(0,2);
  for(const c of cars)media.push({type:'text',text:`Foto del vehículo o producto «${c.name}»`},{type:'image',source:{type:'url',url:await fileUrl(c.url)}});
- if(picked.length)text+=`\nLas «Referencias de estilo» adjuntas muestran cómo se ven los carruseles de la marca: diagramación, tipografía, luz, paleta y tratamiento. Sus etiquetas dicen para qué sirve cada una («sirve para»); una referencia sin etiquetas vale como estilo general. Nunca copies sus textos, titulares, frases, escenas ni composiciones: escribe y dirige contenido nuevo para este brief, con escenas distintas a las de las referencias.`;
+ if(picked.length)text+=`\nLas «Referencias de estilo» adjuntas muestran cómo se ven los carruseles de la marca: diagramación, tipografía, luz, paleta y tratamiento. Sus etiquetas dicen para qué sirve cada una («sirve para»); una referencia sin etiquetas vale como estilo general. Nunca copies sus textos, titulares, frases, escenas ni composiciones: escribe y dirige contenido nuevo para este brief, con escenas distintas a las de las referencias. Tampoco tomes de las referencias ni de sus etiquetas el nombre o el tema de una campaña, promoción, temporada o evento (por ejemplo una campaña del mes): el tema, el concepto y los antetítulos salen solo del brief.`;
  for(const d of all){const v=vehicles(d);text+=`\nMarca: ${d.name}\nReglas: ${d.rules}${v.length?`\nVehículos/productos con foto de referencia (el motor de imagen recibe su foto; usa estos nombres y años exactos): ${v.map((x:any)=>`"${x.name}"`).join(", ")}`:""}\nDatos verificados: ${JSON.stringify(d.datos)}\nPersonas aprobadas: ${JSON.stringify(d.people.map((p:any)=>({id:p.id,name:p.name,descripcion:p.descripcion})))}`;
   for(const f of d.resources.conocimiento.filter((f:any)=>f.active)){if(remaining<=0)break;const file=checked(await w.db.from('archivos').select('*').eq('id',f.url.slice(10)).single());if(file.mime==='application/pdf'&&pdfCount<2&&file.bytes<1500000){const b=checked(await adminClient().storage.from('estudio').download(file.object_path));pdfCount++;media.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:Buffer.from(await b.arrayBuffer()).toString('base64')}});}else if(file.mime.startsWith('text/')&&file.bytes<500000){const b=checked(await adminClient().storage.from('estudio').download(file.object_path));const content=(await b.text()).slice(0,remaining);remaining-=content.length;text+=`\nDocumento ${f.name}:\n${content}`;}}
  }
