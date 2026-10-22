@@ -429,9 +429,8 @@
 .l-cifra .s-flow > :first-child, .l-cta .s-flow > :first-child, .l-frase .s-panel .fitbox > :first-child { margin-top: auto; }
 .l-cifra .s-flow > :last-child, .l-cta .s-flow > :last-child, .l-frase .s-panel .fitbox > :last-child { margin-bottom: auto; }
 
-/* Capa de texto sobre el recorte: todo menos el titular grande y la cifra (ver buildSlide) */
+/* Capa de texto sobre el recorte: todo el texto se lee delante de la persona salvo lo marcado «Detrás» (ver buildSlide y applyMoves) */
 .over { z-index: 7 !important; pointer-events: none; }
-.over .s-title, .over .s-number { visibility: hidden; }
 .s-panel.over { background: none !important; border-color: transparent !important; }
 
 /* El resaltado lima de los paneles tampoco debe subir sobre la línea de arriba */
@@ -669,6 +668,8 @@ mark.hl { background: var(--lime); color: inherit; padding: 0 .1em; -webkit-box-
 .l-bloques .s-blocks { gap: calc(24px * var(--fit)); }
 .l-bloques .blk { flex-shrink: 0; max-width: 100%; overflow-wrap: normal; word-break: normal; hyphens: none; }
 .l-bloques .blk.w-medio { width: 58%; max-width: 58%; }
+/* Zona movida a la columna libre junto a la persona (dodgePerson): la columna ya es angosta */
+.l-bloques .s-blocks.dodge .blk.w-medio { width: auto; max-width: 100%; }
 .l-bloques .s-blocks[data-template="escalera"].z-arriba { width: 58%; right: auto; }
 .l-bloques .s-blocks[data-template="escalera"] .blk.w-medio { width: 100%; max-width: 100%; }
 .l-bloques .s-blocks[data-template="escalera"] .blk-titulo { font-size: calc(78px * var(--ts) * var(--fit)); }

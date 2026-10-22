@@ -686,8 +686,8 @@ function buildSlide(p, s, i, n) {
     <div class="s-count">${counter(p, i, n)}</div>
     ${slideInner(p, s, i, n)}
     <div class="s-grain"></div><div class="s-safe"></div>`;
-  // Con recorte, solo el titular grande (y la cifra) pasa detrás de la persona: se duplica el bloque
-  // de texto encima del recorte con el titular oculto, así antetítulo, apoyo, listas y botón se leen siempre.
+  // Con recorte se duplica el texto encima de la persona (.over): por defecto todo se lee delante;
+  // lo que se marque «Detrás de la persona» se oculta en esa copia y queda entre el fondo y el recorte.
   if (s.image && s.cutout) {
     $$('.fitbox.front, .s-panel, .s-blocks', el).forEach((box) => {
       const c = box.cloneNode(true);
@@ -818,11 +818,98 @@ function applyMoves(el, s) {
     parts.filter(([key,n])=>key===k&&!n.closest('.over')).forEach(([,n])=>n.classList.remove('fx-backdrop'));
   });
 }
-// Por defecto (slides.css) solo el titular y la cifra pasan detrás de la persona
-const layerOf = (s, k) => s.layer?.[k] || (k.startsWith('l:') ? ((s.layers?.texts || []).find((t) => 'l:' + t.id === k)?.behind ? 'back' : 'front') : null) || ((['title', 'number'].includes(k) || (k.startsWith('b:') && ['titulo', 'titulo-xl', 'cifra'].includes((s.blocks || []).find((b) => 'b:' + b.id === k)?.style))) ? 'back' : 'front');
+// Por defecto todo el texto va delante de la persona; cada elemento se puede pasar detrás desde su panel
+const layerOf = (s, k) => s.layer?.[k] || (k.startsWith('l:') ? ((s.layers?.texts || []).find((t) => 'l:' + t.id === k)?.behind ? 'back' : 'front') : null) || 'front';
 const partLabel = (s, k) => (k.startsWith('l:') ? (() => { const t = (s.layers?.texts || []).find((x) => 'l:' + x.id === k); return t ? `Texto · ${String(t.text).replace(/\*/g, '').slice(0, 24)}` : 'Logo'; })() : k.startsWith('b:') ? `Bloque · ${BLOCK_STYLES[(s.blocks || []).find((b) => 'b:' + b.id === k)?.style] || ''}` : PART_LABEL[k] || k);
 
 // Reduce el texto hasta que quepa en su caja (el slider de titular sigue mandando)
+// Silueta de la persona: el alfa de su recorte, en una rejilla de 20 px de la lámina (54 × 68 celdas).
+// Con ella el texto de los bloques busca el lado libre en vez de caer encima de la persona.
+const CELL = 20, cutImages = new Map();
+function cutReady(url) {
+  if (!cutImages.has(url)) cutImages.set(url, loadImage(url).then((img) => {
+    cutImages.set(url, img);
+    // Primera vez que llega el recorte: se vuelve a diagramar lo que está a la vista
+    if (state.p && $('#stage-inner')) { try { renderStage(); state.p.slides.forEach((_, i) => renderThumb(i)); } catch {} }
+    return img;
+  }, () => { cutImages.set(url, null); return null; }));
+  const v = cutImages.get(url);
+  return v instanceof Promise ? v : Promise.resolve(v);
+}
+function personMask(el) {
+  const holder = $('.s-cut', el), node = holder && $('img', holder), url = node?.getAttribute('src');
+  if (!url) return null;
+  const img = cutImages.get(url);
+  if (!(img instanceof HTMLImageElement)) { cutReady(url); return null; }
+  const W = 1080 / CELL, H = Math.ceil(1350 / CELL), c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d'), v = (k) => (parseFloat(el.style.getPropertyValue(k)) || 0) / 100;
+  const ix = v('--ix'), iy = v('--iy'), dx = v('--dx'), dy = v('--dy'), iz = parseFloat(el.style.getPropertyValue('--iz')) || 1;
+  // Misma cuenta que el CSS de .s-photo img: object-fit cover + object-position, luego translate y scale desde (ix, iy)
+  const cw = holder.offsetWidth, ch = holder.offsetHeight, z = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
+  let w = img.naturalWidth * z, h = img.naturalHeight * z, x = (cw - w) * ix, y = (ch - h) * iy;
+  const ox = cw * ix, oy = ch * iy;
+  x = ox + (x - ox) * iz + cw * dx; y = oy + (y - oy) * iz + ch * dy; w *= iz; h *= iz;
+  ctx.beginPath(); ctx.rect(holder.offsetLeft / CELL, holder.offsetTop / CELL, cw / CELL, ch / CELL); ctx.clip();
+  ctx.drawImage(img, (holder.offsetLeft + x) / CELL, (holder.offsetTop + y) / CELL, w / CELL, h / CELL);
+  try {
+    const a = ctx.getImageData(0, 0, W, H).data, m = new Uint8Array(W * H);
+    for (let i = 0; i < m.length; i++) m[i] = a[i * 4 + 3] > 96 ? 1 : 0;
+    return { W, H, m };
+  } catch { return null; }
+}
+// Rectángulo que ocupa el texto de una zona (px de la lámina); la zona centro está corrida -50% en vertical
+function textRect(box) {
+  const ty = box.classList.contains('z-centro') ? -box.offsetHeight / 2 : 0;
+  const r = $$('.blk:not(.blk-linea)', box).map((n) => [box.offsetLeft + n.offsetLeft, box.offsetTop + ty + n.offsetTop, box.offsetLeft + n.offsetLeft + n.offsetWidth, box.offsetTop + ty + n.offsetTop + n.offsetHeight]);
+  return r.length ? r.reduce((a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]) : null;
+}
+// Fracción del rectángulo que tapa la persona
+function covered(M, r) {
+  const x0 = Math.max(0, Math.floor(r[0] / CELL)), y0 = Math.max(0, Math.floor(r[1] / CELL)), x1 = Math.min(M.W, Math.ceil(r[2] / CELL)), y1 = Math.min(M.H, Math.ceil(r[3] / CELL));
+  let n = 0, t = 0;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { t++; n += M.m[y * M.W + x]; }
+  return t ? n / t : 0;
+}
+// Si la persona tapa el texto de una zona, la zona pasa a la columna libre más ancha (o, arriba, se queda sobre su cabeza).
+// Solo se acepta si la letra no queda mucho más chica que antes.
+function dodgePerson(box, M, shrink) {
+  if (!M || box.classList.contains('z-izquierda') || box.classList.contains('z-derecha')) return;
+  const r = textRect(box), before = r && covered(M, r);
+  if (!r || before < 0.06) return;
+  const k0 = parseFloat(box.style.getPropertyValue('--fit')) || 1, ok = (k) => k >= 0.7 || k >= k0 - 0.05;
+  // Columnas donde está la persona a la altura del texto
+  const y0 = Math.max(0, Math.floor(r[1] / CELL)), y1 = Math.min(M.H, Math.ceil(r[3] / CELL)), cols = [];
+  for (let x = 0; x < M.W; x++) { let n = 0; for (let y = y0; y < y1; y++) n += M.m[y * M.W + x]; if (n > (y1 - y0) * 0.12) cols.push(x); }
+  const keep = { left: box.style.left, right: box.style.right, width: box.style.width, maxHeight: box.style.maxHeight };
+  const undo = () => { Object.assign(box.style, keep); box.classList.remove('dodge'); shrink(box); };
+  if (cols.length) {
+    const pl = cols[0] * CELL - 40, pr = (cols[cols.length - 1] + 1) * CELL + 40;
+    const sides = [['left', pl - 84], ['right', 1080 - 84 - pr]].sort((a, b) => b[1] - a[1]);
+    for (const [side, width] of sides) {
+      if (width < 340) break;
+      box.classList.add('dodge');
+      Object.assign(box.style, side === 'left' ? { left: '84px', right: (1080 - pl) + 'px', width: 'auto' } : { left: pr + 'px', right: '84px', width: 'auto' });
+      const k = shrink(box), r2 = textRect(box);
+      if (ok(k) && r2 && covered(M, r2) < before) return;
+      undo();
+    }
+  }
+  // Arriba: el texto se queda sobre la cabeza de la persona
+  if (box.classList.contains('z-arriba')) {
+    const x0 = Math.max(0, Math.floor(r[0] / CELL)), x1 = Math.min(M.W, Math.ceil(r[2] / CELL));
+    let head = M.H;
+    for (let y = 0; y < M.H && head === M.H; y++) { let n = 0; for (let x = x0; x < x1; x++) n += M.m[y * M.W + x]; if (n > (x1 - x0) * 0.08) head = y; }
+    const room = head * CELL - 32 - box.offsetTop;
+    if (room >= 200 && room < (parseFloat(box.style.maxHeight) || 1250)) {
+      box.style.maxHeight = room + 'px';
+      const k = shrink(box);
+      if (ok(k)) return;
+      undo();
+    }
+  }
+}
+
 function fitSlide(el) {
   // Se mide sin los desplazamientos manuales y luego se devuelven
   const moved = $$('.mv', el).filter((n) => n.style.translate || n.style.scale).map((n) => [n, n.style.translate, n.style.scale]);
@@ -837,25 +924,38 @@ function fitSlide(el) {
     }
   });
   // Constrain block zones before measuring; top and bottom must not collide.
-  const zones = $$('.s-blocks:not(.over)', el);
-  zones.forEach((box) => { box.style.setProperty('--fit', 1); box.style.maxHeight = '';if(box.classList.contains('z-izquierda')||box.classList.contains('z-derecha'))box.style.top=''; });
-  const bottom = zones.find((box) => box.classList.contains('z-abajo'));
-  zones.forEach((box) => {
-    const top = box.offsetTop;
-    const end = box.classList.contains('z-arriba') && bottom ? bottom.offsetTop - 48 : 1250;
-    const limit = box.classList.contains('z-abajo') ? (zones.some((b) => b.classList.contains('z-arriba')) ? 540 : 1150)
-      : box.classList.contains('z-centro') ? 540 : Math.max(120, end - top);
-    box.style.maxHeight = limit + 'px';
-    let k = 1;
-    // A narrow child can overflow while the full-width zone still fits.
-    // Preserve whole words and reduce the zone until every block fits its own column.
+  // Orden: arriba, abajo, centro y etiquetas laterales, para que cada zona sepa cuánto espacio dejaron las anteriores.
+  const order = ['z-arriba', 'z-abajo', 'z-centro'], rank = (box) => { const i = order.findIndex((c) => box.classList.contains(c)); return i < 0 ? order.length : i; };
+  const zones = $$('.s-blocks:not(.over)', el).sort((a, b) => rank(a) - rank(b));
+  const copies = new Map(zones.map((box) => [box, $$('.s-blocks.over', el).filter((copy) => copy.className.replace(' over', '') === box.className)]));
+  zones.forEach((box) => { box.style.setProperty('--fit', 1); box.style.maxHeight = ''; box.style.left = box.style.right = box.style.width = ''; box.classList.remove('dodge'); if(box.classList.contains('z-izquierda')||box.classList.contains('z-derecha'))box.style.top=''; });
+  const upper = zones.find((box) => box.classList.contains('z-arriba')), bottom = zones.find((box) => box.classList.contains('z-abajo'));
+  // A narrow child can overflow while the full-width zone still fits.
+  // Preserve whole words and reduce the zone until every block fits its own column.
+  const shrink = (box) => {
+    const limit = parseFloat(box.style.maxHeight) || 1250;
     const wordOverflow=()=>$$('.blk:not(.blk-linea)',box).some(n=>n.scrollWidth>n.clientWidth+2);
+    let k = 1;
+    box.style.setProperty('--fit', 1);
     while ((box.scrollHeight > limit + 2 || box.scrollWidth > box.clientWidth + 2 || wordOverflow()) && k > 0.55) {
       k = Math.max(0.55, k - 0.025);
       box.style.setProperty('--fit', k.toFixed(3));
     }
-    $$('.s-blocks.over', el).filter((copy) => copy.className.replace(' over', '') === box.className)
-      .forEach((copy) => { copy.style.setProperty('--fit', k.toFixed(3)); copy.style.maxHeight = box.style.maxHeight; });
+    return k;
+  };
+  const mask = personMask(el);
+  zones.forEach((box) => {
+    const top = box.offsetTop;
+    // Abajo y centro usan todo el alto libre que dejan las otras zonas antes de achicar la letra.
+    const upperEnd = upper && upper !== box ? upper.offsetTop + upper.offsetHeight + 48 : 100;
+    let limit;
+    if (box.classList.contains('z-arriba')) limit = Math.max(120, (bottom ? bottom.offsetTop - 48 : 1250) - top);
+    else if (box.classList.contains('z-abajo')) limit = Math.max(240, 1350 - (parseFloat(getComputedStyle(box).bottom) || 100) - upperEnd);
+    else if (box.classList.contains('z-centro')) { const half = Math.min(675 - upperEnd, (bottom ? bottom.offsetTop - 48 : 1250) - 675); limit = Math.max(540, 2 * half); }
+    else limit = Math.max(120, 1250 - top);
+    box.style.maxHeight = limit + 'px';
+    shrink(box);
+    dodgePerson(box, mask, shrink);
   });
   // Side labels share the central composition, but must not sit over its headline.
   const middle=zones.find(box=>box.classList.contains('z-centro'));
@@ -868,7 +968,12 @@ function fitSlide(el) {
       }
     }
   }
-  for(const box of zones)$$('.s-blocks.over',el).filter(copy=>copy.className.replace(' over','')===box.className).forEach(copy=>{copy.style.top=box.style.top;});
+  // La copia de encima del recorte (.over) repite la geometría de su zona
+  for (const box of zones) for (const copy of copies.get(box)) {
+    copy.style.setProperty('--fit', box.style.getPropertyValue('--fit'));
+    for (const k of ['maxHeight', 'top', 'left', 'right', 'width']) copy.style[k] = box.style[k];
+    copy.classList.toggle('dodge', box.classList.contains('dodge'));
+  }
   fitLayers(el);
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
 }
@@ -1657,6 +1762,7 @@ async function renderForExport(i) {
   const el = buildSlide(state.p, state.p.slides[i], i, state.p.slides.length);
   host.replaceChildren(el);
   applyMoves(el,state.p.slides[i]);
+  const cutUrl=$('.s-cut img',el)?.getAttribute('src');if(cutUrl)await cutReady(cutUrl);
   await Promise.all($$('img', el).map(img=>img.decode().catch(()=>{throw new Error('No se pudo cargar una imagen de la lámina. Vuelve a abrir el proyecto antes de exportar.');})));
   await document.fonts.ready;
   fitSlide(el);
