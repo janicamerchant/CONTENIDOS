@@ -89,6 +89,12 @@ test('C07: se serializan bloques y plantilla; un payload obsoleto no reserva pre
  await assert.rejects(f.env.api.enqueue(f.identity,'generate',{idempotencyKey:randomUUID(),projectId:'project',motor:'hf_flare',items:[{index:0,slideId:'slide-A',prompt:'Scene',slide:payload}]}),/Guarda los cambios/);
  assert.equal(f.queued().length,0);
 });
+test('en modo foto, un look de marca largo se recorta para que el prompt quepa en Flare; la escena va completa',async()=>{
+ const look='# PHOTOGRAPHY DIRECTION\n\n'+Array.from({length:400},(_,i)=>`- Natural editorial light rule ${i}.`).join('\n\n'),scene='Escena completa '+'x'.repeat(900);
+ const f=fixture(),s=slide();f.setProject({id:'project',marca_id:'audit',version:1,documento:{campaign:campaign.freezeCampaign({...base,modo:'foto',look}),modo:'foto',slides:[s]}});
+ await f.env.api.enqueue(f.identity,'generate',{idempotencyKey:randomUUID(),projectId:'project',motor:'hf_flare',items:[{index:0,slideId:s.id,prompt:scene,slide:contract.slideContent(s)}]});
+ const prompt=f.queued()[0].payload.request.prompt;assert.ok(prompt.length<=5000);assert.ok(prompt.startsWith(scene));assert.match(prompt,/PHOTOGRAPHY DIRECTION/);assert.match(prompt,/No text, letters, logos or watermark/);
+});
 test('preflight y manifiesto se guardan antes de encolar; la imagen usa la revisión guardada',async()=>{
  const f=fixture(),s=slide();f.setProject({id:'project',marca_id:'audit',version:1,documento:{campaign:campaign.freezeCampaign(base),modo:'completa',slides:[s]}});
  await f.env.api.enqueue(f.identity,'generate',{idempotencyKey:randomUUID(),projectId:'project',motor:'hf_flare',items:[{index:0,slideId:s.id,prompt:'Scene',slide:contract.slideContent(s)}]});

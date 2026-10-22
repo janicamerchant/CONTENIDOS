@@ -94,6 +94,12 @@ const PROMPT_MAX:Record<string,number>={hf_flare:5000,hf_soul2:5000};
 // Corta en el último final de frase (o coma) antes de n caracteres
 const recortar=(t:string,n:number)=>{if(t.length<=n)return t;const c=t.slice(0,n),k=Math.max(c.lastIndexOf('. '),c.lastIndexOf('.\n'));return k>n*0.6?c.slice(0,k+1):c.slice(0,Math.max(c.lastIndexOf(', '),n*0.8)|0)+'.';};
 // Rutas de archivo que Claude a veces escribe (assets/x.png): el motor las imprimiría como texto
+// El look de la marca (dirección de fotografía) puede ser más largo que el límite del motor: va al final del presupuesto.
+// Escena, identidad y referencias quedan completas; el look se compacta (sin títulos, viñetas ni líneas vacías) y se recorta en un final de frase.
+const LOOK='\u0000LOOK\u0000';
+function conLook(prompt:string,look:string,max:number){if(!prompt.includes(LOOK))return prompt;const room=max-(prompt.length-LOOK.length);let t=String(look||'').trim();
+ if(t.length>room)t=t.replace(/^#+\s*/gm,'').replace(/^\s*[-*]\s+/gm,'').replace(/\n{2,}/g,'\n').trim();
+ return prompt.replace(LOOK,()=>t.length<=room?t:room>200?recortar(t,room):'');}
 const sinRutas=(t:string)=>t.replace(/['"]?(?:[\w-]+\/)*[\w-]+\.(?:png|jpe?g|webp|svg)['"]?/gi,m=>/logo/i.test(m)?'the supplied official logo':'the supplied reference photos');
 // Etiquetas de las referencias de estilo con significado fijo: le dicen a Claude para qué sirve cada imagen
 const PURPOSE:Record<string,string>={diagramacion:'cómo se acomodan texto e imagen en la lámina',estilo:'luz y tratamiento de la foto',tono:'la voz y el tipo de frase (nunca el texto en sí)',portada:'láminas de portada',cierre:'láminas de cierre o llamado a la acción',cifra:'láminas con una cifra protagonista',lista:'láminas con lista o pasos',frase:'láminas con una frase o cita'};
@@ -177,7 +183,7 @@ async function layersJob(j:any,w:Identity){
 export async function imageRequest(j:any,w:Identity){const p=j.payload;if(p.request)return structuredClone(p.request);const brand=p.campaign?verifiedCampaign(p.campaign,j.marca_id):await brandDetail(w,j.marca_id),s=p.slide||{};const modo=(p.modo==='editable'?'completa':p.modo)||brand.modo;const wanted=new Set((p.people||[]).map((x:any)=>typeof x==='string'?x:x.id));const mentioned=(p.prompt+' '+(s.photo||'')).toLowerCase();const people=brand.people.filter((x:any)=>(p.people? wanted.has(x.id):[x.name,...x.aliases].some((n:string)=>mentioned.includes(n.toLowerCase()))));const refs:string[]=[];if((p.people||[]).some((id:string)=>!brand.people.some((person:any)=>person.id===id)))throw new HttpError(400,'Una persona elegida no pertenece a esta campaña.');
  // Soul 2 no recibe fotos: la identidad viene del Soul ID entrenado de la persona
  if(j.motor==='hf_soul2'){if(modo!=='foto')throw new HttpError(400,'Soul solo admite modo foto.');const person=people.find((x:any)=>x.soul?.status==='completed');if(!person||people.length!==1)throw new HttpError(400,'Soul necesita una sola persona con Soul ID completado.');const others=people.filter((x:any)=>x!==person).map((x:any)=>x.lock);
-  const prompt=p.prompt+'\n'+(brand.look||'')+'\n'+others.join('\n')+'\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
+  const prompt=conLook(p.prompt+'\n'+LOOK+'\n'+others.join('\n')+'\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.',brand.look,5000);
   if(prompt.length>5000)throw new HttpError(400,'El prompt de Soul supera 5.000 caracteres. Acorta la escena.');return {prompt,refs,full:false,needsCutout:!!brand.cutout,soulId:person?.soul.id as string|undefined,soulStrength:Number(person?.soul.strength??1)};}
  // Lámina completa: hasta 3 personas y 6 fotos de cara repartidas entre ellas; modo foto: 2 personas con 2 fotos
  const cast=people.slice(0,modo==='completa'?3:2),perPerson=modo==='completa'?Math.min(3,Math.floor(6/Math.max(1,cast.length))):2,faces:{name:string,count:number}[]=[];
@@ -190,7 +196,7 @@ export async function imageRequest(j:any,w:Identity){const p=j.payload;if(p.requ
  for(const v of cars)if(refs.length<10&&!refs.includes(v.url))refs.push(v.url);const carCount=refs.length-carStart;const carNames=cars.slice(0,carCount).map((v:any)=>v.name);
  // En lámina completa el vestuario lo define el VISUAL SYSTEM; la foto de vestuario solo va en el modo foto
  const outfits=brand.outfits||[];let outfit=false;if(people.length&&s.outfit!=='original'&&outfits.length&&modo!=='completa'){const o=outfits.find((x:any)=>x.name===s.outfit||x.path===s.outfit)||outfits[p.index%outfits.length];refs.push(o.url);outfit=true;}
- const full=modo==='completa';let prompt=p.prompt+'\n'+(brand.look||'')+'\n'+people.map((x:any)=>x.lock).join('\n');
+ const full=modo==='completa';let prompt=p.prompt+'\n'+LOOK+'\n'+people.map((x:any)=>x.lock).join('\n');
  if(people.length&&j.motor in GEMINI_MODELS)prompt+='\nThe first image is a real photograph of this woman: keep her face, facial features, skin, age and hair exactly as in the photo. Do not retouch, smooth, beautify or redraw her face. Change the location, background and lighting to match the scene, with light on her that matches the room. The following image of her is for identity only.'+(outfit?' Dress her in the exact outfit of the LAST image (same garments, cut, fabric and colors); ignore the model, face and body in that last image, it is a clothing reference only. Choose a natural, elegant pose that shows the outfit.':'')+' Real camera photograph, natural skin texture with visible pores, subtle film grain, no CGI or plastic skin.';
  else if(people.length)prompt+='\nUse the first reference images for the exact approved identity. Preserve face and natural skin texture. '+(outfit?'The last reference specifies clothing only.':'');
  if(placeCount)prompt+=`\nReference image${placeCount>1?'s':''} ${Array.from({length:placeCount},(_,i)=>placeStart+i+1).join(' and ')} show${placeCount>1?'':'s'} the brand's real location. Whenever the scene shows the building, facade, showroom or lot, reproduce this exact place: same architecture, facade shape, colors, windows, entrance, signage placement and surroundings. Do not invent a different or generic building. Use these images for the location only, never for people.`;
@@ -223,6 +229,7 @@ export async function imageRequest(j:any,w:Identity){const p=j.payload;if(p.requ
   for(const mins of [[300,700,600],[80,250,250]])for(const [get,set,min] of [[()=>ev,(t:string)=>ev=t,mins[0]],[()=>vs,(t:string)=>vs=t,mins[1]],[()=>sl,(t:string)=>sl=t,mins[2]]] as const){const over=armar(vs,sl,ev).length-max;if(over<=0)break;set(recortar(get(),Math.max(min!,get().length-over)));}
   prompt=armar(vs,sl,ev);}
  else prompt+='\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
+ prompt=conLook(prompt,brand.look,PROMPT_MAX[j.motor]??20000);
  if(prompt.length>(PROMPT_MAX[j.motor]??20000))throw new HttpError(400,'El contenido obligatorio no cabe en el prompt de este motor. Reduce los bloques o elige otro motor.');
  return {prompt,refs,full,needsCutout:!!brand.cutout&&!full,soulId:undefined as string|undefined,soulStrength:1};
 }
