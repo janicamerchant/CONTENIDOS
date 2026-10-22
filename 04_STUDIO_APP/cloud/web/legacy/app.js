@@ -1243,7 +1243,7 @@ function renderInspector() {
 
   $('#inspector').innerHTML = `
     <details class="sec"><summary>Versiones generadas</summary><button type="button" class="btn sm ghost" id="load-history">Ver versiones guardadas</button>${(state.resultHistory?.projectId===p.id?state.resultHistory.items:[]).map(r=>`<div class="history-result"><img src="${esc(r.url)}" width="90" alt="Versión generada"><p>${esc(r.slide?.title||r.slide?.template||'Lámina')} · ${esc(new Date(r.createdAt).toLocaleString('es'))}</p><button type="button" class="btn sm" data-restore-result="${esc(r.id)}">Recuperar versión</button></div>`).join('')}</details>
-    ${p.slides.length>1?`<section class="sec"><h3 class="sec-title">Portada primero</h3><p class="help">${p.coverReview?'Portada aprobada. Puedes generar las láminas pendientes.':'Revisa la primera lámina antes de generar el resto. Si cambias la portada, tendrás que aprobarla otra vez.'}</p><button type="button" class="btn sm" id="approve-cover">Revisar y aprobar portada</button>${p.coverReview?'<button type="button" class="btn sm accent" id="generate-remaining">Generar láminas pendientes</button>':''}</section>`:''}
+    ${p.slides.some(s=>!s.image)?`<section class="sec"><h3 class="sec-title">Láminas sin imagen</h3><p class="help">Genera de una vez todas las láminas que todavía no tienen imagen.</p><button type="button" class="btn sm accent" id="generate-remaining">Generar láminas pendientes</button></section>`:''}
     <section class="sec"><h3 class="sec-title">Revisión del carrusel</h3><p class="help">${p.review?'Revisión aprobada.':'Revisa textos, rostros, logos y consistencia de todas las láminas antes de exportar.'}</p><button type="button" class="btn sm accent" id="approve-review">He revisado el carrusel</button>${p.review?'<button type="button" class="btn sm" id="save-brand-pattern">Usar como patrón de marca</button>':''}<button type="button" class="btn sm ghost" id="refresh-campaign">Actualizar configuración de marca</button></section>
     <section class="sec">
       <h3 class="sec-title">Lámina ${state.sel + 1}</h3>
@@ -1641,8 +1641,7 @@ async function generateRemaining(){
   try{
     const p=state.p;if(state.egen||state.lgen)throw new Error('Espera a que termine la generación.');
     clearTimeout(state.saveTimer);if(await saveProject()===false)return;
-    if(!p.coverReview)throw new Error('Revisa y aprueba la portada primero.');
-    const items=p.slides.flatMap((s,i)=>i&&!s.image&&(s.photo||s.photoPrompt||isFull(p))?[{index:i,slideId:s.id,prompt:promptFor(s,p.brand),people:projectPeople(p,s),slide:slidePayload(s)}]:[]);
+    const items=p.slides.flatMap((s,i)=>!s.image&&(s.photo||s.photoPrompt||isFull(p))?[{index:i,slideId:s.id,prompt:promptFor(s,p.brand),people:projectPeople(p,s),slide:slidePayload(s)}]:[]);
     if(!items.length){toast('No hay imágenes pendientes.');return;}
     const r=await api('/api/generate',{projectId:p.id,...editorMotor(),items});
     state.egen={id:r.id,projectId:p.id,items:[],done:false};pollEditorGen();renderEditor();
@@ -2118,8 +2117,8 @@ function renderCost() {
       ${g.done ? `<div class="form-actions"><button type="button" class="btn accent" id="btn-open-editor">Abrir en el editor</button>
         ${g.items.some((x) => x.status === 'failed') ? '<button type="button" class="btn ghost" id="btn-retry">Reintentar fallidas</button>' : ''}</div>
         ${photos ? `<div class="line"><b>¿No te gustó alguna?</b>
-          <small>Abre el Editor para revisar y aprobar la portada antes de generar las imágenes pendientes. Puedes regenerar cada foto por separado. Puedes cambiar de motor arriba antes de regenerar. La foto anterior queda guardada y puedes volver a ella en el Editor.</small></div>
-        <button type="button" class="btn ghost" id="btn-regen-all" ${ready ? '' : 'disabled'}>Regenerar portada</button>` : ''}` : ''}`;
+          <small>Puedes regenerar cada foto por separado en el Editor. Puedes cambiar de motor arriba antes de regenerar. La foto anterior queda guardada y puedes volver a ella en el Editor.</small></div>
+        <button type="button" class="btn ghost" id="btn-regen-all" ${ready ? '' : 'disabled'}>Regenerar todas</button>` : ''}` : ''}`;
   }
   $('#cost-panel').innerHTML = `
     <h2>Presupuesto de generación</h2>
@@ -2131,9 +2130,9 @@ function renderCost() {
     <div class="line"><b>Claude · propuesta</b><span class="v">${money(d.claudeUsd || 0)}</span>
       <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Sonnet 4.6${u.input_tokens ? ` (última: investigación con ${u.web_searches || u.server_tool_use?.web_search_requests || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
     <div class="line total"><b>Falta por gastar</b><span class="v">${imgUsd == null ? '—' : `≈ ${money(imgUsd)}`}</span>
-      <small>Estimación del carrusel completo. Primero se genera solo la portada; el resto espera tu aprobación.</small></div>
+      <small>Estimación del carrusel completo. Se generan todas las láminas de una vez.</small></div>
     ${g ? genHtml : `<div class="form-actions">
-      <button type="button" class="btn accent" id="btn-approve" ${ready || !photos ? '' : 'disabled'}>${photos ? 'Generar portada primero' : 'Guardar y revisar en el editor'}</button>
+      <button type="button" class="btn accent" id="btn-approve" ${ready || !photos ? '' : 'disabled'}>${photos ? 'Generar todas las láminas' : 'Guardar y revisar en el editor'}</button>
     </div>`}`;
 }
 
@@ -2161,7 +2160,7 @@ async function approve(indices = null) {
   if(await saveProject()===false)return;
   d.campaign=state.p.campaign;
   const issues=Carousel.validateCarousel(state.p.slides);if(issues.length){toast(issues.join(' '),true);return;}
-  const want = new Set(indices || [0]);
+  const want = indices ? new Set(indices) : null;
   const items = d.slides.map((s, i) => (s.gen && (s.photoPrompt || s.photo || isFull(d)) && (!want || want.has(i))
     ? { index: i, slideId:s.id,prompt: promptFor(s, d.brand), people: slidePeople(s), photo: s.photo, photoPrompt: s.photoPrompt,
       slide: slidePayload(s), count: `${i + 1}/${d.slides.length}` } : null)).filter(Boolean);
@@ -2340,7 +2339,7 @@ function bindCreate() {
     if (!b) return;
     if (b.id === 'btn-approve') { b.disabled = true; approve(); }
     else if (b.id === 'btn-retry') { b.disabled = true; approve(state.draft.gen.items.filter((x) => x.status === 'failed').map((x) => x.index)); }
-    else if (b.id === 'btn-regen-all') { b.disabled = true; approve([0]); }
+    else if (b.id === 'btn-regen-all') { b.disabled = true; approve(); }
     else if (b.id === 'btn-open-editor') openProject(state.draft.projectId);
   });
   $$('[data-settings]').forEach((b) => b.addEventListener('click', () => { loadConfig(); $('#dlg-settings').showModal(); }));

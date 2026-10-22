@@ -8,8 +8,8 @@ import {editorialRules,blockDirection} from './art-direction.js';
 import {readSite} from './sitio.js';
 import {reelsJob} from './reels.js';
 import {buildLayers,slideTexts,LAYERS_USD} from './layers.js';
-import {slideRevision,resolveMode,requestedCount,validateCarousel,validateSlide,resultTarget,applyVisual,coverRevision,proposalIssues} from '../shared/carousel.js';
-import {freezeCampaign,verifiedCampaign,identityContext,validReview} from './campaign.js';
+import {slideRevision,resolveMode,requestedCount,validateCarousel,validateSlide,resultTarget,applyVisual,proposalIssues} from '../shared/carousel.js';
+import {freezeCampaign,verifiedCampaign,identityContext} from './campaign.js';
 import {leased,executionSignal} from './execution.js';
 import {normalizeFrame} from './frames.js';
 // Nano Banana Pro (Gemini 3 Pro Image) por la API de Google. Precio aproximado por imagen, solo para el panel de costos.
@@ -32,12 +32,6 @@ export async function enqueue(w:Identity,route:string,b:any){
   if(new Set(items.map(i=>i.slideId||String(i.index))).size!==items.length)throw new HttpError(400,'Láminas duplicadas.');
   const campaign=p.documento.campaign||freezeCampaign(await brandDetail(w,brand));const frozen=verifiedCampaign(campaign,brand),modo=resolveMode(p.documento.modo,frozen);
   const engine=engines().find(m=>m.id===motor);if(!engine.modes.includes(modo))throw new HttpError(400,'Este motor no admite el modo elegido. Elige otro motor o cambia el modo antes de generar.');
-  const cover=p.documento.slides[0],hasCover=items.some(i=>i.slideId?i.slideId===cover?.id:i.index===0),hasRest=items.some(i=>i.slideId?i.slideId!==cover?.id:i.index!==0);
-  if(hasRest&&(hasCover||!validReview(p.documento.coverReview,coverRevision(p.documento))))throw new HttpError(409,'Revisa y aprueba la portada antes de generar el resto del carrusel.');
-  if(hasRest){
-   const coverJobs=checked(await w.db.from('trabajos').select('payload,estado,created_at').eq('proyecto_id',p.id).eq('tipo','imagen'));
-   if(coverJobs.some((j:any)=>j.payload.slideId===cover?.id&&(['queued','running','waiting','uncertain'].includes(j.estado)||!['failed','canceled'].includes(j.estado)&&j.created_at>p.documento.coverReview.approvedAt)))throw new HttpError(409,'La portada se está regenerando o cambió después de aprobarla. Vuelve a revisarla.');
-  }
   for(const item of items){
    const slide=item.slideId?p.documento.slides.find((x:any)=>x.id===item.slideId):p.documento.slides[item.index];
    if(!slide?.id)throw new HttpError(400,'La lámina necesita un ID estable. Guarda primero el proyecto.');
@@ -225,7 +219,8 @@ export async function imageRequest(j:any,w:Identity){const p=j.payload;if(p.requ
   const armar=(vs:string,sl:string,ev:string)=>`[VISUAL SYSTEM — identical on every slide]\n${vs}\n\n${legend?`[REFERENCE IMAGES, in order]\n${legend}\n\n`:''}${identidad}${layout?layout+'\n\n':''}${sl}\n\n[EXACT TEXT ON THIS SLIDE — ${p.language||brand.defaults?.idioma||'original language'}, render letter by letter with every accent; this list wins if anything above differs]\n${texts||'(no text)'}${accent?`\nAccent-color word: "${accent}"`:''}\n\n[AVOID]\n${ev} ${nunca}`;
   // Flare (Higgsfield) rechaza prompts de más de 5.000 caracteres: se recorta primero el AVOID, luego el VISUAL SYSTEM y al final el bloque de la lámina, siempre en un final de frase
   let vs=sistema,sl=sinRutas(p.prompt),ev=evitar;const max=PROMPT_MAX[j.motor]??20000;
-  for(const [get,set,min] of [[()=>ev,(t:string)=>ev=t,300],[()=>vs,(t:string)=>vs=t,700],[()=>sl,(t:string)=>sl=t,600]] as const){const over=armar(vs,sl,ev).length-max;if(over<=0)break;set(recortar(get(),Math.max(min,get().length-over)));}
+  // Si con esos mínimos no cabe (láminas de bloques con mucho texto), una segunda vuelta recorta más antes de rendirse
+  for(const mins of [[300,700,600],[80,250,250]])for(const [get,set,min] of [[()=>ev,(t:string)=>ev=t,mins[0]],[()=>vs,(t:string)=>vs=t,mins[1]],[()=>sl,(t:string)=>sl=t,mins[2]]] as const){const over=armar(vs,sl,ev).length-max;if(over<=0)break;set(recortar(get(),Math.max(min!,get().length-over)));}
   prompt=armar(vs,sl,ev);}
  else prompt+='\nNo text, letters, logos or watermark. Leave space for the title. Natural editorial photography.';
  if(prompt.length>(PROMPT_MAX[j.motor]??20000))throw new HttpError(400,'El contenido obligatorio no cabe en el prompt de este motor. Reduce los bloques o elige otro motor.');

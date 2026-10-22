@@ -63,22 +63,18 @@ try{
  await mkdir('artifacts/consistency-fix',{recursive:true});await page.screenshot({path:'artifacts/consistency-fix/editor.png'});
  await page.setViewportSize({width:390,height:844});assert.ok(!await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth));
  await page.screenshot({path:'artifacts/consistency-fix/mobile.png'});
- // The actual Create UI sends only the cover, then the Editor unlocks the remaining slide.
+ // The actual Create UI sends every slide in one batch; there is no cover-first step.
  await page.setViewportSize({width:1440,height:1000});
  await page.evaluate(async()=>{
-  const campaign=state.p.campaign;state.draft={brand:'fixture',modo:'foto',name:'Portada primero',campaign,slides:[{id:'cover',layout:'frase',theme:'light',title:'Portada de prueba',photo:'A room',photoPrompt:'A room',gen:true},{id:'rest',layout:'frase',theme:'light',title:'Idea pendiente',photo:'A desk',photoPrompt:'A desk',gen:true},{id:'rest-2',layout:'frase',theme:'light',title:'Otra idea pendiente',photo:'A window',photoPrompt:'A window',gen:true}]};
+  const campaign=state.p.campaign;state.draft={brand:'fixture',modo:'foto',name:'Todas de una vez',campaign,slides:[{id:'cover',layout:'frase',theme:'light',title:'Portada de prueba',photo:'A room',photoPrompt:'A room',gen:true},{id:'rest',layout:'frase',theme:'light',title:'Idea pendiente',photo:'A desk',photoPrompt:'A desk',gen:true},{id:'rest-2',layout:'frase',theme:'light',title:'Otra idea pendiente',photo:'A window',photoPrompt:'A window',gen:true}]};
   showView('create');await approve();
  });
- assert.deepEqual(await page.evaluate(()=>fixture.generated.items.map(s=>s.slideId)),['cover']);
+ assert.deepEqual(await page.evaluate(()=>fixture.generated.items.map(s=>s.slideId)),['cover','rest','rest-2']);
  await page.evaluate(async()=>{fixture.complete=true;await pollGeneration();await openProject(state.draft.projectId);});
- await page.locator('#approve-cover').click();await page.waitForFunction(()=>!!state.p.coverReview);
- await page.locator('#generate-remaining').click();await page.waitForFunction(()=>fixture.generated.items[0]?.slideId==='rest');assert.deepEqual(await page.evaluate(()=>fixture.generated.items.map(s=>s.slideId)),['rest','rest-2']);
- await page.evaluate(async()=>{fixture.complete=true;await pollEditorGen();await saveProject();});
- assert.ok(await page.evaluate(()=>state.p.slides.every(s=>!!s.image)));assert.ok(await page.evaluate(()=>!!state.p.coverReview));
+ await page.evaluate(async()=>{await saveProject();renderInspector();});
+ assert.ok(await page.evaluate(()=>state.p.slides.every(s=>!!s.image)));assert.equal(await page.locator('#generate-remaining').count(),0);
  await page.locator('#approve-review').click();await page.waitForFunction(()=>!!state.p.review);
  await page.locator('#save-brand-pattern').click();await page.waitForFunction(()=>fixture.patterns===1);
- await page.evaluate(async()=>{state.p.slides[0].title='Portada cambiada';await saveProject();renderInspector();});
- assert.equal(await page.evaluate(()=>state.p.coverReview),null);assert.equal(await page.locator('#generate-remaining').count(),0);
  assert.deepEqual(errors,[]);await writeFile('artifacts/consistency-fix/browser.json',JSON.stringify({passed:true,exports:result.exports,commits:result.commits,typography,errors},null,2));
- console.log('Chrome: revisión, doble exportación, orden, identidad al reordenar, deshacer, fuentes, móvil, portada aprobable y patrón de marca: OK.');
+ console.log('Chrome: revisión, doble exportación, orden, identidad al reordenar, deshacer, fuentes, móvil, todas las láminas de una vez y patrón de marca: OK.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

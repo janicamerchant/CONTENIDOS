@@ -162,16 +162,11 @@ test('todos los motores terminan en 4:5 sin recortar extremos de una imagen 3:4'
  const region=await sharp(bytes).extract({left:100,top:1330,width:800,height:10}).toBuffer();const stats=await sharp(region).stats();assert.ok(stats.channels[2]!.mean>200,'bottom content preserved');
 });
 
-test('la generación del resto requiere una portada aprobada y rechaza lotes que mezclen portada y resto',async()=>{
+test('la portada y el resto de las láminas se generan en un mismo lote, sin aprobar la portada antes',async()=>{
  const f=fixture(),first=slide(),second=slide({id:'slide-B',title:'Segunda idea'}),doc:any={brand:'audit',modo:'foto',campaign:campaign.freezeCampaign(base),slides:[first,second]};
  f.setProject({id:'p',marca_id:'audit',version:1,documento:doc});
- const payload:any={idempotencyKey:randomUUID(),projectId:'p',motor:'hf_flare',tamano:'1k',items:[{index:1,slideId:second.id,prompt:'Editorial photo',people:[]}]};
- await assert.rejects(f.env.api.enqueue(f.identity,'generate',payload),/aprueba la portada/);assert.equal(f.queued().length,0);
- const revision=contract.coverRevision(doc);doc.coverReview={revision:campaign.reviewHash(revision),signature:campaign.signReview(revision),approvedAt:new Date().toISOString()};
- await f.env.api.enqueue(f.identity,'generate',payload);assert.equal(f.queued().length,1);
- await assert.rejects(f.env.api.enqueue(f.identity,'generate',{...payload,items:[{...payload.items[0],index:0,slideId:first.id},...payload.items]}),/aprueba la portada/);
- f.setJobs([{payload:{slideId:first.id},estado:'running',created_at:doc.coverReview.approvedAt}]);
- await assert.rejects(f.env.api.enqueue(f.identity,'generate',payload),/regenerando/);
+ const payload:any={idempotencyKey:randomUUID(),projectId:'p',motor:'hf_flare',tamano:'1k',items:[{index:0,slideId:first.id,prompt:'Editorial photo',people:[]},{index:1,slideId:second.id,prompt:'Editorial photo',people:[]}]};
+ await f.env.api.enqueue(f.identity,'generate',payload);assert.equal(f.queued().length,2);
 });
 test('un patrón fija tipografías, colores y dirección visual en campañas futuras',()=>{
  const b=campaign.campaignBrand({...base,fonts:{display:'Wrong'},carouselPattern:{style:{fonts:{display:'Anton',body:'Barlow'},colors:{accent:'#123ABC'},modo:'foto',sistema_visual:'Fixed system'},examples:[slide()]}});

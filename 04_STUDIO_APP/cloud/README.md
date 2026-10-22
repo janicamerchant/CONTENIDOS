@@ -70,6 +70,6 @@ Referencias de implementación: [Higgsfield API](https://open.higgsfield.ai/mode
 
 ### Consistencia de carruseles
 
-En **Crear**, genera la portada y ábrela en el Editor. Revísala y pulsa **Revisar y aprobar portada**; después usa **Generar láminas pendientes**. Al terminar, revisa el carrusel para habilitar la exportación. Para reutilizar su identidad en la marca, pulsa **Usar como patrón de marca** después de esa revisión.
+En **Crear**, **Generar todas las láminas** genera el carrusel completo de una vez. En el Editor, **Generar láminas pendientes** genera las que todavía no tienen imagen. Al terminar, revisa el carrusel para habilitar la exportación. Para reutilizar su identidad en la marca, pulsa **Usar como patrón de marca** después de esa revisión.
 
 Las campañas nuevas usan foto con textos y logos editables por defecto. El modo de lámina completa puede elegirse al crear. `npm run benchmark:carousel` produce el reporte histórico y los briefs fijos de comparación de las siete marcas. Detalles de migración, pruebas y activación en [CORRECCIONES_CONSISTENCIA.md](CORRECCIONES_CONSISTENCIA.md).
