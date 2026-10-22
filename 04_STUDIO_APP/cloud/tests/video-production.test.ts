@@ -11,7 +11,7 @@ import {validAudio} from '../src/audio-upload.js';
 import ts from 'typescript';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
-import {modeloVideo,reservaVideo} from '../shared/video-config.js';
+import {modeloVideo,reservaVideo,MAX_REFERENCE_AUDIO_BYTES} from '../shared/video-config.js';
 import {promptVideo,sinGestos} from '../shared/ugc.js';
 import {HttpError} from '../src/auth.js';
 
@@ -25,6 +25,25 @@ test('configuración de video valida límites por modelo y evita voz generada so
  assert.ok(!videoConfigSchema.safeParse({motor:'kling_3',segundos:2}).success);
  assert.ok(!videoConfigSchema.safeParse({audioNarracion:audio,generarAudio:true}).success);
  assert.ok(videoConfigSchema.safeParse({audioNarracion:audio,generarAudio:false}).success);
+});
+test('referencias de voz: límites, modelos compatibles y exclusión de narración completa',()=>{
+ const refs=[{id:audio,nombre:'mi-voz.wav'}];
+ assert.ok(videoConfigSchema.safeParse({audiosReferencia:refs}).success);
+ for(const extra of [{motor:'kling_3'},{generarAudio:false},{audioNarracion:audio}])assert.ok(!videoConfigSchema.safeParse({audiosReferencia:refs,...extra}).success);
+ assert.ok(!videoConfigSchema.safeParse({audiosReferencia:[...refs,...refs]}).success);
+ assert.ok(!videoConfigSchema.safeParse({audiosReferencia:Array.from({length:4},(_,i)=>({id:audio.replace(/1$/,String(i+1))}))}).success);
+});
+test('Seedance 2.5 y 2.0 reciben audio_urls y el guion, sin enviar un ID de ElevenLabs',()=>{
+ for(const motor of ['seedance_2_5','seedance_2_0'] as const){
+  const cfg=videoConfigSchema.parse({motor,audiosReferencia:[{id:audio}]});
+  const r=pedidoHiggsfield(cfg,plan,{...clip,modelo:motor,segundos:8},'https://example.com/frame.png',['https://example.com/private-voice.wav']);
+  const body=r.body as Record<string,unknown>;assert.deepEqual(body.audio_urls,['https://example.com/private-voice.wav']);assert.equal(body.generate_audio,true);
+  assert.ok(r.body.prompt.includes(clip.frase));assert.ok(r.body.prompt.includes('audio references'));assert.ok(!Object.hasOwn(r.body,'voice_id'));
+  assert.throws(()=>pedidoHiggsfield(cfg,plan,{...clip,modelo:motor,segundos:8},'https://example.com/frame.png'),/Falta preparar/);
+  assert.throws(()=>pedidoHiggsfield(cfg,plan,{...clip,modelo:'kling_3',segundos:8},'https://example.com/frame.png',['https://example.com/private-voice.wav']),/requieren Seedance/);
+  const off=pedidoHiggsfield(cfg,plan,{...clip,modelo:motor,segundos:8,voz_off:true},'https://example.com/frame.png',['https://example.com/private-voice.wav']);
+  assert.ok(off.body.prompt.includes('OFF-CAMERA NARRATION SCRIPT: '+clip.frase));assert.ok(off.body.prompt.includes('mouth closed'));
+ }
 });
 test('el plan recibe dirección y motor elegidos, mantiene clips largos de Seedance y respeta narración completa',async()=>{
  const config=videoConfigSchema.parse({motor:'seedance_2_5',segundos:20,escena:'Junto a una ventana',vestuario:'Blazer azul',camara:'selfie',audioNarracion:audio,generarAudio:false});
@@ -46,6 +65,9 @@ test('Seedance recibe un cuerpo documentado y genera clips mudos para el montaje
 test('cambiar plan, audio o aprobación invalida clips; terminar un clip no invalida los demás',()=>{
  const doc:any={videos:{g:{plan,imagenes:[{archivo:'storage://frame',aprobada:true}]}},video_config:{g:videoConfigSchema.parse({})}};
  const rev=revisionVideo(doc,'g');doc.videos.g.clips=[{archivo:'storage://video'}];assert.equal(revisionVideo(doc,'g'),rev);
+ const legacyConfig={...doc.video_config.g};delete legacyConfig.audiosReferencia;
+ const legacyRevision=createHash('sha256').update(JSON.stringify([plan,legacyConfig,doc.videos.g.imagenes])).digest('hex');assert.equal(rev,legacyRevision,'an empty new field preserves existing paid clips');
+ doc.video_config.g.audiosReferencia=[{id:audio,nombre:'voz.wav'}];assert.notEqual(revisionVideo(doc,'g'),rev);doc.video_config.g.audiosReferencia=[];
  doc.video_config.g.audioNarracion=audio;assert.notEqual(revisionVideo(doc,'g'),rev);
  doc.video_config.g.audioNarracion=null;doc.videos.g.imagenes[0].aprobada=false;assert.notEqual(revisionVideo(doc,'g'),rev);
 });
@@ -54,11 +76,11 @@ test('un clip de una revisión anterior se rechaza antes de llamar al proveedor'
  await assert.rejects(()=>clipVideoJob(j,{cargarProyecto:async()=>({documento:{}})} as any),/cambiaron/);
 });
 test('la cola envía el clip una sola vez, retoma el request_id y guarda el MP4 en su guion',async()=>{
- const cfg=videoConfigSchema.parse({motor:'seedance_2_5',generarAudio:false}),doc:any={videos:{g:{plan,imagenes:[{archivo:'storage://'+audio,aprobada:true}]}},video_config:{g:cfg}};
+ const cfg=videoConfigSchema.parse({motor:'seedance_2_5',audiosReferencia:[{id:audio}]}),doc:any={videos:{g:{plan,imagenes:[{archivo:'storage://'+audio,aprobada:true}]}},video_config:{g:cfg}};
  const revision=revisionVideo(doc,'g'),calls:{url:string;body?:any;key?:string}[]=[],states:any[]=[],stored:any[]=[];
  const code=ts.transpile((await readFile('src/reels-higgsfield.ts','utf8')).replace(/^import .*$/gm,''),{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}).replace(/^export /gm,'');
- const db={from:(table:string)=>({select(){return this;},eq(){return this;},update(){return this;},maybeSingle:async()=>({data:{listo:true,marca_id:'brand',object_path:'private/file'},error:null}),then(resolve:any){return Promise.resolve({data:[],error:null}).then(resolve);}}),storage:{from:()=>({createSignedUrl:async()=>({data:{signedUrl:'https://example.com/private-frame'},error:null})})}};
- const env:any={z:(await import('zod')).z,createHash,Buffer,URL,AbortSignal,HttpError,modeloVideo,reservaVideo,promptVideo,sinGestos,videoConfigSchema,process:{env:{HF_CREDENTIALS:'test-only'}},
+ const db={from:(table:string)=>({select(){return this;},eq(){return this;},update(){return this;},maybeSingle:async()=>({data:{listo:true,marca_id:'brand',mime:'audio/wav',bytes:100,object_path:'private/file'},error:null}),then(resolve:any){return Promise.resolve({data:[],error:null}).then(resolve);}}),storage:{from:()=>({createSignedUrl:async()=>({data:{signedUrl:'https://example.com/private-frame'},error:null})})}};
+ const env:any={z:(await import('zod')).z,createHash,Buffer,URL,AbortSignal,HttpError,modeloVideo,reservaVideo,MAX_REFERENCE_AUDIO_BYTES,promptVideo,sinGestos,videoConfigSchema,process:{env:{HF_CREDENTIALS:'test-only'}},
   adminClient:()=>db,checked:(r:any)=>r.data,ProviderError:class extends Error{},saveJob:async(_j:any,s:any)=>{states.push(s);},storeFile:async(...args:any[])=>{stored.push(args);return audio;},
   fetch:async(input:string|URL,init:any={})=>{const url=String(input);calls.push({url,body:init.body&&JSON.parse(init.body),key:init.headers?.['Idempotency-Key']});
    return url.endsWith('/reference-to-video')?{ok:true,json:async()=>({request_id:'provider-1',status:'queued'})}:url.includes('/status')?{ok:true,json:async()=>({status:'completed',video:{url:'https://example.com/out.mp4'}})}:{ok:true,headers:new Headers(),body:(async function*(){yield Buffer.from('0000ftypmp42');})()};}
@@ -67,6 +89,7 @@ test('la cola envía el clip una sola vez, retoma el request_id y guarda el MP4 
  const job:any={id:'job-1',marca_id:'brand',lease_token:'lease',payload:{proyecto:'p',guion:'g',indice:0,revision,configuracion:cfg,plan,clip,imagen:'storage://'+audio}};
  const h={cargarProyecto:async()=>({documento:doc}),actualizarProyecto:async(_p:any,fn:any)=>fn(doc),ahora:()=>''};
  await env.clipWorker(job,h);assert.equal(states[0].estado,'waiting');assert.equal(job.provider_id,'provider-1');
+ assert.deepEqual(Array.from(calls[0]!.body.audio_urls),['https://example.com/private-frame']);assert.equal(calls[0]!.body.generate_audio,true);
  await env.clipWorker(job,h);assert.equal(calls.filter(c=>c.body).length,1);assert.equal(calls[0]!.key,'job-1');assert.ok(calls[1]!.url.includes('provider-1/status'));
  assert.equal(stored.length,1);assert.equal(stored[0][2],'video/mp4');assert.equal(doc.videos.g.clips[0].revision,revision);assert.equal(states[1].estado,'succeeded');
 });
@@ -75,6 +98,8 @@ test('la narración de otra marca no puede adjuntarse a la configuración',async
  const w:any={id:'u',role:'editor',db:{from:(table:string)=>({select(){return this;},eq(){return this;},single:async()=>({data:table==='marcas'?{id:'brand',archivada:false}:{listo:true,marca_id:'other',mime:'audio/mpeg'},error:null})})}};
  const row={id:'p',marca_id:'brand',documento:{analisis:{guiones:[{id:'g'}]}}};
  await assert.rejects(()=>videoRoute(w,row,'video-config',{guion:'g',configuracion:{audioNarracion:audio,generarAudio:false}},{actualizarProyecto:async()=>{wrote=true;}} as any),/Archivo no disponible/);
+ assert.equal(wrote,false);
+ await assert.rejects(()=>videoRoute(w,row,'video-config',{guion:'g',configuracion:{audiosReferencia:[{id:audio}]}},{actualizarProyecto:async()=>{wrote=true;}} as any),/Archivo no disponible/);
  assert.equal(wrote,false);
 });
 test('los archivos de voz deben corresponder a su formato y no pueden ser HTML renombrado',()=>{

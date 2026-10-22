@@ -23,8 +23,12 @@ try{
  check(await client.storage.from('estudio').uploadToSignedUrl(signed.path,signed.token,wav,{contentType:'audio/wav'}));await api('assets/finalize',{id:fileId});
  await api('reels/proyectos/'+pid+'/video-config',{guion:'g',configuracion:{motor:'seedance_2_5',segundos:20,escena:'Una oficina',audioNarracion:fileId,generarAudio:false}});
  const saved=await api('reels/proyectos?id='+pid);assert.equal(saved.video_config.g.audioNarracion,fileId);assert.equal(saved.video_config.g.audioNombre,'narracion.wav');assert.equal(saved.video_config.g.motor,'seedance_2_5');
+ await api('reels/proyectos/'+pid+'/video-config',{guion:'g',configuracion:{motor:'seedance_2_5',audiosReferencia:[{id:fileId,nombre:'nombre no confiable'}]}});
+ const referenced=await api('reels/proyectos?id='+pid);assert.deepEqual(referenced.video_config.g.audiosReferencia,[{id:fileId,nombre:'narracion.wav'}]);assert.equal(referenced.video_config.g.audioNarracion,null);assert.equal(referenced.video_config.g.generarAudio,true);
+ await api('reels/proyectos/'+pid+'/video-config',{guion:'g',configuracion:{motor:'seedance_2_5',audiosReferencia:[]}});
+ assert.deepEqual((await api('reels/proyectos?id='+pid)).video_config.g.audiosReferencia,[]);
  const ref=await api('assets/sign',{id:fileId});const bytes=await fetch(ref.url);assert.ok(bytes.ok);assert.deepEqual(Buffer.from(await bytes.arrayBuffer()),wav);
- console.log('Live Supabase/API: signed audio upload, MIME validation, persistent configuration and private playback URL: OK.');
+ console.log('Live Supabase/API: signed audio upload, MIME validation, narration and voice references, canonical filenames, removal, persistence and private playback URL: OK.');
 }finally{
  await client.auth.signOut().catch(()=>{});
  if(userId)await db.from('miembros').update({activo:false}).eq('user_id',userId);

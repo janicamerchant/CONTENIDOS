@@ -10,7 +10,7 @@ import {authorizeBrand,HttpError,type Identity} from './auth.js';
 import {checked,storeFile,readyFile} from './library.js';
 import {saveJob,ProviderError} from './generation.js';
 import {MAX_CLIPS,MODELOS_CLIP,revisarPlan,soloHablado,type PlanVideo} from '../shared/ugc.js';
-import {videoConfigSchema,instruccionesVideo} from './video-settings.js';
+import {videoConfigSchema,instruccionesVideo,validarReferenciasAudio} from './video-settings.js';
 import {modeloVideo,type ConfigVideo} from '../shared/video-config.js';
 import {videoActions} from './reels-higgsfield.js';
 
@@ -163,6 +163,7 @@ export async function videoRoute(w:Identity,row:any,action:string,b:any,h:Ayudas
  if(action==='video-config'){
   const d=z.object({guion:z.string().max(16),configuracion:videoConfigSchema}).parse(b);
   const g=guionDe(row.documento,d.guion),marca=g.cliente_id||row.marca_id;await authorizeBrand(w,marca,true);
+  await validarReferenciasAudio(w,d.configuracion,marca);
   if(d.configuracion.audioNarracion){const f=await readyFile(w,d.configuracion.audioNarracion,marca);if(!f.mime.startsWith('audio/'))throw new HttpError(400,'Selecciona un archivo de audio.');d.configuracion.audioNombre=f.nombre;}
   await h.actualizarProyecto(row.id,doc=>{const v=doc.videos?.[g.id],old=doc.video_config?.[g.id]||v?.configuracion;
    if(v&&(old?.formato||'9:16')!==d.configuracion.formato)for(const img of v.imagenes||[])if(img)img.aprobada=false;
@@ -172,6 +173,7 @@ export async function videoRoute(w:Identity,row:any,action:string,b:any,h:Ayudas
   const d=z.object({idempotencyKey:key,guion:z.string().max(16),persona:z.string().regex(/^[a-z0-9-]{1,64}$/),indicaciones:z.string().max(4000).default(''),configuracion:videoConfigSchema.optional()}).parse(b);
   const g=guionDe(row.documento,d.guion),marca=g.cliente_id||row.marca_id;await authorizeBrand(w,marca,true);await personaDeMarca(marca,d.persona);
   const config=d.configuracion||videoConfigSchema.parse(row.documento.video_config?.[g.id]||{});
+  await validarReferenciasAudio(w,config,marca);
   if(config.audioNarracion){const f=await readyFile(w,config.audioNarracion,marca);if(!f.mime.startsWith('audio/'))throw new HttpError(400,'Selecciona un audio.');}
   await h.actualizarProyecto(row.id,doc=>{doc.video_config??={};doc.video_config[g.id]=config;});
   await h.encolar(w.id,marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'plan_video',proyecto:row.id,guion:g.id,persona:d.persona,indicaciones:d.indicaciones,configuracion:config},lamina:g.id}]);

@@ -1,7 +1,7 @@
 // Pestaña Reels del Estudio (portada del Generador de Reels): video largo → guiones, reels → transcripción,
 // clientes y estilos, historial y proyecto. Los clientes son las marcas del Estudio. Todo lo pesado va a la cola (/api/reels/*).
 import {promptVideo,palabras,MAX_PALABRAS} from '../shared/ugc.ts';
-import {VIDEO_MODELS,VIDEO_DEFAULTS,modeloVideo,reservaVideo} from '../shared/video-config.ts';
+import {VIDEO_MODELS,VIDEO_DEFAULTS,modeloVideo,reservaVideo,MAX_AUDIO_REFERENCES,MAX_REFERENCE_AUDIO_BYTES} from '../shared/video-config.ts';
 let request,uploadBlob,uploadSigned,resolve,role;
 let CLIENTES=[],CONFIG={},PERSONAS=null;
 const $=(s,el=document)=>el.querySelector(s);
@@ -394,7 +394,7 @@ async function abrirVideo(pid,gid){
    const g=guiones.find(g=>g.id===$('#rl-video-guion').value),caja=$('#rl-video-trabajo');
    caja.innerHTML=`<details class="rl-video-guion"><summary>Ver guion</summary><div class="rl-guion">${esc(sinPretitulos(g.guion))}</div></details>${videoHtml(p,g)}`;
    $('[data-video]',caja).open=true;
-   activarVideos(pid,caja,()=>{if(turno===videoCarga&&$('#rl-video-guion')?.value===g.id)abrirVideo(pid,g.id);});
+   activarVideos(pid,caja,()=>{if(turno===videoCarga&&$('#rl-video-guion')?.value===g.id)abrirVideo(pid,g.id);},p);
   };
   $('#rl-video-guion').onchange=pintar;pintar();
  }catch(e){
@@ -431,6 +431,7 @@ async function descargarWord(p,guiones,boton){
 // ---------- video UGC de un guion (src/reels-video.ts): persona → plan de clips con Claude → revisión
 async function cargarPersonas(){if(!PERSONAS)PERSONAS=await request('/api/people').catch(()=>[]);return PERSONAS;}
 const CAMPOS_CLIP=[['frase','Frase (lo que dice; [gestos] entre corchetes)',3],['que_se_ve','Qué se ve',1],['prompt_imagen','Prompt de imagen (inglés)',4],['camera','Cámara',1],['movement','Movimiento',1],['micro_action','Gesto',1]];
+function referenciasAudioHtml(refs){return refs.length?refs.map(r=>`<div class="rl-audio-ref"><p class="rl-meta">${esc(r.nombre)}</p><audio controls preload="none" data-ref="storage://${esc(r.id)}"></audio><button type="button" class="btn ghost sm" data-v-referencia-quitar="${esc(r.id)}">Quitar referencia</button></div>`).join(''):'<p class="rl-meta">Sin audios de referencia.</p>';}
 function configuracionHtml(p,g,v,personas){
  const c={...VIDEO_DEFAULTS,...(p.video_config?.[g.id]||v?.configuracion)},m=modeloVideo(c.motor);
  const opciones=(k,lista)=>`<label class="rl-campo"><span class="lbl">${esc(k[1])}</span><select class="inp" data-v-cfg="${k[0]}">${lista.map(([val,label])=>`<option value="${esc(val)}" ${String(c[k[0]])===String(val)?'selected':''}>${esc(label)}</option>`).join('')}</select></label>`;
@@ -451,7 +452,12 @@ function configuracionHtml(p,g,v,personas){
    ${opciones(['camara','Cámara'],[['','Elegir según el guion'],['fija en trípode','Fija en trípode'],['selfie','Selfie'],['en mano, movimiento suave','En mano, movimiento suave']])}
    ${texto('tono','Tono / energía','Ej.: cercana, segura, reflexiva')}${texto('acento','Acento de la voz generada','Vacío: usar el acento de la persona')}
   </div><label class="rl-campo"><span class="lbl">Otras indicaciones</span><textarea class="inp" rows="3" maxlength="4000" data-v-cfg="indicaciones">${esc(c.indicaciones)}</textarea></label></fieldset>
-  <fieldset><legend>Tu narración completa</legend><p class="rl-meta">Sube el audio completo del guion. Será la pista de voz del montaje final; los clips se generarán sin hablar. MP3, WAV, M4A, OGG, WebM o FLAC, hasta 50 MB.</p>
+  <fieldset><legend>Audios de referencia de voz</legend><p class="rl-meta">Sube muestras cortas de la misma voz, preferiblemente sin música. Seedance las usará para guiar la voz y el tono al decir el guion de cada clip. Hasta ${MAX_AUDIO_REFERENCES} audios, de 15 MB cada uno: MP3, WAV, M4A, OGG, WebM o FLAC.</p>
+   <input class="inp" type="file" multiple data-v-audio-referencia accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.flac">
+   <div data-v-referencias data-items="${esc(JSON.stringify(c.audiosReferencia))}">${referenciasAudioHtml(c.audiosReferencia)}</div>
+   <p class="rl-meta" data-v-referencia-info></p><p class="rl-meta" data-v-referencia-estado role="status"></p>
+  </fieldset>
+  <fieldset><legend>Tu narración completa</legend><p class="rl-meta">Sube el audio completo del guion. Será la pista de voz del montaje final; los clips se generarán sin hablar. Usa esta opción o las referencias de voz. MP3, WAV, M4A, OGG, WebM o FLAC, hasta 50 MB.</p>
    <input class="inp" type="file" data-v-audio accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.flac">
    <div data-v-audio-datos data-id="${esc(c.audioNarracion||'')}" data-nombre="${esc(c.audioNombre)}">
     <p class="rl-meta" data-v-audio-nombre>${esc(c.audioNombre||'Sin narración cargada.')}</p><audio controls preload="metadata" data-ref="${c.audioNarracion?'storage://'+esc(c.audioNarracion):''}" ${c.audioNarracion?'':'hidden'}></audio>
@@ -464,7 +470,7 @@ function configuracionHtml(p,g,v,personas){
 }
 function leerConfiguracion(caja){
  const zona=$('[data-v-config]',caja),c={};for(const el of $$('[data-v-cfg]',zona))c[el.dataset.vCfg]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;
- const audio=$('[data-v-audio-datos]',zona);return {...c,audioNarracion:audio.dataset.id||null,audioNombre:audio.dataset.nombre||''};
+ const audio=$('[data-v-audio-datos]',zona);return {...c,audioNarracion:audio.dataset.id||null,audioNombre:audio.dataset.nombre||'',audiosReferencia:JSON.parse($('[data-v-referencias]',zona).dataset.items)};
 }
 function videoHtml(p,g){
  const v=p.videos?.[g.id],marca=g.cliente_id||p.marca,personas=(PERSONAS||[]).filter(x=>x.brands.includes(marca));
@@ -510,7 +516,7 @@ function leerPlan(caja){
  return {escena:val('escena'),sujeto:val('sujeto'),voice:val('voice'),accent:val('accent'),
   clips:$$('[data-clip]',caja).map(el=>{const c={};for(const x of $$('[data-c]',el))c[x.dataset.c]=x.type==='checkbox'?x.checked:x.dataset.c==='segundos'?Number(x.value):x.value;return c;})};
 }
-function activarVideos(pid,v,recargar){
+function activarVideos(pid,v,recargar,proyecto){
  for(const caja of $$('[data-video]',v)){
   const actualizarMedios=()=>{const refs=$$('[data-ref]',caja).filter(i=>i.dataset.ref);if(refs.length)resolve(refs.map(i=>i.dataset.ref)).then(urls=>refs.forEach((media,i)=>{media.src=urls[i]||'';})).catch(()=>{});};
   actualizarMedios();
@@ -521,10 +527,21 @@ function activarVideos(pid,v,recargar){
   const gid=caja.dataset.video,jobs=$('.rl-jobs',caja);
   for(const el of $$('[data-v-plan],[data-c]',caja))el.addEventListener('input',()=>{caja.dataset.planDirty='1';});
   const cfg=$('[data-v-config]',caja),estado=$('[data-v-config-estado]',cfg);
+  const refDatos=$('[data-v-referencias]',cfg),refArchivo=$('[data-v-audio-referencia]',cfg),refEstado=$('[data-v-referencia-estado]',cfg);
+  const referencias=()=>JSON.parse(refDatos.dataset.items);
+  const actualizarAudio=()=>{
+   const refs=referencias(),narracion=!!$('[data-v-audio-datos]',cfg).dataset.id,m=modeloVideo($('[data-v-cfg="motor"]',cfg).value);
+   refArchivo.disabled=!m.vozReferencia||narracion||refs.length>=MAX_AUDIO_REFERENCES;
+   $('[data-v-audio]',cfg).disabled=refs.length>0;
+   $('[data-v-cfg="generarAudio"]',cfg).disabled=narracion||refs.length>0;
+   $('[data-v-referencia-info]',cfg).textContent=!m.vozReferencia?'Este modelo no admite referencias de voz. Elige Seedance o quita las referencias guardadas.':narracion?'Para usar muestras de voz, quita primero la narración completa.':refs.length?`${refs.length} de ${MAX_AUDIO_REFERENCES} referencias. Para usar una narración completa, quita primero estas muestras.`:'La referencia guía la voz generada; la narración completa se añade al montaje final.';
+  };
+  const mostrarReferencias=()=>{refDatos.innerHTML=referenciasAudioHtml(referencias());actualizarAudio();actualizarMedios();};
   const guardarConfiguracion=async(guardarPlan=false)=>{
    for(const el of $$('input,select,textarea',cfg))if(!el.checkValidity()){el.reportValidity();throw new Error('Revisa los campos de configuración.');}
    const configuracion=leerConfiguracion(caja);
-   await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-config`,{guion:gid,configuracion});
+   const saved=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-config`,{guion:gid,configuracion});
+   proyecto.video_config??={};proyecto.video_config[gid]=saved.configuracion||configuracion;
    if(guardarPlan&&$('[data-v-plan]',caja))await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-plan`,{guion:gid,plan:leerPlan(caja)});
    estado.textContent='Configuración guardada.';cfg.dataset.dirty='';return configuracion;
   };
@@ -532,6 +549,7 @@ function activarVideos(pid,v,recargar){
   const motor=$('[data-v-cfg="motor"]',cfg);
   motor.onchange=e=>{const m=modeloVideo(motor.value),dur=$('[data-v-cfg="segundos"]',cfg);dur.min=m.min;dur.max=m.max;dur.value=Math.min(m.max,Math.max(m.min,Number(dur.value)||8));$('[data-v-modelo-info]',cfg).textContent=m.descripcion;
    $('[data-v-cfg="resolucion"]',cfg).disabled=!m.resoluciones.length;
+   actualizarAudio();
    if(e)for(const el of $$('[data-clip]',caja)){$('[data-c="modelo"]',el).value=m.id;const segundos=$('[data-c="segundos"]',el);segundos.min=m.min;segundos.max=m.max;segundos.value=Math.max(m.min,Math.min(m.max,Number(segundos.value)));caja.dataset.planDirty='1';}
   };motor.onchange();
   for(const el of $$('[data-c="modelo"]',caja))el.onchange=()=>{const m=modeloVideo(el.value),dur=$('[data-c="segundos"]',el.closest('[data-clip]'));dur.min=m.min;dur.max=m.max;};
@@ -547,7 +565,7 @@ function activarVideos(pid,v,recargar){
     const id=await uploadBlob(new Blob([file],{type:mime}),file.name,{brand:cfg.dataset.marca});
     if(!caja.isConnected)return;
     cfg.dataset.dirty='1';audioDatos.dataset.id=id;audioDatos.dataset.nombre=file.name;$('[data-v-audio-nombre]',cfg).textContent=file.name;
-    const player=$('audio',cfg);player.dataset.ref='storage://'+id;player.hidden=false;
+    const player=$('audio',audioDatos);player.dataset.ref='storage://'+id;player.hidden=false;
     const sound=$('[data-v-cfg="generarAudio"]',cfg);sound.checked=false;sound.disabled=true;$('[data-v-audio-quitar]',cfg).hidden=false;
     $('[data-v-cfg="tipo"]',cfg).value='apoyo';
     await guardarConfiguracion(true);actualizarMedios();audioEstado.textContent='Narración subida y guardada. Se usará en el montaje final.';if($('[data-v-plan]',caja))recargar();
@@ -555,6 +573,32 @@ function activarVideos(pid,v,recargar){
   };
   $('[data-v-audio-quitar]',cfg).onclick=async e=>{e.target.disabled=true;audioDatos.dataset.id='';audioDatos.dataset.nombre='';
    try{await guardarConfiguracion(true);recargar();}catch(err){audioEstado.textContent=err.message;e.target.disabled=false;}};
+  refArchivo.onchange=async()=>{
+   const files=[...refArchivo.files];if(!files.length)return;
+   const before=referencias(),controls=$$('button,input,select,textarea',caja).map(el=>({el,disabled:el.disabled}));controls.forEach(({el})=>{el.disabled=true;});
+   refEstado.textContent='Subiendo referencias de voz…';
+   try{
+    if(before.length+files.length>MAX_AUDIO_REFERENCES)throw new Error(`Puedes guardar hasta ${MAX_AUDIO_REFERENCES} audios de referencia.`);
+    const tipos={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
+    for(const file of files){if(file.size>MAX_REFERENCE_AUDIO_BYTES)throw new Error('Cada referencia debe pesar como máximo 15 MB.');if(!tipos[file.name.split('.').pop().toLowerCase()])throw new Error('Usa MP3, WAV, M4A, OGG, WebM o FLAC.');}
+    for(const file of files){
+     const mime=tipos[file.name.split('.').pop().toLowerCase()],id=await uploadBlob(new Blob([file],{type:mime}),file.name,{brand:cfg.dataset.marca});
+     if(!caja.isConnected)return;
+     const prior=referencias();refDatos.dataset.items=JSON.stringify([...prior,{id,nombre:file.name}]);
+     $('[data-v-cfg="generarAudio"]',cfg).checked=true;
+     try{await guardarConfiguracion();}catch(err){refDatos.dataset.items=JSON.stringify(prior);throw err;}
+     mostrarReferencias();refArchivo.disabled=true;$$('button',refDatos).forEach(b=>{b.disabled=true;});
+    }
+    refEstado.textContent='Referencias guardadas. Se enviarán a Seedance al generar cada clip.';
+   }catch(err){refEstado.textContent=err.message;}finally{refArchivo.value='';controls.forEach(({el,disabled})=>{el.disabled=disabled;});mostrarReferencias();}
+  };
+  refDatos.onclick=async e=>{
+   const button=e.target.closest('[data-v-referencia-quitar]');if(!button)return;
+   const before=referencias(),controls=$$('button,input,select,textarea',caja).map(el=>({el,disabled:el.disabled}));controls.forEach(({el})=>{el.disabled=true;});refDatos.dataset.items=JSON.stringify(before.filter(r=>r.id!==button.dataset.vReferenciaQuitar));
+   try{await guardarConfiguracion();mostrarReferencias();refEstado.textContent='Referencia quitada y configuración guardada.';}
+   catch(err){refDatos.dataset.items=JSON.stringify(before);mostrarReferencias();refEstado.textContent=err.message;}
+   finally{controls.forEach(({el,disabled})=>{el.disabled=disabled;});actualizarAudio();}
+  };
   for(const b of $$('[data-v-planear]',caja))b.onclick=async()=>{
    const persona=$('[data-v-persona]',cfg).value;if(!persona){alert('Elige la persona.');return;}
    if(b.dataset.rehacer&&!confirm('¿Rehacer el plan? Se reemplaza el actual y se pierden tus cambios.'))return;b.disabled=true;
@@ -651,7 +695,7 @@ async function verProyecto(pid,filtro={}){
    seguir(d.grupo,caja,()=>verProyecto(pid,{...filtro,mantenerScroll:true}));}catch(e){caja.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);boton.disabled=false;}};
  $('#rl-mas').onclick=e=>pedir({},e.target,$('#rl-mas-jobs'));
  if(!a)return;
- activarVideos(pid,v,()=>verProyecto(pid,{...filtro,mantenerScroll:true}));
+ activarVideos(pid,v,()=>verProyecto(pid,{...filtro,mantenerScroll:true}),p);
  const pedirPDF=async(guiones,boton,caja)=>{boton.disabled=true;
   try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/entregables`,{idempotencyKey:crypto.randomUUID(),guiones,guia_entregable:$('#rl-guia-entregable').value});
    seguir(d.grupo,caja,()=>verProyecto(pid,{...filtro,mantenerScroll:true}));}catch(e){caja.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);boton.disabled=false;}};

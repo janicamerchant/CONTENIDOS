@@ -6,11 +6,13 @@ export const VIDEO_MODELS=[
 ] as const;
 export type MotorVideo=typeof VIDEO_MODELS[number]['id'];
 export const modeloVideo=(id:string)=>VIDEO_MODELS.find(m=>m.id===id);
+export const MAX_AUDIO_REFERENCES=3;
+export const MAX_REFERENCE_AUDIO_BYTES=15*1024*1024;
 export type ConfigVideo={motor:MotorVideo;resolucion:'480p'|'720p'|'1080p';formato:'9:16'|'16:9'|'1:1';segundos:number;
  tipo:'habla'|'mixto'|'apoyo';ritmo:'pausado'|'natural'|'agil';escena:string;vestuario:string;iluminacion:string;encuadre:string;camara:string;tono:string;acento:string;
- generarAudio:boolean;audioNarracion:string|null;audioNombre:string;indicaciones:string};
+ generarAudio:boolean;audioNarracion:string|null;audioNombre:string;audiosReferencia:{id:string;nombre:string}[];indicaciones:string};
 export const VIDEO_DEFAULTS:ConfigVideo={motor:'seedance_2_0',resolucion:'720p',formato:'9:16',segundos:8,tipo:'habla',ritmo:'natural',
- escena:'',vestuario:'',iluminacion:'',encuadre:'',camara:'',tono:'',acento:'',generarAudio:true,audioNarracion:null,audioNombre:'',indicaciones:''};
+ escena:'',vestuario:'',iluminacion:'',encuadre:'',camara:'',tono:'',acento:'',generarAudio:true,audioNarracion:null,audioNombre:'',audiosReferencia:[],indicaciones:''};
 // Conservative budget reservation, not a price quote. Rates deliberately exclude discounts.
 // Catalog pricing: https://open.higgsfield.ai/models/bytedance/seedance-2.5/text-to-video/playground
 export function reservaVideo(c:ConfigVideo,segundos:number){

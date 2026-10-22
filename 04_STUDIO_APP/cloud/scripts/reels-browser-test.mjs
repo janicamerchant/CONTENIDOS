@@ -40,7 +40,7 @@ const request=async(path,body)=>{
  if(path.startsWith('/api/reels/trabajos?'))return {done:true,items:[{op:'plan_video',estado:'succeeded',proyecto:'p1'}]};
  throw new Error('Unexpected fixture request: '+path);
 };
-setupReels({request,role:new URLSearchParams(location.search).get('role')||'admin',uploadBlob:async(blob,name,scope)=>{fixture.upload={name,scope,mime:blob.type};return '00000000-0000-4000-8000-000000000001';},resolve:async refs=>refs.map(()=>'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="160"><rect width="90" height="160" fill="tan"/></svg>'))});`;
+setupReels({request,role:new URLSearchParams(location.search).get('role')||'admin',uploadBlob:async(blob,name,scope)=>{fixture.upload={name,scope,mime:blob.type};fixture.uploadCount=(fixture.uploadCount||0)+1;return '00000000-0000-4000-8000-'+String(fixture.uploadCount).padStart(12,'0');},resolve:async refs=>refs.map(()=>'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="160"><rect width="90" height="160" fill="tan"/></svg>'))});`;
 const server=createServer((req,res)=>{
  if(req.url==='/reels.js'){res.setHeader('Content-Type','text/javascript');res.end(module);return;}
  res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<style>${css.join('\n')}#view-reels{height:100vh}</style><main id="view-reels"></main><script type="module">${bootstrap}</script>`);
@@ -69,6 +69,24 @@ try{
  await page.locator('[data-v-cfg="segundos"]').fill('20');
  await page.locator('[data-v-cfg="escena"]').fill('Mi oficina');
  await page.locator('[data-v-cfg="vestuario"]').fill('Blazer azul');
+ await page.locator('[data-v-audio-referencia]').setInputFiles(['calmada.wav','conversacional.wav'].map(name=>({name,mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')})));
+ await page.getByText('Referencias guardadas.',{exact:false}).waitFor();
+ assert.equal(await page.locator('[data-v-referencia-quitar]').count(),2);
+ assert.equal(await page.locator('[data-v-audio]').isDisabled(),true);assert.equal(await page.locator('[data-v-cfg="generarAudio"]').isChecked(),true);
+ const refs=await page.evaluate(()=>fixture.writes.filter(w=>w.path.endsWith('/video-config')).at(-1).body.configuracion.audiosReferencia);
+ assert.deepEqual(refs.map(r=>r.nombre),['calmada.wav','conversacional.wav']);
+ assert.equal(await page.locator('[data-v-referencias] audio[data-ref]').count(),2);
+ await page.locator('[data-v-audio-referencia]').setInputFiles(['extra1.wav','extra2.wav'].map(name=>({name,mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')})));
+ await page.getByText('Puedes guardar hasta 3 audios de referencia.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>fixture.uploadCount),2);
+ await page.locator('[data-v-cfg="motor"]').selectOption('kling_3');assert.equal(await page.locator('[data-v-audio-referencia]').isDisabled(),true);
+ await page.locator('[data-v-cfg="motor"]').selectOption('seedance_2_5');
+ await page.locator('#rl-video-guion').selectOption('g2');await page.locator('#rl-video-guion').selectOption('g1');
+ await page.waitForFunction(()=>document.querySelectorAll('[data-v-referencia-quitar]').length===2);
+ assert.equal(await page.locator('[data-v-audio]').isDisabled(),true);
+ await page.locator('[data-v-audio-referencia]').scrollIntoViewIfNeeded();await page.screenshot({path:'artifacts/reels-navigation/referencias-de-voz.png'});
+ await page.locator('[data-v-referencia-quitar]').first().click();await page.waitForFunction(()=>document.querySelectorAll('[data-v-referencia-quitar]').length===1);
+ await page.locator('[data-v-referencia-quitar]').click();await page.waitForFunction(()=>document.querySelectorAll('[data-v-referencia-quitar]').length===0);
+ assert.equal(await page.locator('[data-v-audio]').isEnabled(),true);
  await page.locator('[data-v-audio]').setInputFiles({name:'mi-voz.wav',mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')});
  await page.getByText('Narración subida y guardada.',{exact:false}).waitFor();
  assert.equal(await page.locator('[data-v-cfg="generarAudio"]').isChecked(),false);

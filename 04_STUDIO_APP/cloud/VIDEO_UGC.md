@@ -16,6 +16,14 @@ El selector muestra si la clave de Higgsfield está configurada; el saldo y acce
 - https://open.higgsfield.ai/models/bytedance/seedance-2.0/reference-to-video/api-reference
 - https://open.higgsfield.ai/models/kling-video/v3.0/std/image-to-video/api-reference
 
+## Audios de referencia de voz
+
+En la configuración del video puedes subir hasta tres muestras de la misma voz, de hasta 15 MB cada una. Se admiten MP3, WAV, M4A, OGG, WebM y FLAC. Usa grabaciones cortas y limpias, sin música; con Seedance 2.0 procura que sumen hasta 15 s y con 2.5 hasta 30 s. Cada muestra tiene reproductor y botón para quitarla; se guarda automáticamente por guion. No son IDs de ElevenLabs.
+
+Seedance 2.5 y 2.0 reciben las muestras como `audio_urls` mediante enlaces firmados temporales de Storage privado. La voz generada se guía con ellas y el diálogo sigue siendo el guion de cada clip. Kling no admite este campo en la integración. La aplicación comprueba marca, archivo disponible, tipo y tamaño al guardar y de nuevo antes de generar; no guarda enlaces firmados en la configuración.
+
+Las referencias requieren sonido generado y se usan como alternativa a la narración completa. Al cambiar o quitar muestras, los clips anteriores quedan obsoletos y hay que regenerarlos. Se pueden aplicar al plan existente sin rehacer las imágenes. La API de Higgsfield se contrastó de nuevo el 22-10-2026; la voz generada puede variar respecto a la muestra y la fidelidad requiere una prueba real del modelo.
+
 ## Narración completa
 
 1. Sube tu grabación del guion (MP3, WAV, M4A, OGG, WebM o FLAC, hasta 50 MB). Se guarda en Storage privado y se puede escuchar en el formulario.
