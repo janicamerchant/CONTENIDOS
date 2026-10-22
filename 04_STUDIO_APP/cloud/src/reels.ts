@@ -8,14 +8,14 @@ import {adminClient} from './config.js';
 import {authorizeBrand,HttpError,type Identity} from './auth.js';
 import {checked,readyFile,storeFile} from './library.js';
 import {saveJob,ProviderError} from './generation.js';
-import {planVideoJob,videoRoute,type Ayudas} from './reels-video.js';
+import {planVideoJob,imagenClipJob,videoRoute,type Ayudas} from './reels-video.js';
 import {brandingDe,planAuto,validarPlan,html,renderPdf,contarPaginas,ESQUEMA_PLAN,GUIA_DIRECTOR,type Contenido} from './reels-pdf.js';
 
 const MODELO='claude-opus-5-5';
 const MEDIA='reels-media';
 const MAX_PAGINAS=4;
 // Reserva de presupuesto por trabajo (US$); al terminar se registra el coste calculado.
-const RESERVA:Record<string,number>={transcribir:1,guiones:3,entregable:2,sugerir:0.5,muestra:1,plan_video:0.5};
+const RESERVA:Record<string,number>={transcribir:1,guiones:3,entregable:2,sugerir:0.5,muestra:1,plan_video:0.5,imagen_clip:0.1};
 const ESTRUCTURA_BASE=`# ESTRUCTURA DE GUION (EJEMPLO — REEMPLÁZALA POR LA TUYA)
 
 1. GANCHO (0-3 s): una frase que detenga el scroll.
@@ -160,7 +160,7 @@ function transcripcionConTiempos(t:any){
 
 const digest=(x:any)=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function childKey(group:string,index:number){const h=digest([group,index]).slice(0,32);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20)}`;}
-const motorDe=(op:string,payload:any)=>op==='transcribir'?(payload.fuente?.clase==='url'&&plataforma(payload.fuente.url)!=='directo'?'apify+deepgram':'deepgram'):MODELO;
+const motorDe=(op:string,payload:any)=>op==='imagen_clip'?'apimart:gpt-image-2':op==='transcribir'?(payload.fuente?.clase==='url'&&plataforma(payload.fuente.url)!=='directo'?'apify+deepgram':'deepgram'):MODELO;
 type Hijo={payload:any;lamina?:string};
 // Encola un lote atómico (máx. 10 por lote). Todos comparten grupo para que la interfaz siga su avance.
 async function encolar(actor:string,marca:string,grupo:string,keyBase:string,hijos:Hijo[]){
@@ -388,7 +388,7 @@ async function muestraJob(j:any){
 const ayudas:Ayudas={claudeJson,cargarProyecto,actualizarProyecto,clienteServidor,paso,encolar,sinPretitulos,ahora};
 export async function reelsJob(j:any,_w:Identity){
  const op=j.payload?.op;
- if(op==='plan_video')return planVideoJob(j,ayudas);
+ if(op==='plan_video')return planVideoJob(j,ayudas);if(op==='imagen_clip')return imagenClipJob(j,ayudas);
  if(op==='transcribir')return transcribirJob(j);if(op==='guiones')return guionesJob(j);if(op==='entregable')return entregableJob(j);
  if(op==='sugerir')return sugerirJob(j);if(op==='muestra')return muestraJob(j);throw new HttpError(400,'Trabajo de Reels desconocido.');
 }
@@ -476,7 +476,7 @@ export async function reelsRoute(w:Identity,route:string,method:string,url:URL,b
   if(method!=='POST'||!id)throw new HttpError(405,'Método no admitido.');
   const row=await escribirProyecto(w,id);
   if(action==='borrar'){checked(await adminClient().from('reels_proyectos').delete().eq('id',row.id));return {ok:true};}
-  if(action==='video'||action==='video-plan'){if(action==='video')requireAI();return videoRoute(w,row,action,b,ayudas);}
+  if(action?.startsWith('video')){if(action==='video')requireAI();return videoRoute(w,row,action,b,ayudas);}
   requireAI();const k=key.parse(b.idempotencyKey);
   if(action==='guiones'){
    const d=opcionesSchema.extend({cliente:z.string().min(1).max(64),puntos:z.array(z.number().int().min(0)).max(40).optional()}).parse(b);

@@ -21,7 +21,7 @@ export function sinPretitulos(t){
 }
 const nombreCliente=id=>(CLIENTES.find(c=>c.id===id)||{}).nombre||'';
 async function cargarClientes(){CLIENTES=await request('/api/reels/clientes');return CLIENTES;}
-const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video'};
+const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video',imagen_clip:'Imagen de clip'};
 
 const VISTA=`
 <div class="rl-wrap">
@@ -372,22 +372,30 @@ function videoHtml(p,g){
   <div class="rl-span2"><label class="lbl">Indicaciones (opcional)</label><input class="inp" data-v-indicaciones placeholder="Ej.: caminando por Brickell al atardecer, blazer azul"></div></div>`;
  if(!v)return `<details class="rl-video" data-video="${esc(g.id)}"><summary><b>Video UGC</b> <span class="rl-meta">· convertir este guion en un reel con la persona de la marca</span></summary>${elegir}
   <div class="rl-acciones"><button class="btn accent sm" data-v-planear ${personas.length?'':'disabled'}>Planear video con Claude</button></div><div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
- const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona);
+ const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona),imgs=v.imagenes||[],base=imgs[0];
+ const faltan=plan.clips.map((_,i)=>i).filter(i=>i>0&&!imgs[i]);
+ const imagen=i=>{const m=imgs[i],bloqueada=i>0&&!base?.aprobada;
+  return `<div class="rl-img">${m?`<img data-ref="${esc(m.archivo)}" alt="Imagen del clip ${i+1}">`:`<div class="rl-img-vacia">${bloqueada?'Aprueba primero la imagen del clip 1':'Sin imagen'}</div>`}
+   ${m&&i>0&&m.base!==base?.archivo?'<div class="rl-err">Se hizo con otra versión del clip 1: rehazla.</div>':''}
+   <div class="rl-acciones"><button class="btn ghost sm" data-v-img="${i}" ${bloqueada?'disabled':''}>${m?'Rehacer imagen':'Generar imagen'}</button>
+    ${m?`<label class="rl-chip"><input type="checkbox" data-v-aprobar="${i}" ${m.aprobada?'checked':''}> Aprobada</label>`:''}</div></div>`;};
  return `<details class="rl-video" data-video="${esc(g.id)}" open><summary><b>Video UGC</b> <span class="rl-meta">· ${plan.clips.length} clips · ${esc(persona?.name||v.persona)} · plan del ${esc(v.editado||v.creado)}</span></summary>
   ${v.avisos?.length?`<div class="rl-avisos">${v.avisos.map(a=>`<div class="rl-err">⚠ ${esc(a)}</div>`).join('')}</div>`:''}
   <label class="lbl">Escena</label><textarea class="inp" rows="2" data-v-plan="escena">${esc(plan.escena)}</textarea>
   <div class="rl-row"><div><label class="lbl">Habla</label><select class="inp" data-v-plan="sujeto"><option value="she" ${plan.sujeto==='she'?'selected':''}>Ella (she)</option><option value="he" ${plan.sujeto==='he'?'selected':''}>Él (he)</option></select></div>
    <div class="rl-span2"><label class="lbl">Voz (igual en todos los clips)</label><input class="inp" data-v-plan="voice" value="${esc(plan.voice)}"></div></div>
   <label class="lbl">Acento (igual en todos los clips)</label><input class="inp" data-v-plan="accent" value="${esc(plan.accent)}">
+  <div class="rl-imagenes-cab"><p class="rl-meta">Imágenes de inicio (ApiMart, ~0,02 US$ cada una). El clip 1 sale de las fotos de ${esc(persona?.name||'la persona')}; los demás se derivan del clip 1 aprobado para que la cara no cambie. Guarda los cambios del plan antes de generar.</p>
+   ${faltan.length?`<button class="btn accent sm" data-v-imgs ${base?.aprobada?'':'disabled'}>Generar las imágenes de los demás clips (${faltan.length})</button>`:''}</div>
   ${plan.clips.map((c,i)=>`<div class="rl-clip" data-clip="${i}"><div class="rl-cab-punto"><h3>Clip ${i+1}</h3>
     <span class="rl-tag ${c.modelo==='omni'&&palabras(c.frase)>MAX_PALABRAS?'mal':''}">${palabras(c.frase)} palabras · ~${c.segundos} s</span></div>
    <div class="rl-row"><div><label class="lbl">Modelo</label><select class="inp" data-c="modelo"><option value="omni" ${c.modelo==='omni'?'selected':''}>Omni · habla a cámara</option><option value="grok" ${c.modelo==='grok'?'selected':''}>Grok · voz en off</option></select></div>
     <div><label class="lbl">Segundos</label><input class="inp" type="number" min="3" max="15" data-c="segundos" value="${c.segundos}"></div></div>
    ${CAMPOS_CLIP.map(([k,l,r])=>`<label class="lbl">${l}</label>${r>1?`<textarea class="inp" rows="${r}" data-c="${k}">${esc(c[k])}</textarea>`:`<input class="inp" data-c="${k}" value="${esc(c[k])}">`}`).join('')}
-   <details class="rl-prompt"><summary class="rl-meta">Ver el prompt de video que se enviará</summary><pre>${esc(promptVideo(plan,c))}</pre></details></div>`).join('')}
+   <details class="rl-prompt"><summary class="rl-meta">Ver el prompt de video que se enviará</summary><pre>${esc(promptVideo(plan,c))}</pre></details>${imagen(i)}</div>`).join('')}
   <div class="rl-acciones"><button class="btn accent sm" data-v-guardar>Guardar cambios del plan</button>
    <details class="rl-rehacer"><summary class="btn ghost sm">Rehacer el plan con Claude</summary>${elegir}<button class="btn ghost sm" data-v-planear>Rehacer plan (reemplaza el actual)</button></details></div>
-  <p class="rl-meta">Siguiente etapa: generar la imagen de inicio de cada clip para revisarla antes de pagar los clips de video.</p>
+  <p class="rl-meta">Siguiente etapa: con todas las imágenes aprobadas, generar los clips de video.</p>
   <div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
 }
 function leerPlan(caja){
@@ -403,6 +411,15 @@ function activarVideos(pid,v,recargar){
    if(b.closest('.rl-rehacer')&&!confirm('¿Rehacer el plan? Se reemplaza el actual y se pierden tus cambios.'))return;b.disabled=true;
    try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video`,{idempotencyKey:crypto.randomUUID(),guion:gid,persona,indicaciones:$('[data-v-indicaciones]',zona).value});seguir(d.grupo,jobs,recargar);}
    catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}};
+  const pedirImagenes=async(clips,b)=>{b.disabled=true;
+   try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-imagenes`,{idempotencyKey:crypto.randomUUID(),guion:gid,clips});seguir(d.grupo,jobs,recargar);}
+   catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}};
+  for(const b of $$('[data-v-img]',caja))b.onclick=()=>{const i=+b.dataset.vImg;if(i===0&&$$('[data-v-aprobar]',caja).length>1&&!confirm('Si rehaces el clip 1, las imágenes de los demás clips habrá que rehacerlas. ¿Seguir?'))return;pedirImagenes([i],b);};
+  const todas=$('[data-v-imgs]',caja);if(todas)todas.onclick=()=>{const clips=$$('[data-clip]',caja).map(el=>+el.dataset.clip).filter(i=>i>0&&!$('img[data-ref]',$(`[data-clip="${i}"]`,caja)));pedirImagenes(clips,todas);};
+  for(const c of $$('[data-v-aprobar]',caja))c.onchange=async()=>{c.disabled=true;
+   try{await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-aprobar`,{guion:gid,clip:+c.dataset.vAprobar,aprobada:c.checked});recargar();}
+   catch(e){alert(e.message);c.checked=!c.checked;c.disabled=false;}};
+  const refs=$$('img[data-ref]',caja);if(refs.length)resolve(refs.map(i=>i.dataset.ref)).then(urls=>refs.forEach((img,i)=>{img.src=urls[i]||'';})).catch(()=>{});
   const guardar=$('[data-v-guardar]',caja);
   if(guardar)guardar.onclick=async()=>{guardar.disabled=true;
    try{await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-plan`,{guion:gid,plan:leerPlan(caja)});recargar();}
