@@ -1,6 +1,7 @@
 // Pestaña Reels del Estudio (portada del Generador de Reels): video largo → guiones, reels → transcripción,
 // clientes y estilos, historial y proyecto. Los clientes son las marcas del Estudio. Todo lo pesado va a la cola (/api/reels/*).
 import {promptVideo,palabras,MAX_PALABRAS} from '../shared/ugc.ts';
+import {VIDEO_MODELS,VIDEO_DEFAULTS,modeloVideo,reservaVideo} from '../shared/video-config.ts';
 let request,uploadBlob,uploadSigned,resolve,role;
 let CLIENTES=[],CONFIG={},PERSONAS=null;
 const $=(s,el=document)=>el.querySelector(s);
@@ -21,7 +22,7 @@ export function sinPretitulos(t){
 }
 const nombreCliente=id=>(CLIENTES.find(c=>c.id===id)||{}).nombre||'';
 async function cargarClientes(){CLIENTES=await request('/api/reels/clientes');return CLIENTES;}
-const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video',imagen_clip:'Imagen de clip'};
+const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video',imagen_clip:'Imagen de clip',video_clip:'Clip de video',video_montaje:'Montaje con narración'};
 
 const VISTA=`
 <div class="rl-wrap">
@@ -39,7 +40,7 @@ const VISTA=`
  <section id="rl-tab-video" class="rl-panel" hidden>
   <h2 class="h2">Video UGC desde un guion</h2>
   <p>Elige un proyecto y un guion para preparar un Reel con una persona de la marca.</p>
-  <p class="rl-meta">Disponible: plan de clips e imágenes para revisar y aprobar. La generación de los clips de video y el montaje final están pendientes.</p>
+  <p class="rl-meta">Configura el video, prepara y aprueba las imágenes, genera los clips y móntalos con tu narración original.</p>
   <div id="rl-video-proyectos"></div>
   <div id="rl-video-editor" aria-live="polite"></div>
  </section>
@@ -430,14 +431,48 @@ async function descargarWord(p,guiones,boton){
 // ---------- video UGC de un guion (src/reels-video.ts): persona → plan de clips con Claude → revisión
 async function cargarPersonas(){if(!PERSONAS)PERSONAS=await request('/api/people').catch(()=>[]);return PERSONAS;}
 const CAMPOS_CLIP=[['frase','Frase (lo que dice; [gestos] entre corchetes)',3],['que_se_ve','Qué se ve',1],['prompt_imagen','Prompt de imagen (inglés)',4],['camera','Cámara',1],['movement','Movimiento',1],['micro_action','Gesto',1]];
+function configuracionHtml(p,g,v,personas){
+ const c={...VIDEO_DEFAULTS,...(p.video_config?.[g.id]||v?.configuracion)},m=modeloVideo(c.motor);
+ const opciones=(k,lista)=>`<label class="rl-campo"><span class="lbl">${esc(k[1])}</span><select class="inp" data-v-cfg="${k[0]}">${lista.map(([val,label])=>`<option value="${esc(val)}" ${String(c[k[0]])===String(val)?'selected':''}>${esc(label)}</option>`).join('')}</select></label>`;
+ const texto=(k,label,placeholder='')=>`<label class="rl-campo"><span class="lbl">${label}</span><input class="inp" data-v-cfg="${k}" maxlength="${k==='escena'?2000:k==='vestuario'?1000:300}" value="${esc(c[k])}" placeholder="${esc(placeholder)}"></label>`;
+ return `<div data-v-config data-marca="${esc(g.cliente_id||p.marca)}" class="rl-config">
+  <label class="rl-campo"><span class="lbl">Persona de la marca</span><select class="inp" data-v-persona>${personas.length?personas.map(x=>`<option value="${esc(x.id)}" ${x.id===v?.persona?'selected':''}>${esc(x.name)}</option>`).join(''):'<option value="">Ninguna persona asociada a esta marca</option>'}</select></label>
+  <fieldset><legend>Motor y formato</legend><p class="rl-meta">Higgsfield: ${CONFIG.video?.higgsfield?'clave configurada':'sin clave configurada'}. Cada generación depende del acceso y saldo de tu cuenta.</p><div class="rl-row">
+   ${opciones(['motor','Modelo de video'],VIDEO_MODELS.map(x=>[x.id,x.nombre]))}
+   ${opciones(['resolucion','Calidad'],[['480p','480p · borrador'],['720p','720p'],['1080p','1080p']])}
+   ${opciones(['formato','Formato'],[['9:16','Vertical · 9:16'],['16:9','Horizontal · 16:9'],['1:1','Cuadrado · 1:1']])}
+   <label class="rl-campo"><span class="lbl">Segundos por clip (orientativo)</span><input class="inp" type="number" data-v-cfg="segundos" min="${m.min}" max="${m.max}" value="${c.segundos}"></label>
+   ${opciones(['tipo','Tipo de tomas'],[['habla','Habla a cámara'],['mixto','Habla y planos de apoyo'],['apoyo','Solo planos de apoyo']])}
+   ${opciones(['ritmo','Ritmo'],[['pausado','Pausado'],['natural','Conversacional'],['agil','Ágil']])}</div><p class="rl-meta" data-v-modelo-info>${esc(m.descripcion)}</p></fieldset>
+  <fieldset><legend>Escena y dirección</legend><div class="rl-row">
+   ${texto('escena','Lugar / escena','Ej.: oficina luminosa, sentada junto a la ventana')}${texto('vestuario','Vestuario','Ej.: blazer azul, camiseta blanca')}
+   ${opciones(['iluminacion','Iluminación'],[['','Elegir según la escena'],['natural suave','Natural suave'],['hora dorada','Hora dorada'],['interior cálido','Interior cálido'],['luz difusa','Luz difusa']])}
+   ${opciones(['encuadre','Encuadre'],[['','Elegir según el guion'],['primer plano','Primer plano'],['plano medio','Plano medio'],['plano americano','Plano americano'],['plano abierto','Plano abierto']])}
+   ${opciones(['camara','Cámara'],[['','Elegir según el guion'],['fija en trípode','Fija en trípode'],['selfie','Selfie'],['en mano, movimiento suave','En mano, movimiento suave']])}
+   ${texto('tono','Tono / energía','Ej.: cercana, segura, reflexiva')}${texto('acento','Acento de la voz generada','Vacío: usar el acento de la persona')}
+  </div><label class="rl-campo"><span class="lbl">Otras indicaciones</span><textarea class="inp" rows="3" maxlength="4000" data-v-cfg="indicaciones">${esc(c.indicaciones)}</textarea></label></fieldset>
+  <fieldset><legend>Tu narración completa</legend><p class="rl-meta">Sube el audio completo del guion. Será la pista de voz del montaje final; los clips se generarán sin hablar. MP3, WAV, M4A, OGG, WebM o FLAC, hasta 50 MB.</p>
+   <input class="inp" type="file" data-v-audio accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.flac">
+   <div data-v-audio-datos data-id="${esc(c.audioNarracion||'')}" data-nombre="${esc(c.audioNombre)}">
+    <p class="rl-meta" data-v-audio-nombre>${esc(c.audioNombre||'Sin narración cargada.')}</p><audio controls preload="metadata" data-ref="${c.audioNarracion?'storage://'+esc(c.audioNarracion):''}" ${c.audioNarracion?'':'hidden'}></audio>
+    <button class="btn ghost sm" data-v-audio-quitar ${c.audioNarracion?'':'hidden'}>Quitar narración</button></div>
+   <label class="rl-chip"><input type="checkbox" data-v-cfg="generarAudio" ${c.generarAudio?'checked':''} ${c.audioNarracion?'disabled':''}> Generar voz y sonido con el modelo</label>
+   <p class="rl-meta" data-v-audio-estado role="status"></p>
+  </fieldset><div class="rl-acciones"><button class="btn ghost sm" data-v-config-guardar>Guardar configuración${v?' y plan':''}</button><span class="rl-meta" data-v-config-estado role="status"></span></div>
+  <p class="rl-meta">La escena, vestuario y dirección se aplican al plan nuevo. Si ya tienes uno, usa «Rehacer plan» para aplicar estos cambios.</p>
+ </div>`;
+}
+function leerConfiguracion(caja){
+ const zona=$('[data-v-config]',caja),c={};for(const el of $$('[data-v-cfg]',zona))c[el.dataset.vCfg]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;
+ const audio=$('[data-v-audio-datos]',zona);return {...c,audioNarracion:audio.dataset.id||null,audioNombre:audio.dataset.nombre||''};
+}
 function videoHtml(p,g){
  const v=p.videos?.[g.id],marca=g.cliente_id||p.marca,personas=(PERSONAS||[]).filter(x=>x.brands.includes(marca));
- const elegir=`<div class="rl-row"><div><label class="lbl">Persona</label><select class="inp" data-v-persona>${personas.length?personas.map(x=>`<option value="${esc(x.id)}" ${x.id===v?.persona?'selected':''}>${esc(x.name)}</option>`).join(''):'<option value="">Ninguna persona asociada a esta marca</option>'}</select></div>
-  <div class="rl-span2"><label class="lbl">Indicaciones (opcional)</label><input class="inp" data-v-indicaciones placeholder="Ej.: caminando por Brickell al atardecer, blazer azul"></div></div>`;
+ const elegir=configuracionHtml(p,g,v,personas);
  if(!v)return `<details class="rl-video" data-video="${esc(g.id)}"><summary><b>Video UGC</b> <span class="rl-meta">· convertir este guion en un reel con la persona de la marca</span></summary>${elegir}
   ${personas.length?'':'<p class="rl-meta">Asocia una persona a este cliente en «Marcas» para poder preparar el video.</p>'}
   <div class="rl-acciones"><button class="btn accent sm" data-v-planear ${personas.length?'':'disabled'}>Planear video con Claude</button></div><div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
- const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona),imgs=v.imagenes||[],base=imgs[0];
+ const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona),imgs=v.imagenes||[],base=imgs[0],config={...VIDEO_DEFAULTS,...(p.video_config?.[g.id]||v.configuracion)};
  const faltan=plan.clips.map((_,i)=>i).filter(i=>i>0&&!imgs[i]);
  const imagen=i=>{const m=imgs[i],bloqueada=i>0&&!base?.aprobada;
   return `<div class="rl-img">${m?`<img data-ref="${esc(m.archivo)}" alt="Imagen del clip ${i+1}">`:`<div class="rl-img-vacia">${bloqueada?'Aprueba primero la imagen del clip 1':'Sin imagen'}</div>`}
@@ -445,6 +480,7 @@ function videoHtml(p,g){
    <div class="rl-acciones"><button class="btn ghost sm" data-v-img="${i}" ${bloqueada?'disabled':''}>${m?'Rehacer imagen':'Generar imagen'}</button>
     ${m?`<label class="rl-chip"><input type="checkbox" data-v-aprobar="${i}" ${m.aprobada?'checked':''}> Aprobada</label>`:''}</div></div>`;};
  return `<details class="rl-video" data-video="${esc(g.id)}" open><summary><b>Video UGC</b> <span class="rl-meta">· ${plan.clips.length} clips · ${esc(persona?.name||v.persona)} · plan del ${esc(v.editado||v.creado)}</span></summary>
+  <details class="rl-config-resumen"><summary>Configuración del video · ${esc(modeloVideo(config.motor).nombre)}</summary>${elegir}</details>
   ${v.avisos?.length?`<div class="rl-avisos">${v.avisos.map(a=>`<div class="rl-err">⚠ ${esc(a)}</div>`).join('')}</div>`:''}
   <label class="lbl">Escena</label><textarea class="inp" rows="2" data-v-plan="escena">${esc(plan.escena)}</textarea>
   <div class="rl-row"><div><label class="lbl">Habla</label><select class="inp" data-v-plan="sujeto"><option value="she" ${plan.sujeto==='she'?'selected':''}>Ella (she)</option><option value="he" ${plan.sujeto==='he'?'selected':''}>Él (he)</option></select></div>
@@ -454,41 +490,93 @@ function videoHtml(p,g){
    ${faltan.length?`<button class="btn accent sm" data-v-imgs ${base?.aprobada?'':'disabled'}>Generar las imágenes de los demás clips (${faltan.length})</button>`:''}</div>
   ${plan.clips.map((c,i)=>`<div class="rl-clip" data-clip="${i}"><div class="rl-cab-punto"><h3>Clip ${i+1}</h3>
     <span class="rl-tag ${c.modelo==='omni'&&palabras(c.frase)>MAX_PALABRAS?'mal':''}">${palabras(c.frase)} palabras · ~${c.segundos} s</span></div>
-   <div class="rl-row"><div><label class="lbl">Modelo</label><select class="inp" data-c="modelo"><option value="omni" ${c.modelo==='omni'?'selected':''}>Omni · habla a cámara</option><option value="grok" ${c.modelo==='grok'?'selected':''}>Grok · voz en off</option></select></div>
-    <div><label class="lbl">Segundos</label><input class="inp" type="number" min="3" max="15" data-c="segundos" value="${c.segundos}"></div></div>
+   <div class="rl-row"><div><label class="lbl">Modelo</label><select class="inp" data-c="modelo">${VIDEO_MODELS.map(m=>`<option value="${m.id}" ${m.id===(modeloVideo(c.modelo)?.id||config.motor)?'selected':''}>${m.nombre}</option>`).join('')}</select></div>
+    <div><label class="lbl">Segundos</label><input class="inp" type="number" min="${modeloVideo(c.modelo)?.min||4}" max="${modeloVideo(c.modelo)?.max||modeloVideo(config.motor).max}" data-c="segundos" value="${Math.max(modeloVideo(c.modelo)?.min||4,c.segundos)}"></div></div>
+   <label class="rl-chip"><input type="checkbox" data-c="voz_off" ${c.voz_off||c.modelo==='grok'||config.audioNarracion?'checked':''}> Plano de apoyo / voz en off</label>
    ${CAMPOS_CLIP.map(([k,l,r])=>`<label class="lbl">${l}</label>${r>1?`<textarea class="inp" rows="${r}" data-c="${k}">${esc(c[k])}</textarea>`:`<input class="inp" data-c="${k}" value="${esc(c[k])}">`}`).join('')}
-   <details class="rl-prompt"><summary class="rl-meta">Ver el prompt de video que se enviará</summary><pre>${esc(promptVideo(plan,c))}</pre></details>${imagen(i)}</div>`).join('')}
+   <details class="rl-prompt"><summary class="rl-meta">Ver el prompt de video del plan guardado</summary><pre>${esc(promptVideo(plan,{...c,voz_off:!!config.audioNarracion||!config.generarAudio||c.voz_off}))}</pre></details>${imagen(i)}
+   <div class="rl-acciones"><button class="btn accent sm" data-v-clip="${i}" ${imgs[i]?.aprobada&&base?.aprobada&&(i===0||imgs[i].base===base.archivo)&&CONFIG.video?.higgsfield?'':'disabled'}>${v.clips?.[i]?'Rehacer':'Generar'} clip de video</button>
+    <span class="rl-meta">Reserva de presupuesto: hasta ${reservaVideo({...config,motor:modeloVideo(c.modelo)?.id||config.motor},c.segundos).toFixed(2)} US$. Tarifa final según Higgsfield.</span></div>
+   ${v.clips?.[i]?`<video controls preload="none" data-ref="${esc(v.clips[i].archivo)}"></video><p class="rl-meta">${v.clips[i].revision===v.revision_actual?'Clip vigente.':'El plan o sus imágenes cambiaron: genera de nuevo el clip.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.clips[i].archivo)}">Descargar clip</button>`:''}</div>`).join('')}
   <div class="rl-acciones"><button class="btn accent sm" data-v-guardar>Guardar cambios del plan</button>
-   <details class="rl-rehacer"><summary class="btn ghost sm">Rehacer el plan con Claude</summary>${elegir}<button class="btn ghost sm" data-v-planear>Rehacer plan (reemplaza el actual)</button></details></div>
-  <p class="rl-meta">Siguiente etapa: con todas las imágenes aprobadas, generar los clips de video.</p>
+   <button class="btn ghost sm" data-v-planear data-rehacer="1">Rehacer plan (reemplaza el actual)</button></div>
+  <div class="rl-montaje"><h3>Montaje con tu narración</h3><p class="rl-meta">Une los clips en orden y usa tu audio original. El video termina con la narración; si falta metraje, mantiene el último fotograma. Exportación MP4 a ${esc(config.resolucion)}.</p>
+   <button class="btn accent sm" data-v-montar ${config.audioNarracion&&plan.clips.every((_,i)=>v.clips?.[i]?.revision===v.revision_actual)?'':'disabled'}>Montar video con mi narración</button>
+   ${v.montaje?`<video controls preload="none" data-ref="${esc(v.montaje.archivo)}"></video><p class="rl-meta">${v.montaje.revision===v.revision_actual&&JSON.stringify(v.montaje.clips)===JSON.stringify(v.clips.map(c=>c.archivo))?'Montaje vigente.':'Hay cambios: vuelve a montar el video.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.montaje.archivo)}">Descargar video completo</button>`:''}</div>
   <div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
 }
 function leerPlan(caja){
  const val=s=>$(`[data-v-plan="${s}"]`,caja).value;
  return {escena:val('escena'),sujeto:val('sujeto'),voice:val('voice'),accent:val('accent'),
-  clips:$$('[data-clip]',caja).map(el=>{const c={};for(const x of $$('[data-c]',el))c[x.dataset.c]=x.dataset.c==='segundos'?Number(x.value):x.value;return c;})};
+  clips:$$('[data-clip]',caja).map(el=>{const c={};for(const x of $$('[data-c]',el))c[x.dataset.c]=x.type==='checkbox'?x.checked:x.dataset.c==='segundos'?Number(x.value):x.value;return c;})};
 }
 function activarVideos(pid,v,recargar){
  for(const caja of $$('[data-video]',v)){
+  const actualizarMedios=()=>{const refs=$$('[data-ref]',caja).filter(i=>i.dataset.ref);if(refs.length)resolve(refs.map(i=>i.dataset.ref)).then(urls=>refs.forEach((media,i)=>{media.src=urls[i]||'';})).catch(()=>{});};
+  actualizarMedios();
   if(role==='lector'){
    $$('button,input,select,textarea',caja).forEach(el=>{el.disabled=true;el.title='Tu rol permite solo lectura.';});
    continue;
   }
   const gid=caja.dataset.video,jobs=$('.rl-jobs',caja);
+  for(const el of $$('[data-v-plan],[data-c]',caja))el.addEventListener('input',()=>{caja.dataset.planDirty='1';});
+  const cfg=$('[data-v-config]',caja),estado=$('[data-v-config-estado]',cfg);
+  const guardarConfiguracion=async(guardarPlan=false)=>{
+   for(const el of $$('input,select,textarea',cfg))if(!el.checkValidity()){el.reportValidity();throw new Error('Revisa los campos de configuración.');}
+   const configuracion=leerConfiguracion(caja);
+   await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-config`,{guion:gid,configuracion});
+   if(guardarPlan&&$('[data-v-plan]',caja))await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-plan`,{guion:gid,plan:leerPlan(caja)});
+   estado.textContent='Configuración guardada.';cfg.dataset.dirty='';return configuracion;
+  };
+  for(const el of $$('[data-v-cfg]',cfg))el.addEventListener('input',()=>{cfg.dataset.dirty='1';estado.textContent='Cambios sin guardar.';});
+  const motor=$('[data-v-cfg="motor"]',cfg);
+  motor.onchange=e=>{const m=modeloVideo(motor.value),dur=$('[data-v-cfg="segundos"]',cfg);dur.min=m.min;dur.max=m.max;dur.value=Math.min(m.max,Math.max(m.min,Number(dur.value)||8));$('[data-v-modelo-info]',cfg).textContent=m.descripcion;
+   $('[data-v-cfg="resolucion"]',cfg).disabled=!m.resoluciones.length;
+   if(e)for(const el of $$('[data-clip]',caja)){$('[data-c="modelo"]',el).value=m.id;const segundos=$('[data-c="segundos"]',el);segundos.min=m.min;segundos.max=m.max;segundos.value=Math.max(m.min,Math.min(m.max,Number(segundos.value)));caja.dataset.planDirty='1';}
+  };motor.onchange();
+  for(const el of $$('[data-c="modelo"]',caja))el.onchange=()=>{const m=modeloVideo(el.value),dur=$('[data-c="segundos"]',el.closest('[data-clip]'));dur.min=m.min;dur.max=m.max;};
+  $('[data-v-config-guardar]',cfg).onclick=async e=>{e.target.disabled=true;try{await guardarConfiguracion(true);recargar();}catch(err){estado.textContent=err.message;}finally{e.target.disabled=false;}};
+  const archivo=$('[data-v-audio]',cfg),audioDatos=$('[data-v-audio-datos]',cfg),audioEstado=$('[data-v-audio-estado]',cfg);
+  archivo.onchange=async()=>{
+   const file=archivo.files?.[0];if(!file)return;archivo.disabled=true;audioEstado.textContent='Subiendo narración…';
+   const botones=$$('button',caja).map(el=>({el,disabled:el.disabled}));botones.forEach(({el})=>{el.disabled=true;});
+   try{
+    if(file.size>52428800)throw new Error('La narración supera 50 MB.');
+    const tipos={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
+    const mime=tipos[file.name.split('.').pop().toLowerCase()]||file.type;if(!Object.values(tipos).includes(mime))throw new Error('Usa MP3, WAV, M4A, OGG, WebM o FLAC.');
+    const id=await uploadBlob(new Blob([file],{type:mime}),file.name,{brand:cfg.dataset.marca});
+    if(!caja.isConnected)return;
+    cfg.dataset.dirty='1';audioDatos.dataset.id=id;audioDatos.dataset.nombre=file.name;$('[data-v-audio-nombre]',cfg).textContent=file.name;
+    const player=$('audio',cfg);player.dataset.ref='storage://'+id;player.hidden=false;
+    const sound=$('[data-v-cfg="generarAudio"]',cfg);sound.checked=false;sound.disabled=true;$('[data-v-audio-quitar]',cfg).hidden=false;
+    $('[data-v-cfg="tipo"]',cfg).value='apoyo';
+    await guardarConfiguracion(true);actualizarMedios();audioEstado.textContent='Narración subida y guardada. Se usará en el montaje final.';if($('[data-v-plan]',caja))recargar();
+   }catch(e){audioEstado.textContent=e.message;}finally{archivo.disabled=false;botones.forEach(({el,disabled})=>{el.disabled=disabled;});}
+  };
+  $('[data-v-audio-quitar]',cfg).onclick=async e=>{e.target.disabled=true;audioDatos.dataset.id='';audioDatos.dataset.nombre='';
+   try{await guardarConfiguracion(true);recargar();}catch(err){audioEstado.textContent=err.message;e.target.disabled=false;}};
   for(const b of $$('[data-v-planear]',caja))b.onclick=async()=>{
-   const zona=b.closest('details.rl-rehacer')||caja,persona=$('[data-v-persona]',zona).value;if(!persona){alert('Elige la persona.');return;}
-   if(b.closest('.rl-rehacer')&&!confirm('¿Rehacer el plan? Se reemplaza el actual y se pierden tus cambios.'))return;b.disabled=true;
-   try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video`,{idempotencyKey:crypto.randomUUID(),guion:gid,persona,indicaciones:$('[data-v-indicaciones]',zona).value});seguir(d.grupo,jobs,recargar);}
+   const persona=$('[data-v-persona]',cfg).value;if(!persona){alert('Elige la persona.');return;}
+   if(b.dataset.rehacer&&!confirm('¿Rehacer el plan? Se reemplaza el actual y se pierden tus cambios.'))return;b.disabled=true;
+   try{const configuracion=await guardarConfiguracion();const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video`,{idempotencyKey:crypto.randomUUID(),guion:gid,persona,configuracion});seguir(d.grupo,jobs,recargar);}
    catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}};
   const pedirImagenes=async(clips,b)=>{b.disabled=true;
    try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-imagenes`,{idempotencyKey:crypto.randomUUID(),guion:gid,clips});seguir(d.grupo,jobs,recargar);}
    catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}};
+  for(const b of $$('[data-v-clip],[data-v-montar]',caja))b.onclick=async()=>{
+   b.disabled=true;
+   try{
+    if(cfg.dataset.dirty||caja.dataset.planDirty)throw new Error('Guarda la configuración y el plan antes de generar.');
+    const action=b.hasAttribute('data-v-clip')?'video-clips':'video-montaje';
+    const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/${action}`,{idempotencyKey:crypto.randomUUID(),guion:gid,...(action==='video-clips'?{clip:Number(b.dataset.vClip)}:{})});seguir(d.grupo,jobs,recargar);
+   }catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}
+  };
+  for(const b of $$('[data-v-descargar]',caja))b.onclick=async()=>{try{const urls=await resolve([b.dataset.vDescargar]);const a=document.createElement('a');a.href=urls[0];a.download='reel.mp4';a.target='_blank';a.rel='noopener';a.click();}catch(e){alert(e.message);}};
   for(const b of $$('[data-v-img]',caja))b.onclick=()=>{const i=+b.dataset.vImg;if(i===0&&$$('[data-v-aprobar]',caja).length>1&&!confirm('Si rehaces el clip 1, las imágenes de los demás clips habrá que rehacerlas. ¿Seguir?'))return;pedirImagenes([i],b);};
   const todas=$('[data-v-imgs]',caja);if(todas)todas.onclick=()=>{const clips=$$('[data-clip]',caja).map(el=>+el.dataset.clip).filter(i=>i>0&&!$('img[data-ref]',$(`[data-clip="${i}"]`,caja)));pedirImagenes(clips,todas);};
   for(const c of $$('[data-v-aprobar]',caja))c.onchange=async()=>{c.disabled=true;
    try{await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-aprobar`,{guion:gid,clip:+c.dataset.vAprobar,aprobada:c.checked});recargar();}
    catch(e){alert(e.message);c.checked=!c.checked;c.disabled=false;}};
-  const refs=$$('img[data-ref]',caja);if(refs.length)resolve(refs.map(i=>i.dataset.ref)).then(urls=>refs.forEach((img,i)=>{img.src=urls[i]||'';})).catch(()=>{});
   const guardar=$('[data-v-guardar]',caja);
   if(guardar)guardar.onclick=async()=>{guardar.disabled=true;
    try{await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-plan`,{guion:gid,plan:leerPlan(caja)});recargar();}

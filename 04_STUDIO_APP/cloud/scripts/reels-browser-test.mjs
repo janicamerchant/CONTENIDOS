@@ -13,11 +13,11 @@ localStorage.setItem('fixture-reels-tab','largo');
 const clip={frase:'Una sola tarea.',modelo:'omni',segundos:4,que_se_ve:'Sentada en la oficina.',prompt_imagen:'Office, natural light.',camera:'Static.',movement:'none',micro_action:'Smiles.'};
 const plan={escena:'Una oficina luminosa.',sujeto:'she',voice:'Warm.',accent:'Venezuelan Spanish.',clips:[clip,{...clip,frase:'Anota la urgencia.'}]};
 const guiones=[{id:'g1',titulo:'El bloque de 90 minutos',cliente_id:'janica',guion:'Una sola tarea. Anota la urgencia.'},{id:'g2',titulo:'Otro guion',cliente_id:'janica',guion:'Lo que anotas lo decides tú.'}];
-const proyecto={id:'p1',marca:'janica',tipo:'largo',info:{titulo:'Atención <Janica>'},transcripcion:{texto:'Una transcripción.',parrafos:[]},analisis:{guiones,puntos_clave:[]},videos:{}};
+const proyecto={id:'p1',marca:'janica',tipo:'largo',info:{titulo:'Atención <Janica>'},transcripcion:{texto:'Una transcripción.',parrafos:[]},analisis:{guiones,puntos_clave:[]},videos:{},video_config:{}};
 window.fixture={writes:[],failProject:false};
 const request=async(path,body)=>{
  if(body)fixture.writes.push({path,body});
- if(path==='/api/reels/config')return {deepgram:true,apify:true,anthropic:true};
+ if(path==='/api/reels/config')return {deepgram:true,apify:true,anthropic:true,video:{higgsfield:true}};
  if(path==='/api/reels/clientes')return [{id:'janica',nombre:'Janica',estilos:[]},{id:'city',nombre:'City Kia',estilos:[]},{id:'empty',nombre:'Sin proyectos',estilos:[]}];
  if(path==='/api/people')return [{id:'janica-persona',name:'Janica',brands:['janica']}];
  if(path==='/api/reels/proyectos')return [{id:'p1',marca:'janica',tipo:'largo',titulo:'Atención <Janica>',guiones:2},{id:'p2',marca:'city',titulo:'City Kia',guiones:1},{id:'p3',marca:'empty',titulo:'Solo transcripción',guiones:0}];
@@ -26,17 +26,21 @@ const request=async(path,body)=>{
   return structuredClone(path.endsWith('p2')?{...proyecto,id:'p2',marca:'city',videos:{},analisis:{guiones:[{...guiones[0],cliente_id:'city'}]}}:proyecto);
  }
  if(path==='/api/reels/proyectos/p1/video'){
-  proyecto.videos[body.guion]={persona:body.persona,plan:structuredClone(plan),imagenes:[]};return {grupo:'fixture'};
+  const p=structuredClone(plan);p.clips.forEach(c=>{c.modelo=body.configuracion.motor;c.voz_off=!!body.configuracion.audioNarracion;});
+  proyecto.videos[body.guion]={persona:body.persona,plan:p,configuracion:body.configuracion,revision_actual:'fixture',imagenes:[]};return {grupo:'fixture'};
  }
+ if(path==='/api/reels/proyectos/p1/video-config'){proyecto.video_config[body.guion]=body.configuracion;return {configuracion:body.configuracion};}
  if(path==='/api/reels/proyectos/p1/video-plan'){proyecto.videos[body.guion].plan=body.plan;return {ok:true};}
  if(path==='/api/reels/proyectos/p1/video-imagenes'){
-  for(const i of body.clips)proyecto.videos[body.guion].imagenes[i]={archivo:'storage://image-'+i,aprobada:false};return {grupo:'fixture'};
+  for(const i of body.clips)proyecto.videos[body.guion].imagenes[i]={archivo:'storage://image-'+i,aprobada:false,base:i?proyecto.videos[body.guion].imagenes[0].archivo:null};return {grupo:'fixture'};
  }
+ if(path==='/api/reels/proyectos/p1/video-clips'){const v=proyecto.videos[body.guion];v.clips??=[];v.clips[body.clip]={archivo:'storage://video-'+body.clip,revision:'fixture'};return {grupo:'fixture'};}
+ if(path==='/api/reels/proyectos/p1/video-montaje'){const v=proyecto.videos[body.guion];v.montaje={archivo:'storage://final',revision:'fixture',clips:v.clips.map(c=>c.archivo)};return {grupo:'fixture'};}
  if(path==='/api/reels/proyectos/p1/video-aprobar'){proyecto.videos[body.guion].imagenes[body.clip].aprobada=body.aprobada;return {ok:true};}
  if(path.startsWith('/api/reels/trabajos?'))return {done:true,items:[{op:'plan_video',estado:'succeeded',proyecto:'p1'}]};
  throw new Error('Unexpected fixture request: '+path);
 };
-setupReels({request,role:new URLSearchParams(location.search).get('role')||'admin',resolve:async refs=>refs.map(()=>'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="160"><rect width="90" height="160" fill="tan"/></svg>'))});`;
+setupReels({request,role:new URLSearchParams(location.search).get('role')||'admin',uploadBlob:async(blob,name,scope)=>{fixture.upload={name,scope,mime:blob.type};return '00000000-0000-4000-8000-000000000001';},resolve:async refs=>refs.map(()=>'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="160"><rect width="90" height="160" fill="tan"/></svg>'))});`;
 const server=createServer((req,res)=>{
  if(req.url==='/reels.js'){res.setHeader('Content-Type','text/javascript');res.end(module);return;}
  res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<style>${css.join('\n')}#view-reels{height:100vh}</style><main id="view-reels"></main><script type="module">${bootstrap}</script>`);
@@ -61,10 +65,22 @@ try{
  assert.equal(await page.locator('[data-video]').evaluate(e=>e.open),true);
  assert.equal(await page.locator('#rl-video-editor h3').textContent(),'Atención <Janica>');
  assert.equal(await page.locator('#rl-video-editor h3 janica').count(),0,'project title is escaped');
+ await page.locator('[data-v-cfg="motor"]').selectOption('seedance_2_5');
+ await page.locator('[data-v-cfg="segundos"]').fill('20');
+ await page.locator('[data-v-cfg="escena"]').fill('Mi oficina');
+ await page.locator('[data-v-cfg="vestuario"]').fill('Blazer azul');
+ await page.locator('[data-v-audio]').setInputFiles({name:'mi-voz.wav',mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')});
+ await page.getByText('Narración subida y guardada.',{exact:false}).waitFor();
+ assert.equal(await page.locator('[data-v-cfg="generarAudio"]').isChecked(),false);
+ assert.equal(await page.locator('[data-v-cfg="generarAudio"]').isDisabled(),true);
+ assert.equal(await page.locator('audio').isVisible(),true);
+ assert.deepEqual(await page.evaluate(()=>fixture.upload),{name:'mi-voz.wav',scope:{brand:'janica'},mime:'audio/wav'});
+ await page.screenshot({path:'artifacts/reels-navigation/configuracion.png'});
  await page.locator('[data-v-planear]').click();
  await page.locator('[data-v-plan="escena"]').waitFor({state:'visible'});
- const pedido=await page.evaluate(()=>fixture.writes[0]);
+ const pedido=await page.evaluate(()=>fixture.writes.find(w=>w.path.endsWith('/video')));
  assert.equal(pedido.body.guion,'g1');assert.equal(pedido.body.persona,'janica-persona');
+ assert.equal(pedido.body.configuracion.motor,'seedance_2_5');assert.equal(pedido.body.configuracion.segundos,20);assert.equal(pedido.body.configuracion.vestuario,'Blazer azul');
  assert.equal(await page.locator('[data-v-img="1"]').isDisabled(),true);
  await page.locator('[data-v-plan="escena"]').fill('La escena revisada.');
  await page.locator('[data-v-guardar]').click();
@@ -75,6 +91,20 @@ try{
  await page.locator('[data-v-aprobar="0"]').check();
  await page.waitForFunction(()=>!document.querySelector('[data-v-imgs]').disabled);
  assert.equal(await page.locator('[data-v-img="1"]').isEnabled(),true);
+ page.on('dialog',d=>d.accept());
+ await page.locator('[data-v-clip="0"]').click();
+ await page.getByRole('button',{name:'Descargar clip',exact:true}).waitFor();
+ assert.equal(await page.locator('[data-v-montar]').isDisabled(),true);
+ await page.locator('[data-v-img="1"]').click();
+ await page.locator('[data-v-aprobar="1"]').check();
+ await page.waitForFunction(()=>!document.querySelector('[data-v-clip="1"]').disabled);
+ await page.locator('[data-v-clip="1"]').click();
+ await page.waitForFunction(()=>!document.querySelector('[data-v-montar]').disabled);
+ await page.locator('[data-v-montar]').click();
+ await page.getByRole('button',{name:'Descargar video completo',exact:true}).waitFor();
+ await page.locator('.rl-config-resumen').evaluate(e=>{e.open=true;});
+ assert.equal(await page.locator('[data-v-cfg="vestuario"]').inputValue(),'Blazer azul','configuration survives reload');
+ assert.equal(await page.locator('[data-v-audio-nombre]').textContent(),'mi-voz.wav');
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile fits viewport');
  await page.screenshot({path:'artifacts/reels-navigation/plan-mobile.png'});

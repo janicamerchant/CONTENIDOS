@@ -9,6 +9,8 @@ import {authorizeBrand,HttpError,type Identity} from './auth.js';
 import {checked,readyFile,storeFile} from './library.js';
 import {saveJob,ProviderError} from './generation.js';
 import {planVideoJob,imagenClipJob,videoRoute,type Ayudas} from './reels-video.js';
+import {clipVideoJob,montajeVideoJob,revisionVideo} from './reels-higgsfield.js';
+import {VIDEO_MODELS,reservaVideo} from '../shared/video-config.js';
 import {brandingDe,planAuto,validarPlan,html,renderPdf,contarPaginas,ESQUEMA_PLAN,GUIA_DIRECTOR,type Contenido} from './reels-pdf.js';
 
 const MODELO='claude-opus-5-5';
@@ -160,13 +162,13 @@ function transcripcionConTiempos(t:any){
 
 const digest=(x:any)=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function childKey(group:string,index:number){const h=digest([group,index]).slice(0,32);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20)}`;}
-const motorDe=(op:string,payload:any)=>op==='imagen_clip'?'apimart:gpt-image-2':op==='transcribir'?(payload.fuente?.clase==='url'&&plataforma(payload.fuente.url)!=='directo'?'apify+deepgram':'deepgram'):MODELO;
+const motorDe=(op:string,payload:any)=>op==='video_clip'?'higgsfield:'+payload.configuracion.motor:op==='video_montaje'?'ffmpeg':op==='imagen_clip'?'apimart:gpt-image-2':op==='transcribir'?(payload.fuente?.clase==='url'&&plataforma(payload.fuente.url)!=='directo'?'apify+deepgram':'deepgram'):MODELO;
 type Hijo={payload:any;lamina?:string};
 // Encola un lote atómico (máx. 10 por lote). Todos comparten grupo para que la interfaz siga su avance.
 async function encolar(actor:string,marca:string,grupo:string,keyBase:string,hijos:Hijo[]){
  const out:any[]=[];
  for(let s=0;s<hijos.length;s+=10){
-  const jobs=hijos.slice(s,s+10).map((h,i)=>({tipo:'reels',motor:motorDe(h.payload.op,h.payload),payload:h.payload,key:childKey(keyBase,s+i),hash:digest(h.payload),reserva:RESERVA[h.payload.op],proyecto:null,lamina:h.lamina??null,version:null}));
+  const jobs=hijos.slice(s,s+10).map((h,i)=>({tipo:'reels',motor:motorDe(h.payload.op,h.payload),payload:h.payload,key:childKey(keyBase,s+i),hash:digest(h.payload),reserva:h.payload.op==='video_clip'?reservaVideo(h.payload.configuracion,h.payload.clip.segundos):h.payload.op==='video_montaje'?0.01:RESERVA[h.payload.op],proyecto:null,lamina:h.lamina??null,version:null}));
   const r=await adminClient().rpc('encolar_lote',{p_actor:actor,p_marca:marca,p_grupo:grupo,p_jobs:jobs});
   if(r.error){if(r.error.code==='P0001')throw new HttpError(409,'No hay presupuesto disponible o hay demasiados trabajos pendientes. Revisa los trabajos antes de generar de nuevo.');checked(r);}
   out.push(...r.data);
@@ -389,6 +391,7 @@ const ayudas:Ayudas={claudeJson,cargarProyecto,actualizarProyecto,clienteServido
 export async function reelsJob(j:any,_w:Identity){
  const op=j.payload?.op;
  if(op==='plan_video')return planVideoJob(j,ayudas);if(op==='imagen_clip')return imagenClipJob(j,ayudas);
+ if(op==='video_clip')return clipVideoJob(j,ayudas);if(op==='video_montaje')return montajeVideoJob(j,ayudas);
  if(op==='transcribir')return transcribirJob(j);if(op==='guiones')return guionesJob(j);if(op==='entregable')return entregableJob(j);
  if(op==='sugerir')return sugerirJob(j);if(op==='muestra')return muestraJob(j);throw new HttpError(400,'Trabajo de Reels desconocido.');
 }
@@ -408,7 +411,8 @@ async function estadoGrupo(w:Identity,grupo:string){
 
 export async function reelsRoute(w:Identity,route:string,method:string,url:URL,b:any):Promise<any>{
  const parts=route.split('/').map(decodeURIComponent);const [,section,id,action]=parts;
- if(section==='config'&&method==='GET')return {anthropic:!!process.env.ANTHROPIC_API_KEY,deepgram:!!process.env.DEEPGRAM_API_KEY,apify:!!process.env.APIFY_TOKEN,maxMB:50};
+ if(section==='config'&&method==='GET')return {anthropic:!!process.env.ANTHROPIC_API_KEY,deepgram:!!process.env.DEEPGRAM_API_KEY,apify:!!process.env.APIFY_TOKEN,maxMB:50,
+  video:{higgsfield:!!process.env.HF_CREDENTIALS,modelos:VIDEO_MODELS.map(m=>({...m,configurado:!!process.env.HF_CREDENTIALS}))}};
  if(section==='trabajos'&&method==='GET')return estadoGrupo(w,url.searchParams.get('grupo')||'');
 
  if(section==='clientes'){
@@ -469,7 +473,9 @@ export async function reelsRoute(w:Identity,route:string,method:string,url:URL,b
  if(section==='proyectos'){
   if(method==='GET'){
    const pid=url.searchParams.get('id');
-   if(pid){const r=checked(await w.db.from('reels_proyectos').select('*').eq('id',z.string().max(64).parse(pid)).maybeSingle());if(!r)throw new HttpError(404,'Proyecto no encontrado.');return {...r.documento,id:r.id,marca:r.marca_id};}
+   if(pid){const r=checked(await w.db.from('reels_proyectos').select('*').eq('id',z.string().max(64).parse(pid)).maybeSingle());if(!r)throw new HttpError(404,'Proyecto no encontrado.');
+    const doc=structuredClone(r.documento);for(const [gid,v] of Object.entries(doc.videos||{}) as [string,any][])v.revision_actual=revisionVideo(r.documento,gid);
+    return {...doc,id:r.id,marca:r.marca_id};}
    const rows=checked(await w.db.from('reels_proyectos').select('id,marca_id,tipo,titulo,created_at,documento->analisis->guiones,documento->creado').order('created_at',{ascending:false}).limit(300)) as any[];
    return rows.map(p=>({id:p.id,tipo:p.tipo,titulo:p.titulo||'(sin título)',creado:p.creado||p.created_at.slice(0,16).replace('T',' '),marca:p.marca_id,guiones:Array.isArray(p.guiones)?p.guiones.length:0}));
   }

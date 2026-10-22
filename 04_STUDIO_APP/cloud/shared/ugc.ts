@@ -3,9 +3,9 @@
 // en todos los clips (si cambian, la voz cambia de un clip a otro) y SCRIPT tiene que ser la frase exacta del guion.
 export const MAX_CLIPS=30;          // los guiones del Estudio pasan de 1 a 3,5 minutos
 export const MAX_PALABRAS=25;          // unos 8 s de habla
-export const MODELOS_CLIP=['omni','grok'] as const;
+export const MODELOS_CLIP=['omni','grok','seedance_2_5','seedance_2_0','kling_3'] as const;
 export type ModeloClip=typeof MODELOS_CLIP[number];
-export type Clip={frase:string;modelo:ModeloClip;segundos:number;que_se_ve:string;prompt_imagen:string;camera:string;movement:string;micro_action:string};
+export type Clip={frase:string;modelo:ModeloClip;segundos:number;que_se_ve:string;prompt_imagen:string;camera:string;movement:string;micro_action:string;voz_off?:boolean};
 export type PlanVideo={escena:string;sujeto:'she'|'he';voice:string;accent:string;clips:Clip[]};
 
 // Los [gestos] van dentro de la frase para Omni pero no se dicen: no cuentan como palabras ni como guion.
@@ -18,7 +18,7 @@ const comparable=(t:string)=>sinGestos(t).toLowerCase().normalize('NFD').replace
 
 export function promptVideo(plan:PlanVideo,c:Clip){
  const cierre='Single continuous take, no cuts or scene changes.';
- if(c.modelo==='grok')return [`Using this image, keep the person and the setting exactly the same. ${c.camera.trim()} ${c.movement.trim()}`.trim(),
+ if(c.modelo==='grok'||c.voz_off)return [`Using this image, keep the person and the setting exactly the same. ${c.camera.trim()} ${c.movement.trim()}`.trim(),
   c.micro_action.trim(),'No talking, mouth closed. '+cierre+' No text, no watermark.'].filter(Boolean).join(' ');
  return [`CAMERA: ${c.camera.trim()} ${cierre}`,`MOVEMENT: ${c.movement.trim()||'none'}.`.replace(/\.\.$/,'.'),`MICRO-ACTION: [${c.micro_action.trim()}]`,
   `SCRIPT: ${plan.sujeto==='he'?'he':'she'} says: "${c.frase.trim()}"`,`VOICE: ${plan.voice.trim()}`,`ACCENT: ${plan.accent.trim()}`].join('\n');

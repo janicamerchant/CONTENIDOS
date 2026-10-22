@@ -1,5 +1,6 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
+import {AUDIO_MIMES,validAudio} from '../src/audio-upload.js';
 import {z} from 'zod';
 import {waitUntil} from '@vercel/functions';
 import {aiConfig,enqueue,generationStatus,runWorker,recoveredProject,soulRoute} from '../src/generation.js';
@@ -141,7 +142,7 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    const r=await who.db.storage.from('estudio').createSignedUrl(file.data.object_path,300);databaseError(r.error);return send(200,{url:r.data!.signedUrl,expiresIn:300});
   }
   if(route==='assets/upload'&&req.method==='POST'){
-   const b=z.object({brand:id.optional(),person:id.optional(),name:z.string().min(1).max(180),mime:z.enum(['image/png','image/jpeg','image/webp','image/gif','application/pdf','text/plain','text/markdown']),bytes:z.number().int().positive().max(52428800)}).parse(await body(req));
+   const b=z.object({brand:id.optional(),person:id.optional(),name:z.string().min(1).max(180),mime:z.enum(['image/png','image/jpeg','image/webp','image/gif','application/pdf','text/plain','text/markdown',...AUDIO_MIMES]),bytes:z.number().int().positive().max(52428800)}).parse(await body(req));
    if(b.person){adminOnly(who);const p=checked(await who.db.from('personas').select('id').eq('id',b.person).eq('archivada',false).maybeSingle());if(!p)throw new HttpError(404,'Persona no encontrada.');}else{if(!b.brand)throw new HttpError(400,'Falta la marca.');await authorizeBrand(who,b.brand,true);}const admin=adminClient();const fileId=randomUUID();
    const r=await admin.from('archivos').insert({id:fileId,alcance:b.person?'persona':'marca',marca_id:b.person?null:b.brand,persona_id:b.person||null,nombre:b.name,mime:b.mime,bytes:b.bytes}).select('object_path').single();databaseError(r.error);
    const signed=await admin.storage.from('estudio').createSignedUploadUrl(r.data!.object_path,{upsert:false});databaseError(signed.error);
@@ -162,6 +163,7 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
     'application/pdf':b=>b.toString('ascii',0,5)==='%PDF-'
    };
    if(signatures[file.data.mime]&&!signatures[file.data.mime]!(bytes))throw new HttpError(422,'El contenido no coincide con el tipo de archivo.');
+   if(file.data.mime.startsWith('audio/')&&!validAudio(bytes,file.data.mime))throw new HttpError(422,'El contenido no corresponde a un audio compatible.');
    const saved=await admin.from('archivos').update({sha256,listo:true}).eq('id',b.id);databaseError(saved.error);return send(200,{id:b.id,ref:`storage://${b.id}`});
   }
   throw new HttpError(404,'Ruta no disponible.');
