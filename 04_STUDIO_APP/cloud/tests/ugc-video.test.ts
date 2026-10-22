@@ -46,3 +46,11 @@ test('los encabezados de sección solos en su línea no cuentan como guion',()=>
  assert.equal(soloHablado(guion),'Llevas meses viendo cursos.\n\nComenta PASO.');
  assert.deepEqual(revisarPlan(guion,plan([clip('Llevas meses viendo cursos.'),clip('Comenta PASO.')])),[]);
 });
+
+test('imagen del clip 1 desde las fotos; las demás editan el clip 1 y usan las fotos solo para la cara',async()=>{
+ const {promptImagen}=await import('../src/reels-video.js');
+ const uno=promptImagen(0,'Medium shot in a bright office.','IDENTITY LOCK: Janica.');
+ assert.ok(uno.startsWith('Medium shot in a bright office.'));assert.ok(uno.includes('IDENTITY LOCK: Janica.'));assert.ok(!uno.includes('Edit reference image 1'));
+ const dos=promptImagen(1,'Keep the same person. Close-up.','IDENTITY LOCK: Janica.');
+ assert.ok(dos.startsWith('Edit reference image 1'));assert.ok(dos.includes('identity references only'));assert.ok(dos.includes('No text, no watermark'));
+});
