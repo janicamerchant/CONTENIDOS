@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
+import * as Carousel from '../shared/carousel.js';
 const source=readFileSync(new URL('../web/legacy/app.js',import.meta.url),'utf8');
 const requestCode=source.slice(source.indexOf('async function createRequestCarousel('),source.indexOf('// ---------------------------------------------------------------- entregas'));
 const generationCode=source.slice(source.indexOf('function draftToProject()'),source.indexOf('function pickIdeaBrand('));
 function fixture({save=true,ready=true,full=true,failed=false}={}) {
  const calls:any[]=[],saved:any[]=[],messages:any[]=[];
  const state:any={view:'requests',p:null};
- const slide={layout:'escena',title:'Crece',photo:'Una escena real',photoPrompt:'A natural scene',blocks:[]};
+ const slide={id:'slide-1',theme:'light',layout:'escena',title:'Crece',photo:'Una escena real',photoPrompt:'A natural scene',blocks:[]};
  const elements:any={};
- const env:any={state,console,Set,Date,
+ const env:any={state,console,Set,Date,Carousel,uid:()=> 'slide-1',stableProject:(p:any)=>p,defaultMode:()=>full?'completa':'foto',brandOf:()=>({modo:full?'completa':'foto'}),
   $:(key:string)=>elements[key]||=( {textContent:''}),
   brandMotor:()=>({motor:'nano_banana_pro',tamano:'2k'}),motorReady:()=>ready,fullMode:()=>full,
   isFull:(d:any)=>['completa','editable'].includes(d.modo),peopleIn:()=>['approved-person'],
@@ -18,17 +19,18 @@ function fixture({save=true,ready=true,full=true,failed=false}={}) {
   saveRequest:async(r:any)=>{calls.push(['request',r]);return r;},showView:(view:string)=>state.view=view,
   renderCreate:()=>{},renderEditor:()=>{},renderProposal:()=>{},renderCost:()=>{},toast:(...args:any[])=>messages.push(args),
   draftMotor:()=>({motor:'nano_banana_pro',tamano:'2k'}),promptFor:(s:any)=>s.photoPrompt,slidePeople:(s:any)=>s.people,
-  slidePayload:(s:any)=>({title:s.title,photo:s.photo,photoPrompt:s.photoPrompt}),dropLayerKeys:(x:any)=>x,
+  slidePayload:Carousel.slideContent,dropLayerKeys:(x:any)=>x,
   clearTimeout:()=>{},setTimeout:()=>{},
   api:async(path:string,body:any)=>{
    calls.push([path,body]);
    if(path==='/api/draft')return {name:'Carrusel de prueba',visualSystem:'Brand serif system',avoid:'No clutter',concept:'Idea',slides:[slide]};
    if(path==='/api/generate')return {id:'batch'};
-   if(path.startsWith('/api/generate?id='))return {done:true,items:[failed?{index:0,status:'failed'}:{index:0,status:'completed',url:'storage://image',full}]};
+   if(path.startsWith('/api/generate?id='))return {done:true,items:[failed?{index:0,status:'failed'}:{index:0,slideId:state.p.slides[0].id,revision:Carousel.slideRevision(state.p.slides[0]),originalImage:'',status:'completed',url:'storage://image',full}]};
    throw new Error('Unexpected route '+path);
   },
  };
- runInNewContext(requestCode+'\n'+generationCode+'\nglobalThis.run=draftFromRequest;globalThis.poll=pollGeneration;',env);
+ const builder=source.slice(source.indexOf('function buildDraft('),source.indexOf('async function propose('));
+ runInNewContext(builder+'\n'+requestCode+'\n'+generationCode+'\nglobalThis.run=draftFromRequest;globalThis.poll=pollGeneration;',env);
  return {env,state,calls,saved,messages};
 }
 const request={id:'request-123',brief:{marca:'brand-123',tema:'Una idea',laminas:'1'}};

@@ -4,6 +4,7 @@
 //    quedan idénticos al original.
 // El Editor dibuja el fondo limpio + el texto como texto real (editable y movible) + el logo oficial de la marca.
 import sharp from 'sharp';
+import {executionSignal} from './execution.js';
 
 const API='https://generativelanguage.googleapis.com/v1beta/models/';
 const DETECT_MODEL='gemini-3.5-flash',CLEAN_MODEL='gemini-3.1-flash-image';
@@ -11,7 +12,7 @@ export const LAYERS_USD=0.101+0.006;   // limpieza a 2K + detección y revisión
 
 export type Box=[number,number,number,number];   // x, y, ancho, alto en fracción de la imagen (0–1)
 export type TextLayer={id:string,text:string,box:Box,color:string,accent:string,font:string,weight:number,italic:boolean,upper:boolean,align:'left'|'center'|'right',spacing:'tight'|'normal'|'wide',behind:boolean,effect:string};
-export type LogoLayer={id:string,box:Box,bg:'dark'|'light'};
+export type LogoLayer={id:string,box:Box,bg:'dark'|'light',brand:'primary'|'byline'};
 export type Layers={plate:Buffer,width:number,height:number,texts:TextLayer[],logos:LogoLayer[]};
 
 const SCHEMA={type:'OBJECT',properties:{
@@ -50,7 +51,7 @@ Fill every removed area with what would naturally be behind it, continuing the l
 Keep everything else exactly the same: same people and faces, same vehicles and their badges, same composition, framing, colors and lighting. Do not add anything new. No text, no letters, no logos in the result.`;
 
 async function gemini(model:string,body:any,timeout=180000){
- const r=await fetch(API+model+':generateContent',{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY!,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeout),redirect:'error'});
+ const r=await fetch(API+model+':generateContent',{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY!,'Content-Type':'application/json'},body:JSON.stringify(body),signal:executionSignal(timeout),redirect:'error'});
  if(r.status===402)throw new Error('la cuenta de Google (Gemini) se quedó sin saldo prepagado; recárgala en AI Studio (ai.studio/projects).');
  if(!r.ok)throw new Error(`Google respondió ${r.status} al separar capas.`);return r.json() as Promise<any>;}
 
@@ -58,7 +59,8 @@ const clamp=(v:number)=>Math.max(0,Math.min(1,v));
 const toBox=(b:any):Box|null=>{if(!Array.isArray(b)||b.length!==4||b.some((v:any)=>typeof v!=='number'))return null;const [y0,x0,y1,x1]=b.map((v:number)=>clamp(v/1000)) as [number,number,number,number];return x1-x0>0.005&&y1-y0>0.004?[x0,y0,x1-x0,y1-y0]:null;};
 const hex=(c:any,f='#FFFFFF')=>/^#?[0-9a-f]{6}$/i.test(String(c||'').trim())?'#'+String(c).trim().replace('#','').toUpperCase():f;
 // Familia de Google Fonts que más se parece a la detectada (el display de la marca manda si es del mismo tipo)
-function family(typeface:string,role:string,fonts:any){
+export function family(typeface:string,role:string,fonts:any){
+ const approved=role==='display'?fonts?.display:fonts?.body;if(approved)return approved;
  if(typeface==='condensed_sans')return 'Anton';
  if(typeface==='extended_sans')return 'Archivo Black';
  if(typeface==='serif')return role==='display'?'Playfair Display':'Lora';
@@ -70,9 +72,9 @@ function family(typeface:string,role:string,fonts:any){
 // Parte del área más chica que queda dentro de la otra (1 = una contiene a la otra)
 function overlap(a:Box,b:Box){const w=Math.min(a[0]+a[2],b[0]+b[2])-Math.max(a[0],b[0]),h=Math.min(a[1]+a[3],b[1]+b[3])-Math.max(a[1],b[1]);return w>0&&h>0?w*h/Math.min(a[2]*a[3],b[2]*b[3]):0;}
 const words=(t:string)=>t.replace(/[*]/g,'').split(/\s+/).filter(Boolean).length;
-export async function detect(img:Buffer,mime:string,expected:string[],brand:{name?:string,fonts?:any}){
+export async function detect(img:Buffer,mime:string,expected:string[],brand:{name?:string,fonts?:any,bylineName?:string}){
  let out:any;
- for(let i=0;i<2&&!out;i++){try{const d=await gemini(DETECT_MODEL,{contents:[{role:'user',parts:[{inline_data:{mime_type:mime,data:img.toString('base64')}},{text:DETECT_PROMPT(expected,brand.name||'')}]}],generationConfig:{responseMimeType:'application/json',responseSchema:SCHEMA}},90000);
+ for(let i=0;i<2&&!out;i++){try{const d=await gemini(DETECT_MODEL,{contents:[{role:'user',parts:[{inline_data:{mime_type:mime,data:img.toString('base64')}},{text:DETECT_PROMPT(expected,[brand.name,brand.bylineName].filter(Boolean).join(' and '))}]}],generationConfig:{responseMimeType:'application/json',responseSchema:SCHEMA}},90000);
   out=JSON.parse((d.candidates?.[0]?.content?.parts||[]).map((p:any)=>p.text||'').join(''));}catch(e){if(i)throw e;}}
  const texts:TextLayer[]=[];
  for(const [i,l] of (out.lines||[]).entries()){const box=toBox(l.box_2d);let t=String(l.text||l.printed||'').replace(/[*]/g,'').trim();const pr=String(l.printed||'').replace(/[*]/g,'').trim();if(pr&&words(t)>words(pr))t=pr;if(!box||!t)continue;
@@ -81,7 +83,8 @@ export async function detect(img:Buffer,mime:string,expected:string[],brand:{nam
    color:hex(l.color),accent:hex(l.accent_color,hex(l.color)),font:family(l.typeface,l.role,brand.fonts),weight:Math.max(100,Math.min(900,Math.round((+l.weight||700)/100)*100)),
    italic:!!l.italic,upper:!!l.uppercase,align:['left','center','right'].includes(l.align)?l.align:'left',spacing:['tight','normal','wide'].includes(l.letter_spacing)?l.letter_spacing:'normal',
    behind:!!l.behind_person,effect:String(l.effect||'none')});}
- const logos=(out.logos||[]).map((l:any,i:number)=>({id:'g'+i,box:toBox(l.box_2d)})).filter((l:any)=>l.box) as {id:string,box:Box}[];
+ const owner=(name:string)=>{const norm=(v:string)=>v.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g,'');const n=norm(name),secondary=brand.bylineName&&n.includes(norm(brand.bylineName)),primary=brand.name&&n.includes(norm(brand.name));return secondary&&!primary?'byline':!brand.bylineName||primary&&!secondary?'primary':'unknown';};
+ const logos=(out.logos||[]).map((l:any,i:number)=>({id:'g'+i,name:String(l.name||''),box:toBox(l.box_2d),brand:owner(String(l.name||''))})).filter((l:any)=>l.box) as {id:string,box:Box,brand:'primary'|'byline'|'unknown'}[];
  // Fuera: el texto que es parte de un logo y las líneas repetidas (misma caja); de las repetidas queda la que trae acento
  const kept:TextLayer[]=[];
  for(const t of texts){if(logos.some(l=>overlap(t.box,l.box)>0.6))continue;const twin=kept.findIndex(k=>overlap(k.box,t.box)>0.7);
@@ -165,14 +168,16 @@ export async function clean(img:Buffer,mime:string,texts:string[],boxes:Box[],wi
 // Fondo bajo cada logo (para elegir la versión del logo oficial que contrasta)
 async function bgOf(plate:Buffer,W:number,H:number,[x,y,w,h]:Box):Promise<'dark'|'light'>{
  const r={left:Math.floor(x*W),top:Math.floor(y*H),width:Math.max(1,Math.floor(w*W)),height:Math.max(1,Math.floor(h*H))};
- const st=await sharp(plate).extract({...r,width:Math.min(r.width,W-r.left),height:Math.min(r.height,H-r.top)}).stats();
+ const sample=await sharp(plate).extract({...r,width:Math.min(r.width,W-r.left),height:Math.min(r.height,H-r.top)}).toBuffer();const st=await sharp(sample).stats();
  const [R=0,G=0,B=0]=st.channels.map(c=>c.mean);return 0.2126*R+0.7152*G+0.0722*B<140?'dark':'light';}
 
-export async function buildLayers(img:Buffer,mime:string,expected:string[],brand:{name?:string,fonts?:any,hasLogo:boolean}):Promise<Layers>{
+export async function buildLayers(img:Buffer,mime:string,expected:string[],brand:{name?:string,fonts?:any,hasLogo:boolean,bylineName?:string,bylineLogo?:boolean}):Promise<Layers>{
  const {texts,logos}=await detect(img,mime,expected,brand);
+ const normalize=(v:string)=>v.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).sort().join(' ');
+ if(expected.length&&normalize(texts.map(t=>t.text.replace(/\*/g,'')).join(' '))!==normalize(expected.join(' ')))throw new Error('El texto detectado no coincide con el texto aprobado. Revisa la lámina original antes de separar.');
  if(!texts.length&&!logos.length)throw new Error('No se encontró texto en la lámina para separar.');
  // Los logos solo se borran si la marca tiene logo oficial para ponerlo encima
- const useLogos=brand.hasLogo?logos:[];
+ const useLogos=logos.filter((l):l is typeof l & {brand:'primary'|'byline'}=>l.brand==='byline'?!!brand.bylineLogo:l.brand==='primary'&&brand.hasLogo);
  const {plate,width,height}=await clean(img,mime,texts.map(t=>t.text.replace(/\*/g,'')),[...texts.map(t=>t.box),...useLogos.map(l=>l.box)],useLogos.length>0);
  const withBg:LogoLayer[]=[];for(const l of useLogos)withBg.push({...l,bg:await bgOf(plate,width,height,l.box)});
  return {plate,width,height,texts,logos:withBg};

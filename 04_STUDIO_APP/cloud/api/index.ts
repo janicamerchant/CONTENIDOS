@@ -3,11 +3,14 @@ import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {waitUntil} from '@vercel/functions';
 import {aiConfig,enqueue,generationStatus,runWorker,recoveredProject,soulRoute} from '../src/generation.js';
-import {libraryRoute,adminOnly,checked,readyFile} from '../src/library.js';
+import {libraryRoute,adminOnly,checked,readyFile,brandDetail} from '../src/library.js';
 import {authenticate,authorizeBrand,databaseError,HttpError} from '../src/auth.js';
 import {adminClient,config} from '../src/config.js';
 import {teamRoute} from '../src/team.js';
 import {reelsRoute} from '../src/reels.js';
+import {freezeCampaign,verifiedCampaign,signReview,validReview,reviewHash} from '../src/campaign.js';
+import {resolveMode,reviewRevision,reviewIssues,coverRevision,coverIssues,slideContent} from '../shared/carousel.js';
+import {groupedDeliveries} from '../src/deliveries.js';
 const id=z.string().min(1).max(128);
 async function body(req:IncomingMessage):Promise<any>{
  // Vercel may have parsed req.body. Still enforce a small metadata-only API.
@@ -39,6 +42,42 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    // Con capas, el recorte es de la persona sobre el fondo limpio
    checked(await adminClient().from('trabajos').update({resultado:b.layers&&j.resultado.layers?{...j.resultado,layers:{...j.resultado.layers,cutout:'storage://'+b.fileId}}:{...j.resultado,cutout:'storage://'+b.fileId}}).eq('id',j.id).eq('estado','succeeded'));return send(200,{ok:true});
   }
+  if(route==='projects/results'&&req.method==='GET'){
+   const projectId=id.parse(url.searchParams.get('id'));const project=checked(await who.db.from('proyectos').select('marca_id').eq('id',projectId).single());await authorizeBrand(who,project.marca_id);
+   const rows=checked(await who.db.from('trabajos').select('id,payload,resultado,created_at').eq('proyecto_id',projectId).eq('tipo','imagen').eq('estado','succeeded').order('created_at',{ascending:false}).limit(30));
+   return send(200,rows.filter((j:any)=>j.resultado?.url).map((j:any)=>({id:j.id,slideId:j.payload.slideId||j.payload.slide?.id,slide:j.payload.slide,createdAt:j.created_at,...j.resultado})));
+  }
+  if(route==='projects/cover-review'&&req.method==='POST'){
+   const b=z.object({projectId:id,version:z.number().int().positive()}).parse(await body(req));
+   const row=checked(await who.db.from('proyectos').select('*').eq('id',b.projectId).single());await authorizeBrand(who,row.marca_id,true);
+   if(row.version!==b.version)throw new HttpError(409,'El proyecto cambió; vuelve a revisar la portada.');
+   const active=checked(await who.db.from('trabajos').select('payload').eq('proyecto_id',row.id).eq('tipo','imagen').in('estado',['queued','running','waiting']));
+   if(active.some((j:any)=>j.payload.slideId===row.documento.slides[0]?.id))throw new HttpError(409,'Espera a que termine la portada antes de aprobarla.');
+   const issues=coverIssues(row.documento);if(issues.length)throw new HttpError(422,issues.join(' '));
+   const revision=coverRevision(row.documento),coverReview={revision:reviewHash(revision),signature:signReview(revision),approvedAt:new Date().toISOString(),approvedBy:who.id};
+   const saved=checked(await who.db.rpc('guardar_proyecto',{p_id:row.id,p_marca:row.marca_id,p_documento:{...row.documento,coverReview},p_version:row.version}));
+   return send(200,{id:row.id,version:saved.version,coverReview});
+  }
+  if(route==='projects/pattern'&&req.method==='POST'){
+   const b=z.object({projectId:id,version:z.number().int().positive()}).parse(await body(req));
+   const row=checked(await who.db.from('proyectos').select('*').eq('id',b.projectId).single());await authorizeBrand(who,row.marca_id,true);
+   if(row.version!==b.version||!validReview(row.documento.review,reviewRevision(row.documento)))throw new HttpError(409,'Revisa y aprueba el carrusel antes de usarlo como patrón.');
+   const brand=checked(await who.db.from('marcas').select('*').eq('id',row.marca_id).single()),frozen=verifiedCampaign(row.documento.campaign,row.marca_id);
+   const style=Object.fromEntries(['design','fonts','colors','titleCase','look','logos','byline','theme'].filter(k=>frozen[k]!==undefined).map(k=>[k,frozen[k]]));
+   Object.assign(style,{modo:row.documento.modo,sistema_visual:row.documento.visualSystem||frozen.sistema_visual||'',evitar:row.documento.avoid||frozen.evitar||''});
+   const pattern={version:1,projectId:row.id,projectVersion:row.version,name:row.documento.name,approvedAt:new Date().toISOString(),approvedBy:who.id,style,examples:row.documento.slides.map((s:any)=>({id:s.id,...slideContent(s)}))};
+   checked(await adminClient().rpc('guardar_marca',{p_actor:who.id,p_marca:brand.id,p_version:brand.version,p_identidad:{...brand.identidad,carouselPattern:pattern,modo:row.documento.modo},p_reglas:brand.reglas,p_personas:null}));
+   return send(200,{ok:true,pattern});
+  }
+  if(route==='projects/review'&&req.method==='POST'){
+   const b=z.object({projectId:id,version:z.number().int().positive()}).parse(await body(req));
+   const row=checked(await who.db.from('proyectos').select('*').eq('id',b.projectId).single());await authorizeBrand(who,row.marca_id,true);
+   if(row.version!==b.version)throw new HttpError(409,'El proyecto cambió; vuelve a revisar.');
+   const issues=reviewIssues(row.documento);if(issues.length)throw new HttpError(422,issues.join(' '));
+   const revision=reviewRevision(row.documento),review={revision:reviewHash(revision),signature:signReview(revision),approvedAt:new Date().toISOString(),approvedBy:who.id};
+   const document={...row.documento,review};const saved=checked(await who.db.rpc('guardar_proyecto',{p_id:row.id,p_marca:row.marca_id,p_documento:document,p_version:row.version}));
+   return send(200,{id:row.id,version:saved.version,review});
+  }
   if(route==='projects'){
    if(req.method==='GET'){
     const project=url.searchParams.get('id');let q=who.db.from('proyectos').select('*').order('updated_at',{ascending:false});
@@ -48,7 +87,13 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    }
    const b=z.object({id,brand:id,version:z.number().int().nonnegative(),slides:z.array(z.record(z.string(),z.unknown())).max(30)}).passthrough().parse(await body(req));
    await authorizeBrand(who,b.brand,true);const {version,...document}=b;
-   const r=await who.db.rpc('guardar_proyecto',{p_id:b.id,p_marca:b.brand,p_documento:document,p_version:version});databaseError(r.error);return send(200,{id:r.data.id,version:r.data.version,updatedAt:r.data.updated_at});
+   const old=checked(await who.db.from('proyectos').select('*').eq('id',b.id).maybeSingle());
+   const campaign=b.refreshCampaign===true?freezeCampaign(await brandDetail(who,b.brand)):old?.documento.campaign||b.campaign||freezeCampaign(await brandDetail(who,b.brand));
+   const frozen=verifiedCampaign(campaign,b.brand);document.campaign=campaign;document.modo=resolveMode(b.modo,frozen);if(b.refreshCampaign===true){document.visualSystem='';document.avoid='';}delete document.refreshCampaign;
+   const ids=new Set();for(const slide of document.slides as any[]){if(!slide.id||ids.has(slide.id))throw new HttpError(400,'Cada lámina necesita un ID único.');ids.add(slide.id);}
+   const previous=old?.documento.review;document.review=validReview(previous,reviewRevision(document))?previous:null;
+   const previousCover=old?.documento.coverReview;document.coverReview=validReview(previousCover,coverRevision(document))?previousCover:null;
+   const r=await who.db.rpc('guardar_proyecto',{p_id:b.id,p_marca:b.brand,p_documento:document,p_version:version});databaseError(r.error);return send(200,{id:r.data.id,version:r.data.version,updatedAt:r.data.updated_at,campaign,review:document.review,coverReview:document.coverReview,visualSystem:document.visualSystem,avoid:document.avoid});
   }
   if(route==='brands'&&req.method==='GET'){const r=await who.db.from('marcas').select('*');databaseError(r.error);return send(200,{brands:r.data?.filter(b=>!b.archivada&&b.id!=='_comun').map(b=>({...b.identidad,id:b.id,version:b.version})),archived:r.data?.filter(b=>b.archivada).map(b=>({id:b.id,name:b.identidad.name}))});}
   if(route==='config'&&req.method==='GET')return send(200,aiConfig());
@@ -60,18 +105,24 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    const r=await who.db.from('archivos').select('id,nombre,marca_id').eq('listo',true).is('eliminado_at',null).like('mime','image/%').limit(1000);databaseError(r.error);
    return send(200,r.data?.map(x=>({name:x.nombre,group:x.marca_id??'Personas y originales',folder:x.marca_id??'',url:`storage://${x.id}`})));
   }
+  if(route==='deliveries/commit'&&req.method==='POST'){
+   const b=z.object({exportId:z.uuid(),projectId:id,version:z.number().int().positive()}).parse(await body(req));
+   const project=checked(await who.db.from('proyectos').select('*').eq('id',b.projectId).single());await authorizeBrand(who,project.marca_id,true);
+   if(!validReview(project.documento.review,reviewRevision(project.documento)))throw new HttpError(409,'Revisa y aprueba el carrusel antes de entregar.');
+   checked(await adminClient().rpc('publicar_exportacion',{p_actor:who.id,p_exportacion:b.exportId,p_proyecto:b.projectId,p_version:b.version}));return send(200,{ok:true});
+  }
   if(route==='deliveries'){
    if(req.method==='POST'){
-    const b=z.object({id:z.uuid(),folder:z.string().min(1).max(160),name:z.string().min(1).max(180)}).parse(await body(req));
-    const f=await who.db.from('archivos').select('marca_id,listo,mime').eq('id',b.id).single();
-    if(f.error||!f.data?.listo||!f.data.marca_id||!f.data.mime.startsWith('image/'))throw new HttpError(404,'Imagen no encontrada.');
-    await authorizeBrand(who,f.data.marca_id,true);
-    const saved=await adminClient().from('entregas').upsert({marca_id:f.data.marca_id,archivo_id:b.id,carpeta:b.folder,nombre:b.name},{onConflict:'archivo_id',ignoreDuplicates:true});databaseError(saved.error);return send(200,{ok:true});
+    const b=z.object({id:z.uuid(),folder:z.string().min(1).max(160),name:z.string().min(1).max(180),exportId:z.uuid(),projectId:id,version:z.number().int().positive(),slideId:id,position:z.number().int().min(0).max(9),total:z.number().int().min(1).max(10)}).parse(await body(req));
+    const project=checked(await who.db.from('proyectos').select('*').eq('id',b.projectId).single());await authorizeBrand(who,project.marca_id,true);
+    if(project.version!==b.version||!validReview(project.documento.review,reviewRevision(project.documento)))throw new HttpError(409,'El proyecto cambió o falta aprobar su revisión.');
+    if(!project.documento.slides.some((s:any)=>s.id===b.slideId)||b.position>=b.total)throw new HttpError(400,'Posición de lámina inválida.');
+    const f=await readyFile(who,b.id,project.marca_id);if(!f.mime.startsWith('image/'))throw new HttpError(400,'Selecciona una imagen.');
+    const existing=checked(await who.db.from('entregas').select('*').eq('exportacion_id',b.exportId));
+    if(existing.some((e:any)=>e.publicada||e.proyecto_id!==b.projectId||e.proyecto_version!==b.version||e.total!==b.total))throw new HttpError(409,'Esta exportación ya terminó o pertenece a otra revisión.');
+    checked(await adminClient().from('entregas').upsert({marca_id:project.marca_id,archivo_id:b.id,carpeta:b.folder,nombre:b.name,exportacion_id:b.exportId,proyecto_id:b.projectId,proyecto_version:b.version,lamina_id:b.slideId,posicion:b.position,total:b.total},{onConflict:'marca_id,exportacion_id,posicion'}));return send(200,{ok:true});
    }
-   const r=await who.db.from('entregas').select('*').order('created_at',{ascending:false});databaseError(r.error);
-   const groups=new Map<string,{folder:string;updatedAt:string;images:string[]}>();
-   for(const row of r.data??[]){const key=row.marca_id+':'+row.carpeta;if(!groups.has(key))groups.set(key,{folder:row.carpeta,updatedAt:row.created_at,images:[]});groups.get(key)!.images.push(`storage://${row.archivo_id}`);}
-   return send(200,[...groups.values()]);
+   const r=checked(await who.db.from('entregas').select('*').order('created_at',{ascending:false}));return send(200,groupedDeliveries(r));
   }
   if(route==='jobs'&&req.method==='GET'){
    const job=z.uuid().parse(url.searchParams.get('id'));const r=await who.db.from('trabajos').select('id,estado,resultado,error,updated_at').eq('id',job).single();databaseError(r.error);return send(200,r.data);

@@ -33,5 +33,27 @@ try {
   return {fits:zones.every(n=>n.scrollHeight<=parseFloat(n.style.maxHeight)+2),top:zones[0].offsetTop+zones[0].scrollHeight,bottom:zones[1].offsetTop,fit:zones[0].style.getPropertyValue('--fit'),copy:document.querySelector('.over').style.getPropertyValue('--fit')};
  });
  assert.ok(stress.fits,'long text fits');assert.ok(stress.top+46<=stress.bottom,'zones do not collide');assert.equal(Number(stress.fit),Number(stress.copy),'overlay matches original');
+ // Real regression from the Janica script: an underlined word used to split as «gobiern / a».
+ await page.evaluate(()=>{
+  const el=document.querySelector('.slide');el.innerHTML='<div class="s-blocks z-arriba"><div class="blk blk-titulo-xl w-medio">Lo que <em>obedeces</em><br>te <span class="ul">gobierna.</span></div></div>';
+  fitSlide(el);
+ });
+ const words=await page.evaluate(()=>{
+  const heading=document.querySelector('.blk'),span=heading.querySelector('.ul'),range=document.createRange();range.selectNodeContents(span);
+  return {wordLines:[...range.getClientRects()].filter(r=>r.width>0).length,scroll:heading.scrollWidth,width:heading.clientWidth,fit:heading.parentElement.style.getPropertyValue('--fit')};
+ });
+ assert.equal(words.wordLines,1,'a headline word is never split across lines');assert.ok(words.scroll<=words.width+2,'longest word fits its actual column');
+ await page.screenshot({path:'artifacts/layout-audit/janica-word-wrap.png'});
+ // Labels cannot cover a central highlighted headline; citations reserve the folio row.
+ await page.evaluate(()=>{
+  const el=document.querySelector('.slide');el.innerHTML='<div class="s-blocks z-arriba"><div class="blk blk-serif">Los primeros días</div></div><div class="s-blocks z-centro"><div class="blk blk-titulo-xl">Es tu atención<br><mark class="hl">desintoxicándose.</mark></div></div><div class="s-blocks z-izquierda"><div class="blk blk-etiqueta">PROCESO</div></div><div class="s-blocks z-derecha"><div class="blk blk-etiqueta">VALE LA PENA</div></div><div class="s-blocks z-abajo"><div class="blk blk-fuente">Gloria Mark · Gallup, 2006</div></div><div class="s-count">7/8</div>';
+  fitSlide(el);
+ });
+ const collision=await page.evaluate(()=>{
+  const el=document.querySelector('.slide'),middle=el.querySelector('.z-centro').getBoundingClientRect(),labels=[...el.querySelectorAll('.z-izquierda,.z-derecha')].map(n=>n.getBoundingClientRect()),source=el.querySelector('.blk-fuente').getBoundingClientRect(),count=el.querySelector('.s-count').getBoundingClientRect();
+  return {labelsClear:labels.every(b=>b.bottom+22<=middle.top||b.top>=middle.bottom+22),sourceClear:source.bottom+22<=count.top};
+ });
+ assert.ok(collision.labelsClear,'side labels do not collide with the central headline');assert.ok(collision.sourceClear,'citation clears folio');
+ await page.screenshot({path:'artifacts/layout-audit/janica-zones.png'});
  console.log('Browser layout audit passed: hierarchy, grouping, overflow, zone collisions and overlay.');
 } finally {await browser.close();}

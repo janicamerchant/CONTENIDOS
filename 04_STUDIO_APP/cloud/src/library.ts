@@ -1,3 +1,4 @@
+import {canonical} from '../shared/carousel.js';
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {adminClient} from './config.js';
@@ -26,15 +27,16 @@ export async function brandDetail(w:Identity,id:string){
  const ps=personList.filter((p:any)=>p.brands.includes(id));const resources:any={conocimiento:[],referencias:[],logos:[],vestuario:[],otros:[]};const trash:any[]=[];
  for(const r of rr){const f=r.archivos;if(!f?.listo)continue;if(r.eliminado_at||r.tipo==='papelera'){trash.push({name:r.id,original:r.metadata?.original||r.ruta,kind:r.metadata?.kind||r.tipo,deletedAt:r.eliminado_at});continue;}
  (resources[r.tipo]??=[]).push({path:r.ruta,name:f.nombre,size:f.bytes,active:r.activo,tags:r.etiquetas||[],url:`storage://${f.id}`,id:r.id});}
- const logos=structuredClone(row.identidad.logos||{});for(const d of Object.values(logos) as any[]){const r=rr.find((r:any)=>r.ruta===d.src&&!r.eliminado_at);if(r)d.url=`storage://${r.archivo_id}`;else delete d.url;}
+ const resolveLogos=(defs:any)=>{const logos=structuredClone(defs||{});for(const d of Object.values(logos) as any[]){const r=rr.find((r:any)=>r.ruta===d.src&&!r.eliminado_at&&r.activo&&r.archivos?.listo&&!r.archivos.eliminado_at);if(r)d.url=`storage://${r.archivo_id}`;else delete d.url;}return logos;};
+ const logos=resolveLogos(row.identidad.logos);
  const datos=row.identidad.datos??checked(await w.db.from('marca_datos').select('dato,fuente,url').eq('marca_id',id));
- const byline=row.identidad.byline?{...row.identidad.byline,...row.identidad.byline.logos}:undefined;
+ const byline=row.identidad.byline?{...row.identidad.byline,logos:resolveLogos(row.identidad.byline.logos),...resolveLogos(row.identidad.byline.logos)}:undefined;
  return {...row.identidad,byline,id,version:row.version,name:row.identidad.name||(id==='_comun'?'Documentos comunes':id),rules:row.reglas,logos,datos,personas:ps.map((p:any)=>p.id),people:ps,outfits:resources.vestuario.filter((r:any)=>r.active),resources,trash,meter:null};
 }
 export async function brandList(w:Identity){const rows=checked(await w.db.from('marcas').select('*'));const brands=await Promise.all(rows.filter((r:any)=>!r.archivada&&r.id!=='_comun').map(async(row:any)=>{const {resources,trash,meter,rules,...b}=await brandDetail(w,row.id);return b;}));
  const archived=rows.filter((r:any)=>r.archivada).map((r:any)=>({id:r.id,name:'marca:'+r.id,label:r.identidad.name,type:'marca'}));if(w.role==='admin'){const ps=checked(await w.db.from('personas').select('*').eq('archivada',true));archived.push(...ps.map((r:any)=>({id:r.id,name:'persona:'+r.id,label:r.identidad.name,type:'persona'})));}return {brands,archived};}
 const fields=['name','file','swatch','design','theme','colors','fonts','titleCase','defaults','look','cutout','logos','byline','modo','plantillas','motor_persona','motor_imagen','tamano','datos','sistema_visual','evitar'];
-function cleanIdentity(b:any,old:any={}){const out={...old};for(const key of fields)if(Object.hasOwn(b,key))out[key]=b[key];if(b.name!==undefined)out.name=name.parse(b.name);if(b.datos!==undefined)out.datos=z.array(z.object({dato:name,fuente:name,url:z.string().max(2000).optional()})).max(200).parse(b.datos);out.file=slug(out.file||out.name||'carrusel').toUpperCase();if(out.design==='base')out.swatch=out.colors?.accent||'#ECFE6E';return out;}
+function cleanIdentity(b:any,old:any={}){const out={...old};for(const key of fields)if(Object.hasOwn(b,key))out[key]=b[key];if(b.name!==undefined)out.name=name.parse(b.name);if(b.datos!==undefined)out.datos=z.array(z.object({dato:name,fuente:name,url:z.string().max(2000).optional()})).max(200).parse(b.datos);if(old.carouselPattern&&['design','fonts','colors','titleCase','look','logos','byline','theme','modo','sistema_visual','evitar'].some(k=>Object.hasOwn(b,k)&&canonical(b[k])!==canonical(old[k])))delete out.carouselPattern;out.file=slug(out.file||out.name||'carrusel').toUpperCase();if(out.design==='base')out.swatch=out.colors?.accent||'#ECFE6E';return out;}
 export async function libraryRoute(w:Identity,route:string,method:string,b:any):Promise<any|undefined>{
  const db=adminClient();const parts=route.split('/').map(decodeURIComponent),[section,id,action]=parts;
  if(section==='requests'&&method==='POST'){

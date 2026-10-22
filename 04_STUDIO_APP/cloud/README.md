@@ -40,7 +40,7 @@ Un trabajo `uncertain` requiere revisar su ID y el historial del proveedor antes
 
 Configurar en Vercel: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ANTHROPIC_API_KEY`, `HF_CREDENTIALS`, `CRON_SECRET`, `DEEPGRAM_API_KEY` y `APIFY_TOKEN`. Todas salvo las dos primeras son secretos. No subir `.env` ni `SUPABASE_ACCESS_TOKEN`.
 
-Solo se muestran motores conectados: Google y OpenAI directos no están configurados en esta instalación. No se requieren para el motor Higgsfield disponible.
+Solo se muestran motores con credenciales de servidor. Google habilita Nano Banana y la separación de capas; Higgsfield habilita Flare y Soul. Cada motor anuncia sus modos y tamaños compatibles; Soul requiere una identidad entrenada y admite modo foto. OpenAI directo no está implementado en este backend.
 
 ## Desarrollo y validación
 
@@ -51,7 +51,11 @@ Solo se muestran motores conectados: Google y OpenAI directos no están configur
 - `npx tsx scripts/functional-test.ts`: flujos API/navegador contra `TEST_SITE` (por defecto `http://127.0.0.1:4323`). Crea y elimina una marca de prueba.
 - Añadir `--cutout` para probar segmentación y subida, `--ai` para una propuesta y una imagen reales, `--profile` para un perfil real. Las opciones IA consumen créditos del proveedor.
 
-La auditoría histórica y su estado de resolución están en [AUDITORIA_PRODUCCION.md](AUDITORIA_PRODUCCION.md).
+La auditoría histórica y su estado de resolución están en [AUDITORIA_PRODUCCION.md](AUDITORIA_PRODUCCION.md). Las correcciones del flujo de carruseles y su migración están en [CORRECCIONES_CONSISTENCIA.md](CORRECCIONES_CONSISTENCIA.md).
+
+Crear, Solicitudes y Recuperar conservan el mismo modo de campaña. La marca y las referencias quedan congeladas al crear el proyecto; «Actualizar configuración de marca» las actualiza explícitamente. Los resultados se asocian por ID y revisión de la lámina. «Versiones generadas» permite recuperar un resultado que no se aplicó por cambios posteriores.
+
+Antes de exportar, revisa todas las láminas y pulsa «He revisado el carrusel». La aprobación se invalida al cambiar el contenido o diseño. Las exportaciones conservan orden y versión, y aparecen en Entregas cuando se completa todo el lote. `npm run test:carousel-browser` verifica el flujo con una API local de prueba sin cargar credenciales ni consumir IA.
 
 ## Datos y operación
 
@@ -62,3 +66,10 @@ Las migraciones están en `supabase/migrations/`; el proyecto remoto es `okgjpsn
 SMTP e invitaciones por email no están configurados. El acceso existente usa contraseña. MediaPipe segmenta personas, no objetos generales; todo resultado generativo debe revisarse visualmente antes de publicar contenido.
 
 Referencias de implementación: [Higgsfield API](https://open.higgsfield.ai/models/marketing-studio/image/flare/api-reference), [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs), [Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing), [Supabase TUS firmado](https://supabase.com/docs/guides/storage/uploads/resumable-uploads#presigned-uploads), [MediaPipe](https://developers.google.com/edge/mediapipe/solutions/vision/image_segmenter/web_js).
+
+
+### Consistencia de carruseles
+
+En **Crear**, genera la portada y ábrela en el Editor. Revísala y pulsa **Revisar y aprobar portada**; después usa **Generar láminas pendientes**. Al terminar, revisa el carrusel para habilitar la exportación. Para reutilizar su identidad en la marca, pulsa **Usar como patrón de marca** después de esa revisión.
+
+Las campañas nuevas usan foto con textos y logos editables por defecto. El modo de lámina completa puede elegirse al crear. `npm run benchmark:carousel` produce el reporte histórico y los briefs fijos de comparación de las siete marcas. Detalles de migración, pruebas y activación en [CORRECCIONES_CONSISTENCIA.md](CORRECCIONES_CONSISTENCIA.md).

@@ -51,6 +51,20 @@ test('Postgres real: aislamiento, privilegios, versiones y cola',async t=>{
   await as('authenticated',B);assert.deepEqual((await rows('select id from reels_proyectos')).map(r=>r.id),['r-janica']);assert.deepEqual((await rows('select marca_id from reels_marcas')).map(r=>r.marca_id),['janica']);
   await assert.rejects(db.query(`insert into reels_proyectos(id,marca_id,tipo,documento) values('x','janica','reel','{}')`),/permission denied/);await assert.rejects(db.query(`update reels_marcas set contexto='x'`),/permission denied/);});
  await t.test('Reels: la cola acepta trabajos de tipo reels',async()=>{await as('service_role');const r=await rows(`select (encolar_trabajo('${A}','eva','reels','deepgram','{"op":"transcribir"}','50000000-0000-4000-a000-000000000001','h',1,'50000000-0000-4000-a000-000000000002')).tipo`);assert.equal(r[0].tipo,'reels');await assert.rejects(db.query(`select encolar_trabajo('${A}','eva','otro','x','{}','50000000-0000-4000-a000-000000000003','h',1,'50000000-0000-4000-a000-000000000004')`),/check constraint/);});
+ await t.test('exportación atómica: incompleta no publica, revisión obsoleta no publica y orden no duplica',async()=>{
+  await as('service_role');
+  await db.exec(`insert into proyectos(id,marca_id,documento) values('p-export','eva','{"id":"p-export","brand":"eva","slides":[]}');
+   insert into archivos(id,alcance,marca_id,nombre,mime,bytes,listo) values('61000000-0000-4000-a000-000000000001','marca','eva','01.png','image/png',10,true),('61000000-0000-4000-a000-000000000002','marca','eva','02.png','image/png',10,true);
+   insert into entregas(marca_id,archivo_id,carpeta,nombre,exportacion_id,proyecto_id,proyecto_version,lamina_id,posicion,total) values('eva','61000000-0000-4000-a000-000000000001','same','01.png','62000000-0000-4000-a000-000000000001','p-export',1,'s-1',0,2);`);
+  const publish=`select publicar_exportacion('${A}','62000000-0000-4000-a000-000000000001','p-export',1)`;
+  await assert.rejects(db.query(publish),/incompleta/);
+  assert.equal((await rows("select publicada from entregas where proyecto_id='p-export'"))[0].publicada,false);
+  await db.exec(`insert into entregas(marca_id,archivo_id,carpeta,nombre,exportacion_id,proyecto_id,proyecto_version,lamina_id,posicion,total) values('eva','61000000-0000-4000-a000-000000000002','same','02.png','62000000-0000-4000-a000-000000000001','p-export',1,'s-2',1,2);`);
+  await assert.rejects(db.query(publish.replace("'p-export',1","'p-export',2")),/cambió/);
+  await db.query(publish);await db.query(publish);
+  assert.equal((await rows("select count(*)::int n from entregas where proyecto_id='p-export' and publicada"))[0].n,2);
+  await as('authenticated',A);await assert.rejects(db.query(publish),/permission denied/);
+ });
  await t.test('RLS habilitado en todas las tablas de aplicación',async()=>{await as('service_role');assert.equal((await rows("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity")).length,0);});
  await db.close();
 });

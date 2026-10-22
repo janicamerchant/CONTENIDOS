@@ -23,14 +23,14 @@ Reflexiva, elegante, honesta, directa, motivadora y con inteligencia emocional. 
 - Cada lámina es una fotografía a sangre completa. No hay marco, ni caja de color, ni degradado oscuro encima de la foto.
 - La luz es cálida y natural: sol de tarde que entra de lado, sombras suaves de hojas o ventanas sobre paredes claras.
 - Paleta de la foto: marfil, blanco roto, beige, arena, piedra, taupe, madera clara, negro solo en detalles (marcos de puertas, pluma, pantalón).
-- Espacios reales y premium: oficina con vidrio, escenario de conferencia, backstage, pasillo con puertas, escalera de piedra, recibidor de casa, sala de reuniones.
-- Cada foto deja una zona limpia (pared lisa, cortina, cielo claro, piso) exactamente donde va el texto. El texto se apoya sobre esa zona sin cajas.
+- Espacios reales y premium que salen del tema de cada carrusel. Ejemplos ya usados (no los repitas por defecto): oficina con vidrio, escenario de conferencia, backstage, pasillo con puertas, escalera de piedra, recibidor de casa, sala de reuniones. Busca lugares nuevos: auto, aeropuerto, cocina temprano, jardín, camerino, estudio de grabación, hotel, calle de la ciudad.
+- Cada foto deja una zona limpia (pared lisa, cortina, cielo claro, piso) exactamente donde va el texto. El texto se apoya sobre esa zona sin cajas. La zona cambia de lugar entre láminas (arriba, abajo, un lateral).
 
 ### 2. Janica aparece poco y bien
 
 - Janica sale en 2 o 3 láminas de 7: portada, una intermedia y el cierre. Nunca en todas.
-- Las demás láminas cuentan la idea con objetos y espacios (una libreta, un teléfono boca abajo, una silla vacía en un escenario, dos puertas, una escalera, una mochila infantil junto a la laptop).
-- Los objetos pueden llevar palabras cortas en español como parte del escenario: lomos de libros (DISCIPLINA, ENFOQUE, RESULTADOS), portada de libreta, una frase pequeña impresa en la pared. Máximo 3 palabras por objeto.
+- Las demás láminas cuentan la idea con objetos, espacios u otras personas (manos, siluetas, de espaldas) elegidos para ESE tema. Ejemplos de carruseles anteriores: una silla vacía en un escenario, dos puertas, una escalera, una mochila infantil junto a la laptop. Evita caer siempre en libreta + teléfono + café.
+- Opcional y como mucho en una lámina por carrusel: un objeto puede llevar palabras cortas en español como parte del escenario (lomo de libro, portada de libreta, letrero). Máximo 3 palabras por objeto. No es un recurso fijo de la marca.
 
 ### 3. Tipografía
 
@@ -39,7 +39,7 @@ Reflexiva, elegante, honesta, directa, motivadora y con inteligencia emocional. 
   - Mayúsculas monumentales para afirmaciones (LOW PROFILE. SIEMPRE. / MENOS RUIDO y MÁS PROTECCIÓN.).
   - Minúsculas con una palabra en *cursiva* para frases reflexivas (No todas las personas celebran tu *crecimiento*.).
 - La palabra en cursiva se marca con *asteriscos*. Una sola por titular.
-- Texto de apoyo: sans geométrica limpia (Montserrat), gris oscuro, 1 o 2 líneas cortas máximo (una sola frase). Lo demás va en el caption.
+- Texto de apoyo: sans geométrica limpia (Montserrat), gris oscuro, 3 a 4 líneas cortas máximo.
 - Firma: JANICA MERCHANT en mayúsculas pequeñas muy espaciadas, abajo a la izquierda, con una línea fina encima en el cierre.
 - Número de lámina: línea fina y "4/7" en serif cursiva, abajo a la derecha. Discreto.
 - Referencia secundaria (carpeta `referencias-estilo-tipografico-otra-persona/`, solo estilo, nunca esa cara): el titular puede mezclar serif gigante con una segunda línea en sans bold, y pasar por detrás de la persona.
@@ -50,6 +50,8 @@ Reflexiva, elegante, honesta, directa, motivadora y con inteligencia emocional. 
 - Amarillo Nika / lima `#ECFE6E` como un solo gesto pequeño por lámina: un trazo de pincel bajo una palabra, una línea corta, un punto final, un cuadrito o un resaltado detrás de una palabra. Nunca en bloques grandes ni en el texto.
 
 ### 5. Composiciones aprobadas
+
+Son ejemplos de lo que ya funcionó, no un catálogo cerrado. Portada y cierre siguen su modelo; en medio se pueden crear composiciones nuevas con la misma tipografía y el mismo acento.
 
 1. **Portada**: Janica a un lado (derecha), titular en mayúsculas arriba a la izquierda que puede rozar su cabello, línea lima, apoyo en sans, firma abajo.
 2. **Escena**: foto de espacio u objeto, titular en minúsculas grande arriba a la izquierda con cursiva, apoyo debajo.

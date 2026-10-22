@@ -1,3 +1,5 @@
+import * as carouselContract from '../shared/carousel.ts';
+window.carouselContract=carouselContract;
 import {Upload} from 'tus-js-client';
 import {cutoutPerson} from './cutout.js';
 import {openTeam} from './team.js';
@@ -42,6 +44,7 @@ window.cloudRefreshImages=async()=>{
 };
 setInterval(()=>{if(!document.hidden)window.cloudRefreshImages();},60000);
 function persistent(value){if(typeof value==='string')return reverse.get(value)??value;if(Array.isArray(value))return value.map(persistent);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,persistent(v)]));return value;}
+window.cloudPersistent=persistent;
 const versions=new Map(),cutouts=new Map(),brandVersions=new Map();
 window.cloudApi=async(path,body)=>{
  if(body)body=persistent(body);
@@ -62,23 +65,24 @@ window.cloudApi=async(path,body)=>{
 
  if(path==='/api/projects'&&body){
   const snapshot=persistent(structuredClone(body));
-  const op=saveQueue.catch(()=>{}).then(async()=>{if(me.role==='lector')throw new Error('Tu acceso es de solo lectura.');const version=versions.get(snapshot.id)??snapshot.version??0;const r=await request(path,{...snapshot,version});versions.set(r.id,r.version);return r;});saveQueue=op;return op;
+  const op=saveQueue.catch(()=>{}).then(async()=>{if(me.role==='lector')throw new Error('Tu acceso es de solo lectura.');const version=versions.get(snapshot.id)??snapshot.version??0;const r=await request(path,{...snapshot,version});versions.set(r.id,r.version);return resolve(r);});saveQueue=op;return op;
  }
+ if(path==='/api/projects/review'||path==='/api/projects/cover-review'){const r=await request(path,body);versions.set(r.id,r.version);return r;}
  if(path==='/api/upload'||path==='/api/export'){
-  const brand=window.cloudCurrentBrand();const blob=await(await fetch(body.dataUrl)).blob();
+  const brand=body.brand||window.cloudCurrentBrand();const blob=await(await fetch(body.dataUrl)).blob();
   const name=body.name??`${body.filename}.png`;const fileId=await uploadBlob(blob,name,{brand});
-  if(path==='/api/export')await request('/api/deliveries',{id:fileId,folder:body.folder,name});
+  if(path==='/api/export')await request('/api/deliveries',{id:fileId,folder:body.folder,name,exportId:body.exportId,projectId:body.projectId,version:body.version,slideId:body.slideId,position:body.position,total:body.total});
   return {url:await resolve('storage://'+fileId),name,path:body.folder?`${body.folder}/${name}`:name};
  }
  if(path==='/api/open'){window.cloudOpenFolder(body?.path);return {ok:true};}
  const data=await request(path,body);if(path.startsWith('/api/brands/')&&data.id&&data.version)brandVersions.set(data.id,data.version);
  if(path.startsWith('/api/generate?id=')&&data.items){for(const item of data.items){if(item.status==='completed'&&item.needsCutout&&!item.cutout&&item.url){
-  if(!cutouts.has(item.url))cutouts.set(item.url,(async()=>{const blob=await cutoutPerson(await resolve(item.url));const id=await uploadBlob(blob,'recorte.png',{brand:window.cloudCurrentBrand()});await request('/api/jobs/cutout',{group:data.id,index:item.index,fileId:id});return 'storage://'+id;})().catch(e=>{cutouts.delete(item.url);throw e;}));
+  if(!cutouts.has(item.url))cutouts.set(item.url,(async()=>{const blob=await cutoutPerson(await resolve(item.url));const id=await uploadBlob(blob,'recorte.png',{brand:item.brand||window.cloudCurrentBrand()});await request('/api/jobs/cutout',{group:data.id,index:item.index,fileId:id});return 'storage://'+id;})().catch(e=>{cutouts.delete(item.url);throw e;}));
   try{item.cutout=await cutouts.get(item.url);}catch{item.qa='La foto está lista. Puedes repetir el recorte desde el Editor.';}
  }
  // Lámina en capas: la persona se recorta del fondo limpio (sin letras encima) para poder poner texto detrás
  if(item.status==='completed'&&item.layers?.plate&&!item.layers.cutout){const ref=item.layers.plate;
-  if(!cutouts.has(ref))cutouts.set(ref,(async()=>{const blob=await cutoutPerson(await resolve(ref));const id=await uploadBlob(blob,'recorte.png',{brand:window.cloudCurrentBrand()});await request('/api/jobs/cutout',{group:data.id,index:item.index,fileId:id,layers:true});return 'storage://'+id;})().catch(e=>{cutouts.delete(ref);throw e;}));
+  if(!cutouts.has(ref))cutouts.set(ref,(async()=>{const blob=await cutoutPerson(await resolve(ref));const id=await uploadBlob(blob,'recorte.png',{brand:item.brand||window.cloudCurrentBrand()});await request('/api/jobs/cutout',{group:data.id,index:item.index,fileId:id,layers:true});return 'storage://'+id;})().catch(e=>{cutouts.delete(ref);throw e;}));
   try{item.layers.cutout=await cutouts.get(ref);}catch{}
  }}}
 

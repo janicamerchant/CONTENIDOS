@@ -1,5 +1,7 @@
 /* Estudio de Carruseles · Nika Media — lógica del cliente */
 'use strict';
+const Carousel=window.carouselContract;
+const stableProject=p=>window.cloudPersistent?window.cloudPersistent(p):p;
 
 // ---------------------------------------------------------------- utilidades
 const $ = (s, el = document) => el.querySelector(s);
@@ -42,10 +44,13 @@ const LOGOS = {};
 const FALLBACK_BRAND = { id: 'sin-marca', name: 'Sin marca', file: 'CARRUSEL', swatch: '#888', design: 'base', theme: 'dark', defaults: { audiencia: '', cta: '', idioma: 'Español', objetivo: 'Autoridad' }, look: '', people: [], logos: {} };
 const brandIds = () => Object.keys(BRANDS);
 const brandOf = (id) => BRANDS[id] || BRANDS[brandIds()[0]] || FALLBACK_BRAND;
-const brandFor = (p) => p.brandData || brandOf(p.brand);
+const brandFor = (p) => p.campaign?.brand || p.brandData || brandOf(p.brand);
+const projectLogoKey=p=>p.campaign?.signature||brandFor(p).id;
+async function prepareProjectAssets(p){const b=brandFor(p);[b.fonts?.display,b.fonts?.body].forEach(loadFont);await loadLogos([{...b,id:projectLogoKey(p)}]);}
 const designOf = (p) => brandFor(p).design || 'base';
 // Marcas en modo "lámina completa": el motor genera foto + tipografía juntas (ver lamina_completa.rb)
-const fullMode = (id) => brandOf(id).modo === 'completa';
+const defaultMode=id=>Carousel.resolveMode('',brandOf(id));
+const fullMode = (id) => defaultMode(id)!=='foto';
 // Tipo de lámina del carrusel (propuesta o proyecto): se elige en Crear; si no trae, manda el de la marca
 const isFull = (x) => (x?.modo ? ['completa', 'editable'].includes(x.modo) : fullMode(x?.brand));
 
@@ -54,8 +59,8 @@ const isFull = (x) => (x?.modo ? ['completa', 'editable'].includes(x.modo) : ful
 const motores = () => state.cfg?.motores || [];
 const motorInfo = (id) => motores().find((m) => m.id === id);
 // El de la marca; si su API key no está en .env, el primero conectado (Soul solo si no hay otro)
-const brandMotor = (brandId) => {
-  const b = brandOf(brandId);
+const brandMotor = (brandId, snapshot) => {
+  const b = snapshot || brandOf(brandId);
   let id = motorInfo(b.motor_imagen) ? b.motor_imagen : state.cfg?.motorDefecto || 'hf_flare';
   if (!motorInfo(id)?.disponible) {
     const ok = motores().filter((m) => m.disponible);
@@ -80,7 +85,7 @@ function motorPicker(key, sel, disabled = false) {
   const sizes = Object.keys(m?.tamanos || {});
   return `<div class="motor-pick">
     <label class="lbl" for="${key}-motor">Motor de imagen</label>
-    <select id="${key}-motor" class="inp sm" data-motor="${key}" ${disabled ? 'disabled' : ''}>${motores().map((x) => `<option value="${esc(x.id)}" ${x.id === sel.motor ? 'selected' : ''} ${x.disponible ? '' : 'disabled'}>${esc(x.nombre)} · ${esc(x.proveedor)}${x.disponible ? '' : ` (falta ${esc(x.env)})`}</option>`).join('')}</select>
+    <select id="${key}-motor" class="inp sm" data-motor="${key}" ${disabled ? 'disabled' : ''}>${motores().map((x) => `<option value="${esc(x.id)}" ${x.id === sel.motor ? 'selected' : ''} ${x.disponible && (!x.modes || x.modes.includes(Carousel.resolveMode(key==='editor'?state.p?.modo:state.draft?.modo,key==='editor'?brandFor(state.p):state.draft?.campaign?.brand||brandOf(state.draft?.brand)))) ? '' : 'disabled'}>${esc(x.nombre)} · ${esc(x.proveedor)}${x.disponible ? '' : ` (falta ${esc(x.env)})`}</option>`).join('')}</select>
     ${sizes.length > 1 ? `<select id="${key}-tamano" class="inp sm" data-tamano="${key}" aria-label="Tamaño" ${disabled ? 'disabled' : ''}>${sizes.map((t) => `<option value="${t}" ${t === sel.tamano ? 'selected' : ''}>${t.toUpperCase()} · ${usdLabel(m.tamanos[t])}</option>`).join('')}</select>` : `<span class="hint">${usdLabel(motorUsd(sel.motor, sel.tamano))} por foto</span>`}
     ${m && !m.disponible ? `<p class="hint">Falta ${esc(m.env)} en 04_STUDIO_APP/.env. Agrégala y reinicia el Estudio.</p>` : ''}
   </div>`;
@@ -88,11 +93,8 @@ function motorPicker(key, sel, disabled = false) {
 const motorReady = (sel) => !!motorInfo(sel.motor)?.disponible;
 
 // Textos de la lámina que el servidor manda al motor de imagen y luego revisa letra por letra
-const slidePayload = (s) => ({
-  layout: s.layout, kicker: s.kicker, title: s.title, body: s.body, number: s.number, numberLabel: s.numberLabel,
-  items: s.items, leftLabel: s.leftLabel, leftItems: s.leftItems, rightLabel: s.rightLabel, rightItems: s.rightItems,
-  cta: s.cta, source: s.source, photo: s.photo, photoPrompt: s.photoPrompt, basePhoto: s.basePhoto || '', outfit: s.outfit || '',
-});
+const slidePayload = (s) => Carousel.slideContent(s);
+const projectPeople=(p,s)=>s.people??(brandFor(p).people||[]).filter(person=>[person.name,...(person.aliases||[])].some(name=>(`${s.photo||''} ${s.photoPrompt||''}`).toLocaleLowerCase().includes(name.toLocaleLowerCase()))).map(p=>p.id);
 // La lámina nombra a una persona aprobada y la marca usa "foto real + escena" (ver foto_real.rb):
 // devuelve esa persona con su lista de fotos reales, o null.
 const realPerson = (id, s) => {
@@ -107,10 +109,10 @@ function basePhotoPicker(p, s) {
   const val = s.basePhoto || '';
   const o = (v, label) => `<option value="${esc(v)}" ${v === val ? 'selected' : ''}>${esc(label)}</option>`;
   const thumb = rp.photos.find((f) => f.name === val)?.url;
-  return `<label class="lbl" for="base-photo">Tu foto real (la IA solo cambia el lugar)</label>
+  return `<label class="lbl" for="base-photo">Foto de referencia de identidad</label>
     <select id="base-photo" class="inp">${o('', 'Automática según el diseño')}${rp.photos.map((f) => o(f.name, f.name.replace(/\.\w+$/, ''))).join('')}</select>
     ${thumb ? `<img class="base-thumb" src="${esc(thumb)}" alt="">` : ''}
-    <p class="help">La IA toma esta foto tuya y cambia el fondo, la luz y el lugar. Tu cara no se genera.</p>
+    <p class="help">Esta foto guía la identidad de la persona y la escena solicitada. Revisa el rostro generado antes de aprobar.</p>
     ${outfitPicker(p, s)}`;
 }
 
@@ -257,9 +259,9 @@ async function prepareLogo(def) {
 }
 
 // Logos de cada marca, con el fondo quitado (key) o teñidos (tint) según marca.json
-async function loadLogos() {
+async function loadLogos(brands = Object.values(BRANDS)) {
   const defs = [];
-  Object.values(BRANDS).forEach((b) => {
+  brands.forEach((b) => {
     Object.entries(b.logos || {}).forEach(([k, d]) => defs.push([`${b.id}:${k}`, d]));
     ['dark', 'light'].forEach((k) => { if (b.byline?.[k]) defs.push([`${b.id}:by-${k}`, b.byline[k]]); });
   });
@@ -415,7 +417,7 @@ function torn(s, edge) {
 
 // Logo según el fondo; si la marca solo tiene uno, se usa ese.
 function logoFor(p, s) {
-  const id = brandFor(p).id, dark = s.theme === 'dark';
+  const id = projectLogoKey(p), dark = s.theme === 'dark';
   return logo(id, dark ? 'dark' : 'light') || logo(id, dark ? 'light' : 'dark');
 }
 
@@ -425,7 +427,7 @@ function signature(p, s, big = false) {
   const mark = src ? `<img class="logo" src="${src}" alt="">` : `<span class="wordmark">${esc(br.name)}</span>`;
   let by = '';
   if (big && br.byline) {
-    const bl = logo(br.id, s.theme === 'dark' ? 'by-dark' : 'by-light');
+    const bl = logo(projectLogoKey(p), s.theme === 'dark' ? 'by-dark' : 'by-light');
     by = `<div class="by">${esc(br.byline.text || '')} ${bl ? `<img src="${bl}" alt="${esc(br.byline.alt || '')}">` : `<b>${esc(br.byline.alt || '')}</b>`}</div>`;
   }
   return `<div class="s-sign${big ? ' big' : ''}">${mark}${by}</div>`;
@@ -658,7 +660,7 @@ function buildSlide(p, s, i, n) {
     'slide', `b-${br.design || 'base'}`, `t-${s.theme}`, `l-${s.layout}`,
     s.bw ? 'bw' : '', s.texture ? 'tex' : '', hasImg ? 'has-photo' : '',
   ].filter(Boolean).join(' ');
-  if ((br.design || 'base') === 'base') Object.entries(baseVars(br, s.theme)).forEach(([k, v]) => el.style.setProperty(k, v));
+  if (br.colors || br.fonts) Object.entries(baseVars(br, s.theme)).forEach(([k, v]) => el.style.setProperty(k, v));
   const background = br.backgrounds?.[s.theme];
   if (background) el.style.setProperty('--brand-background', 'url(' + JSON.stringify(background) + ')');
   el.style.setProperty('--ts', s.ts);
@@ -743,8 +745,8 @@ function layeredHtml(p, s) {
     const body = esc(t.text).replace(/\*([^*]+)\*/g, '<b class="ly-acc">$1</b>');
     return `<div class="ly-t ${LY_FX[t.effect] || ''}" data-ly="${esc(t.id)}" data-ls="${ls}" data-al="${esc(t.align)}" style="${pos(t.box)};--c:${esc(t.color)};--a:${esc(t.accent || t.color)};font-family:'${esc(t.font)}', 'Archivo', sans-serif;font-weight:${LY_SINGLE.has(t.font) ? 400 : +t.weight || 700};font-style:${t.italic ? 'italic' : 'normal'};text-transform:${t.upper ? 'uppercase' : 'none'};letter-spacing:${ls}em"><span>${body}</span></div>`;
   };
-  const id = brandFor(p).id;
-  const logos = (L.logos || []).map((g) => { const src = logo(id, g.bg === 'light' ? 'light' : 'dark') || logo(id, g.bg === 'light' ? 'dark' : 'light'); return src ? `<img class="ly-logo" data-ly="${esc(g.id)}" src="${src}" alt="" style="${pos(g.box)}">` : ''; }).join('');
+  const id = projectLogoKey(p);
+  const logos = (L.logos || []).map((g) => { const prefix=g.brand==='byline'?'by-':'';const src = logo(id, prefix+(g.bg === 'light' ? 'light' : 'dark')) || logo(id, prefix+(g.bg === 'light' ? 'dark' : 'light')); return src ? `<img class="ly-logo" data-ly="${esc(g.id)}" src="${src}" alt="" style="${pos(g.box)}">` : ''; }).join('');
   const back = (L.texts || []).filter((t) => layerOf(s, 'l:' + t.id) === 'back'), front = (L.texts || []).filter((t) => layerOf(s, 'l:' + t.id) !== 'back');
   return `<div class="s-photo s-full"><img class="s-full-bg" src="${esc(L.plate)}" alt="" aria-hidden="true"></div>
     <div class="ly-box" style="left:${(100 - bw) / 2}%;top:${(100 - bh) / 2}%;width:${bw}%;height:${bh}%">
@@ -831,7 +833,7 @@ function fitSlide(el) {
   });
   // Constrain block zones before measuring; top and bottom must not collide.
   const zones = $$('.s-blocks:not(.over)', el);
-  zones.forEach((box) => { box.style.setProperty('--fit', 1); box.style.maxHeight = ''; });
+  zones.forEach((box) => { box.style.setProperty('--fit', 1); box.style.maxHeight = '';if(box.classList.contains('z-izquierda')||box.classList.contains('z-derecha'))box.style.top=''; });
   const bottom = zones.find((box) => box.classList.contains('z-abajo'));
   zones.forEach((box) => {
     const top = box.offsetTop;
@@ -840,13 +842,28 @@ function fitSlide(el) {
       : box.classList.contains('z-centro') ? 540 : Math.max(120, end - top);
     box.style.maxHeight = limit + 'px';
     let k = 1;
-    while ((box.scrollHeight > limit + 2 || box.scrollWidth > box.clientWidth + 2) && k > 0.55) {
+    // A narrow child can overflow while the full-width zone still fits.
+    // Preserve whole words and reduce the zone until every block fits its own column.
+    const wordOverflow=()=>$$('.blk:not(.blk-linea)',box).some(n=>n.scrollWidth>n.clientWidth+2);
+    while ((box.scrollHeight > limit + 2 || box.scrollWidth > box.clientWidth + 2 || wordOverflow()) && k > 0.55) {
       k = Math.max(0.55, k - 0.025);
       box.style.setProperty('--fit', k.toFixed(3));
     }
     $$('.s-blocks.over', el).filter((copy) => copy.className.replace(' over', '') === box.className)
       .forEach((copy) => { copy.style.setProperty('--fit', k.toFixed(3)); copy.style.maxHeight = box.style.maxHeight; });
   });
+  // Side labels share the central composition, but must not sit over its headline.
+  const middle=zones.find(box=>box.classList.contains('z-centro'));
+  if(middle){
+    const start=middle.offsetTop-middle.offsetHeight/2,end=start+middle.offsetHeight;
+    for(const side of zones.filter(box=>box.classList.contains('z-izquierda')||box.classList.contains('z-derecha'))){
+      if(side.offsetTop+side.offsetHeight>start-24&&side.offsetTop<end+24){
+        const above=start-side.offsetHeight-32,topEnd=zones.find(box=>box.classList.contains('z-arriba'));
+        side.style.top=(above>=(topEnd?topEnd.offsetTop+topEnd.offsetHeight+32:84)?above:end+32)+'px';
+      }
+    }
+  }
+  for(const box of zones)$$('.s-blocks.over',el).filter(copy=>copy.className.replace(' over','')===box.className).forEach(copy=>{copy.style.top=box.style.top;});
   fitLayers(el);
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
 }
@@ -856,14 +873,17 @@ const state = { p: null, sel: 0, assets: [], requests: [], hasKey: false, view: 
 const cur = () => state.p.slides[state.sel];
 
 function scheduleSave() {
+  if(state.p)state.p.review=null;
   $('#save-state').textContent = 'Sin guardar…';
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(saveProject, 700);
 }
 async function saveProject() {
   try {
-    const r = await api('/api/projects', state.p);
-    state.p.id = r.id;
+    const project=state.p;
+    const r = await api('/api/projects', project);
+    Object.assign(project,{id:r.id,version:r.version,campaign:r.campaign||project.campaign,review:r.review||null,coverReview:r.coverReview||null,visualSystem:r.visualSystem??project.visualSystem,avoid:r.avoid??project.avoid});delete project.refreshCampaign;
+    await prepareProjectAssets(project);
     store.set('lastProject', r.id);
     $('#save-state').textContent = 'Guardado ' + new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
     return true;
@@ -941,7 +961,8 @@ function renderEditor() {
   $('#p-name').value = state.p.name || '';
   $('#btn-export-all').textContent = state.p.slides.length === 1 ? 'Exportar post' : 'Exportar carrusel';
   renderBrandPick($('#brand-pick'), state.p.brand, (b) => {
-    state.p.brand = b;
+    if(state.p.version&&b!==state.p.brand){toast('Crea un proyecto nuevo para trabajar con otra marca.',true);return;}
+    state.p.brand = b;state.p.campaign=null;
     renderEditor();
     scheduleSave();
   });
@@ -1159,7 +1180,7 @@ async function makeLayersInEditor(i) {
   clearTimeout(state.saveTimer);
   if (await saveProject() === false) return;
   try {
-    const r = await api('/api/layers', { projectId: p.id, index: i });
+    const r = await api('/api/layers', { projectId: p.id, index: i,slideId:p.slides[i].id });
     state.lgen = { id: r.id, index: i, projectId: p.id };
     renderInspector();
     toast('Separando la lámina en capas… tarda entre 30 y 60 segundos.');
@@ -1175,11 +1196,13 @@ async function pollLayers() {
     const x = job.items[0] || {};
     state.lgen = null;
     if (x.status === 'completed' && x.layers && state.p?.id === g.projectId) {
-      const s = state.p.slides[g.index];
+      const target=Carousel.resultTarget(stableProject(state.p).slides,x);if(!target){toast('La lámina cambió: puedes recuperarla desde Versiones generadas.',true);renderInspector();return;}
+      const s=state.p.slides.find(t=>t.id===target.id),targetIndex=state.p.slides.indexOf(s);
       // Los movimientos y estilos guardados eran de otras capas
-      Object.assign(s, { layers: x.layers, move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer) });
-      renderThumb(g.index);
-      if (state.sel === g.index) renderStage();
+      s.previousVisual=Carousel.visualSnapshot(s);
+      Object.assign(s, { layers: x.layers, editability:'ready', move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer) });
+      renderThumb(targetIndex);
+      if (state.sel === targetIndex) renderStage();
       scheduleSave();
       toast(`Lámina ${g.index + 1} en capas: ya puedes mover y cambiar sus textos.`);
     } else if (x.status !== 'completed') toast(x.error || 'No se pudo separar en capas.', true);
@@ -1219,6 +1242,9 @@ function renderInspector() {
   const titled = L !== 'cifra';
 
   $('#inspector').innerHTML = `
+    <details class="sec"><summary>Versiones generadas</summary><button type="button" class="btn sm ghost" id="load-history">Ver versiones guardadas</button>${(state.resultHistory?.projectId===p.id?state.resultHistory.items:[]).map(r=>`<div class="history-result"><img src="${esc(r.url)}" width="90" alt="Versión generada"><p>${esc(r.slide?.title||r.slide?.template||'Lámina')} · ${esc(new Date(r.createdAt).toLocaleString('es'))}</p><button type="button" class="btn sm" data-restore-result="${esc(r.id)}">Recuperar versión</button></div>`).join('')}</details>
+    ${p.slides.length>1?`<section class="sec"><h3 class="sec-title">Portada primero</h3><p class="help">${p.coverReview?'Portada aprobada. Puedes generar las láminas pendientes.':'Revisa la primera lámina antes de generar el resto. Si cambias la portada, tendrás que aprobarla otra vez.'}</p><button type="button" class="btn sm" id="approve-cover">Revisar y aprobar portada</button>${p.coverReview?'<button type="button" class="btn sm accent" id="generate-remaining">Generar láminas pendientes</button>':''}</section>`:''}
+    <section class="sec"><h3 class="sec-title">Revisión del carrusel</h3><p class="help">${p.review?'Revisión aprobada.':'Revisa textos, rostros, logos y consistencia de todas las láminas antes de exportar.'}</p><button type="button" class="btn sm accent" id="approve-review">He revisado el carrusel</button>${p.review?'<button type="button" class="btn sm" id="save-brand-pattern">Usar como patrón de marca</button>':''}<button type="button" class="btn sm ghost" id="refresh-campaign">Actualizar configuración de marca</button></section>
     <section class="sec">
       <h3 class="sec-title">Lámina ${state.sel + 1}</h3>
       <div class="layouts" role="group" aria-label="Diseño">
@@ -1257,7 +1283,7 @@ function renderInspector() {
         ${s.photo || s.photoPrompt || isFull(p) ? `<button type="button" class="btn sm" id="regen-one" ${state.egen || !motorReady(editorMotor()) ? 'disabled' : ''}>${state.egen?.index === state.sel && state.egen?.projectId === p.id ? (state.egen.status || 'Generando…') : editorMotor().motor === 'hf_soul' ? (s.image ? 'Regenerar foto con Soul' : 'Generar foto con Soul') : realPerson(p.brand, s) ? (s.image ? 'Regenerar escena con tu foto real' : 'Crear escena con tu foto real') : isFull(p) ? (s.image ? 'Regenerar lámina completa' : 'Generar lámina completa') : s.image ? 'Regenerar foto' : 'Generar foto'}</button>` : ''}
       </div>
       ${s.photo || s.photoPrompt ? `<p class="help">${usdLabel(motorUsd(editorMotor().motor, editorMotor().tamano))}. Usa el prompt de arriba${peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`).map((id) => ` y la cara de ${esc(personName(p.brand, id))}`).join('')}; la foto actual queda guardada.</p>` : ''}
-      ${s.prevImage ? `<button type="button" class="btn sm ghost" id="undo-photo">Volver a la foto anterior</button>` : ''}
+      ${s.previousVisual || s.prevImage ? `<button type="button" class="btn sm ghost" id="undo-photo">Volver a la foto anterior</button>` : ''}
       ${imgSlot('image', 'Foto', s.image)}
       ${s.image ? `<p class="help">Arrastra la foto en la lámina (en una zona sin texto) para moverla; doble clic la centra. Foto y recorte se mueven juntos.</p>`
         + range('Horizontal', 'dx', -100, 100, 1, '%') + range('Vertical', 'dy', -100, 100, 1, '%') + range('Zoom', 'iz', s.full ? 0.5 : 1, 2.5, 0.02, '×')
@@ -1357,6 +1383,13 @@ function bindInspector() {
     const b = e.target.closest('button');
     if (!b) return;
     const s = cur();
+    if(b.id==='load-history'){const project=state.p;api('/api/projects/results?id='+encodeURIComponent(project.id)).then(items=>{if(state.p.id===project.id){state.resultHistory={projectId:project.id,items};renderInspector();$('#load-history').closest('details').open=true;}}).catch(e=>toast(e.message,true));return;}
+    if(b.dataset.restoreResult){const r=state.resultHistory?.items.find(r=>r.id===b.dataset.restoreResult);if(!r)return;let target=state.p.slides.find(s=>s.id===r.slideId);if(!target){target=blankSlide(r.slide?.layout,state.p.brand,{id:r.slideId||uid()});state.p.slides.push(target);}Object.assign(target,slidePayload(r.slide||target));Carousel.applyVisual(target,r);state.sel=state.p.slides.indexOf(target);scheduleSave();renderEditor();toast('Versión recuperada. Revisa el carrusel antes de exportar.');return;}
+    if(b.id==='approve-review'){approveReview();return;}
+    if(b.id==='approve-cover'){approveCover();return;}
+    if(b.id==='generate-remaining'){generateRemaining();return;}
+    if(b.id==='save-brand-pattern'){saveBrandPattern();return;}
+    if(b.id==='refresh-campaign'){state.p.refreshCampaign=true;state.p.review=null;saveProject().then(ok=>{if(ok){renderEditor();toast('Configuración de marca actualizada. Revisa las láminas antes de exportar.');}});return;}
     if (b.dataset.bmove || b.dataset.bdel !== undefined) {
       const i = +b.closest('[data-bi]').dataset.bi;
       if (b.dataset.bdel !== undefined) s.blocks.splice(i, 1);
@@ -1406,8 +1439,7 @@ function bindInspector() {
     else if (b.id === 'regen-one' || b.id === 'regen-outfit') regenerateInEditor(state.sel);
     else if (b.id === 'undo-photo') {
       // Intercambia foto actual y anterior, así también se puede volver a la nueva
-      [s.image, s.prevImage] = [s.prevImage, s.image];
-      [s.cutout, s.prevCutout] = [s.prevCutout || '', s.cutout || ''];
+      Carousel.undoVisual(s);
       refreshSlide();
       renderInspector();
     }
@@ -1458,20 +1490,20 @@ function promptFor(s, brand = state.p.brand) {
 }
 
 // Motor elegido en el Editor para este proyecto (si no se tocó, el de la marca)
-const editorMotor = () => (state.emotor?.projectId === state.p?.id ? state.emotor : brandMotor(state.p?.brand));
+const editorMotor = () => {if(state.emotor?.projectId===state.p?.id)return state.emotor;const s=cur();return s.motor&&motorInfo(s.motor)?{motor:s.motor,tamano:sizeFor(s.motor,s.tamano)}:state.p.motor&&motorInfo(state.p.motor)?{motor:state.p.motor,tamano:sizeFor(state.p.motor,state.p.tamano)}:brandMotor(state.p?.brand,brandFor(state.p));};
 
 // Regenera la foto de una lámina desde el Editor con el motor elegido
 async function regenerateInEditor(i) {
-  const p = state.p, s = p.slides[i];
+  const p = state.p, s = p.slides[i];s.people=projectPeople(p,s);
   clearTimeout(state.saveTimer);
   if (await saveProject() === false) return;                    // el servidor escribe la foto nueva sobre el proyecto guardado
   try {
     const r = await api('/api/generate', {
       projectId: p.id, ...editorMotor(),
-      items: [{ index: i, prompt: promptFor(s, p.brand), people: peopleIn(p.brand, `${s.photo} ${s.photoPrompt}`), photo: s.photo, photoPrompt: s.photoPrompt,
+      items: [{ index: i, slideId:s.id, prompt: promptFor(s, p.brand), people: projectPeople(p,s), photo: s.photo, photoPrompt: s.photoPrompt,
         slide: slidePayload(s), count: `${i + 1}/${p.slides.length}` }],
     });
-    state.egen = { id: r.id, index: i, projectId: p.id };
+    state.egen = { id: r.id, index: i, slideId:s.id, projectId: p.id };
     renderInspector();
     toast('Generando la foto nueva… puedes seguir editando.');
     pollEditorGen();
@@ -1491,17 +1523,18 @@ async function pollEditorGen() {
       setTimeout(pollEditorGen, 3000);
       return;
     }
-    const x = job.items[0] || {};
     state.egen = null;
-    if (x.status === 'completed' && state.p?.id === g.projectId) {
-      const s = state.p.slides[g.index];
-      if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
-      Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '', layers: x.layers || null, move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer) });
-      renderThumb(g.index);
-      if (state.sel === g.index) renderStage();
-      scheduleSave();
-      toast(`Foto nueva en la lámina ${g.index + 1}. Si no te gusta, usa "Volver a la foto anterior".`);
-    } else if (x.status !== 'completed') toast(`La foto de la lámina ${g.index + 1} falló: ${x.error || 'sin detalle'}`, true);
+    if(state.p?.id===g.projectId){
+      let applied=0,failed=0;
+      for(const x of job.items){
+        if(x.status!=='completed'){failed++;continue;}
+        const target=Carousel.resultTarget(stableProject(state.p).slides,x);
+        if(!target)continue;
+        const actual=state.p.slides.find(s=>s.id===target.id);Carousel.applyVisual(actual,x);applied++;
+      }
+      if(applied){scheduleSave();renderEditor();}
+      toast(failed?`${failed} imágenes fallaron. Puedes reintentarlas.`:applied?`${applied} imágenes listas. Puedes volver a la versión anterior.`:'La lámina cambió: recupera la imagen desde Versiones generadas.',!!failed);
+    }
     if (state.view === 'editor') renderInspector();
   } catch (e) {
     state.egen = null;
@@ -1571,12 +1604,18 @@ async function renderForExport(i) {
   const host = $('#export-stage');
   const el = buildSlide(state.p, state.p.slides[i], i, state.p.slides.length);
   host.replaceChildren(el);
-  await Promise.all($$('img', el).map((img) => (img.complete ? Promise.resolve() : new Promise((r) => { img.onload = img.onerror = r; }))));
+  await Promise.all($$('img', el).map(img=>img.decode().catch(()=>{throw new Error('No se pudo cargar una imagen de la lámina. Vuelve a abrir el proyecto antes de exportar.');})));
   await document.fonts.ready;
   fitSlide(el);
+  const bounds=el.getBoundingClientRect();
+  for(const node of $$('.s-title,.s-body,.s-source,.s-items,.blk,.ly-t',el)){
+    if(!node.textContent.trim())continue;const box=node.getBoundingClientRect();
+    if(node.classList.contains('blk')&&node.scrollWidth>node.clientWidth+2)throw new Error(`Lámina ${i+1}: una palabra no cabe en su columna. Amplía la columna o reduce el tamaño antes de exportar.`);
+    if(box.left<bounds.left-2||box.top<bounds.top-2||box.right>bounds.right+2||box.bottom>bounds.bottom+2)throw new Error(`Lámina ${i+1}: hay texto fuera del lienzo. Ajusta su tamaño o posición antes de exportar.`);
+  }
   const fk = state.p.brand + '|' + [...new Set(state.p.slides.flatMap((x) => [...Object.values(x.fx || {}).map((f) => f.font), ...(x.layers?.on ? x.layers.texts.map((t) => t.font) : [])].filter(Boolean)))].sort().join(',');
   if (fontCSS[fk] === undefined) {
-    try { fontCSS[fk] = await htmlToImage.getFontEmbedCSS(el); } catch (e) { console.warn('Fuentes sin incrustar', e); fontCSS[fk] = ''; }
+    try { fontCSS[fk] = await htmlToImage.getFontEmbedCSS(el); } catch (e) { throw new Error('No se pudieron incrustar las fuentes de la marca. Revisa la conexión y vuelve a exportar.'); }
   }
   const opts = { width: 1080, height: 1350, pixelRatio: parseFloat($('#exp-scale').value) || 1, fontEmbedCSS: fontCSS[fk] || undefined, cacheBust: false };
   // Safari a veces pinta el primer render sin imágenes: se descarta una pasada de calentamiento.
@@ -1587,8 +1626,49 @@ async function renderForExport(i) {
 const exportFolder = () => `${brandOf(state.p.brand).file}_${slugify(state.p.name)}`;
 let lastExportDir = '';
 
+async function approveCover(){
+  try{
+    if(state.egen||state.lgen||(state.draft?.projectId===state.p.id&&state.draft.gen&&!state.draft.gen.done))throw new Error('Espera a que termine la generación.');
+    select(0);const issues=Carousel.coverIssues(state.p);if(issues.length)throw new Error(issues.join(' '));
+    clearTimeout(state.saveTimer);if(await saveProject()===false)return;
+    const before=Carousel.coverRevision(stableProject(state.p)),project=state.p;
+    const r=await api('/api/projects/cover-review',{projectId:project.id,version:project.version});
+    if(state.p!==project||Carousel.coverRevision(stableProject(project))!==before)throw new Error('La portada cambió. Vuelve a revisarla.');
+    Object.assign(project,{coverReview:r.coverReview,version:r.version});renderInspector();toast('Portada aprobada.');
+  }catch(e){toast(e.message,true);}
+}
+async function generateRemaining(){
+  try{
+    const p=state.p;if(state.egen||state.lgen)throw new Error('Espera a que termine la generación.');
+    clearTimeout(state.saveTimer);if(await saveProject()===false)return;
+    if(!p.coverReview)throw new Error('Revisa y aprueba la portada primero.');
+    const items=p.slides.flatMap((s,i)=>i&&!s.image&&(s.photo||s.photoPrompt||isFull(p))?[{index:i,slideId:s.id,prompt:promptFor(s,p.brand),people:projectPeople(p,s),slide:slidePayload(s)}]:[]);
+    if(!items.length){toast('No hay imágenes pendientes.');return;}
+    const r=await api('/api/generate',{projectId:p.id,...editorMotor(),items});
+    state.egen={id:r.id,projectId:p.id,items:[],done:false};pollEditorGen();renderEditor();
+  }catch(e){toast(e.message,true);}
+}
+async function saveBrandPattern(){
+  try{
+    if(await saveProject()===false)return;
+    const p=state.p;await api('/api/projects/pattern',{projectId:p.id,version:p.version});
+    await loadBrands();toast('Patrón de marca guardado para los próximos carruseles.');
+  }catch(e){toast(e.message,true);}
+}
+
+async function approveReview(){
+  try{if(state.egen||state.lgen||(state.draft?.projectId===state.p.id&&state.draft.gen&&!state.draft.gen.done))throw new Error('Espera a que termine la generación antes de aprobar.');
+    const issues=Carousel.reviewIssues(state.p);if(issues.length)throw new Error(issues.join(' '));
+    if(await saveProject()===false)return;
+    const before=Carousel.reviewRevision(stableProject(state.p)),projectId=state.p.id;
+    const r=await api('/api/projects/review',{projectId:state.p.id,version:state.p.version});if(state.p.id!==projectId||Carousel.reviewRevision(stableProject(state.p))!==before)throw new Error('El carrusel cambió durante la revisión. Vuelve a revisarlo.');Object.assign(state.p,{review:r.review,version:r.version});renderInspector();toast('Carrusel revisado y listo para exportar.');
+  }catch(e){toast(e.message,true);}
+}
 async function exportSlides(indices) {
   if (typeof htmlToImage === 'undefined') { toast('No cargó la librería de exportación. Revisa la conexión a internet.', true); return; }
+  if(!state.p.review){toast('Revisa el carrusel y pulsa «He revisado el carrusel» antes de exportar.',true);return;}
+  if(await saveProject()===false||!state.p.review)return;
+  const project=structuredClone(state.p),exportId=crypto.randomUUID(),version=project.version;
   const dlg = $('#dlg-export');
   $('#exp-title').textContent = 'Exportando…';
   $('#exp-actions').hidden = true;
@@ -1599,15 +1679,17 @@ async function exportSlides(indices) {
   const missing = [];
   try {
     for (let n = 0; n < indices.length; n++) {
+      if(state.p.id!==project.id||Carousel.reviewRevision(stableProject(state.p))!==Carousel.reviewRevision(stableProject(project)))throw new Error('El carrusel cambió durante la exportación. Vuelve a revisarlo.');
       const i = indices[n];
       const s = state.p.slides[i];
       if (!s.image && (s.layout === 'portada' || s.photo)) missing.push(i + 1);
       $('#exp-msg').textContent = `Lámina ${i + 1} de ${state.p.slides.length}`;
       const dataUrl = await renderForExport(i);
-      const r = await api('/api/export', { folder, filename: `${brandOf(state.p.brand).file}_${pad(i + 1)}`, dataUrl });
+      const r = await api('/api/export', { folder, filename: `${brandFor(project).file}_${pad(i + 1)}`, dataUrl,brand:project.brand,exportId,projectId:project.id,version,slideId:project.slides[i].id,position:n,total:indices.length });
       lastExportDir = r.path.split('/').slice(0, -1).join('/');
       $('#exp-bar').style.width = `${((n + 1) / indices.length) * 100}%`;
     }
+    await api('/api/deliveries/commit',{exportId,projectId:project.id,version});
     $('#exp-title').textContent = indices.length > 1 ? 'Carrusel exportado' : 'Lámina exportada';
     $('#exp-msg').innerHTML = `Guardado en <span class="mono">${esc(lastExportDir)}/</span>`
       + (missing.length ? `<br>Ojo: ${missing.length > 1 ? 'las láminas' : 'la lámina'} ${missing.join(', ')} ${missing.length > 1 ? 'tienen' : 'tiene'} el marcador de foto en lugar de una imagen.` : '');
@@ -1625,6 +1707,7 @@ async function exportSlides(indices) {
 async function openProject(id) {
   try {
     state.p = normalizeProject(await api('/api/projects?id=' + encodeURIComponent(id)));
+    await prepareProjectAssets(state.p);
     state.sel = 0;
     store.set('lastProject', state.p.id);
     showView('editor');
@@ -1734,14 +1817,7 @@ async function saveRequest(r) {
 
 async function createRequestCarousel(r, d, brief) {
   if (!d.slides?.length) throw new Error('La IA no devolvió láminas. La solicitud sigue guardada; puedes volver a intentarlo.');
-  state.draft = {
-    brief: { ...brief, idea: brief.tema }, requestId: r.id, brand: brief.marca, modo: brief.modo,
-    name: d.name || brief.tema, concept: d.concept || '', caption: d.caption || '',
-    visualSystem: d.visualSystem || '', avoid: d.avoid || '',
-    slides: d.slides.map((s) => ({ ...s, gen: isFull({ modo: brief.modo, brand: brief.marca }) || !!(s.photoPrompt || s.photo),
-      people: peopleIn(brief.marca, `${s.photo || ''} ${s.photoPrompt || ''}`) })),
-    research: d.research || '', missingModels: d.missingModels || [], usage: d.usage, claudeUsd: d.usage?.usd || 0, calls: 1,
-  };
+  state.draft = {...buildDraft({...brief,idea:brief.tema},d),requestId:r.id};
   saveDraft();
   state.p = draftToProject();
   state.sel = 0;
@@ -1765,7 +1841,7 @@ async function draftFromRequest(r, btn) {
   try {
     const motor = brandMotor(r.brief.marca);
     if (!motorReady(motor)) throw new Error('No hay un motor de imágenes conectado para esta marca.');
-    const brief = { ...r.brief, requestId: r.id, modo: r.brief.modo || (fullMode(r.brief.marca) ? 'completa' : 'foto') };
+    const brief = { ...r.brief, requestId: r.id, modo: Carousel.resolveMode(r.brief.modo,brandOf(r.brief.marca)) };
     const d = await api('/api/draft', { brief });
     await createRequestCarousel(r, d, brief);
   } catch (e) {
@@ -1836,7 +1912,7 @@ async function fetchImage(url) {
 // Una imagen: con su nombre de entrega (MARCA_proyecto_01.png)
 async function downloadDeliveryImage(di, ii) {
   const d = state.deliveries[di];
-  try { const b = await fetchImage(d.images[ii]); saveBlob(b, `${d.folder}_${pad(ii + 1)}${extOf(b.type)}`); } catch (e) { toast(e.message, true); }
+  try { const b = await fetchImage(d.images[ii]); saveBlob(b, d.files?.[ii]?.name||`${d.folder}_${pad(ii + 1)}${extOf(b.type)}`); } catch (e) { toast(e.message, true); }
 }
 // Toda la entrega en un .zip
 async function downloadDelivery(di, btn) {
@@ -1848,7 +1924,7 @@ async function downloadDelivery(di, btn) {
     for (const [i, url] of d.images.entries()) {
       btn.textContent = `Descargando ${i + 1}/${d.images.length}…`;
       const b = await fetchImage(url);
-      files.push({ name: `${d.folder}_${pad(i + 1)}${extOf(b.type)}`, data: new Uint8Array(await b.arrayBuffer()) });
+      files.push({ name: d.files?.[i]?.name||`${d.folder}_${pad(i + 1)}${extOf(b.type)}`, data: new Uint8Array(await b.arrayBuffer()) });
     }
     saveBlob(makeZip(files), `${d.folder}.zip`);
     toast(`${d.folder}.zip descargado.`);
@@ -1899,6 +1975,8 @@ function readIdea() {
   };
 }
 
+function buildDraft(brief,d){const draft=Carousel.makeDraft(brief,d,brandOf(brief.marca),text=>peopleIn(brief.marca,text));draft.slides.forEach(s=>s.id ||= uid());return draft;}
+
 async function propose(brief, btn) {
   const label = btn.textContent;
   btn.disabled = true;
@@ -1907,11 +1985,7 @@ async function propose(brief, btn) {
   try {
     const d = await api('/api/propose', brief);
     const spent = (state.draft?.claudeUsd || 0) + (d.usage?.usd || 0);
-    state.draft = {
-      brief, brand: brief.marca, modo: brief.modo || (fullMode(brief.marca) ? 'editable' : 'foto'), name: d.name || brief.idea.slice(0, 60), concept: d.concept || '', caption: d.caption || '', visualSystem: d.visualSystem || '', avoid: d.avoid || '',
-      slides: (d.slides || []).map((s) => ({ ...s, gen: isFull({ modo: brief.modo, brand: brief.marca }) || !!(s.photoPrompt || s.photo), people: peopleIn(brief.marca, `${s.photo} ${s.photoPrompt}`) })),
-      research: d.research || '', missingModels: d.missingModels || [], usage: d.usage, claudeUsd: spent, calls: (state.draft?.calls || 0) + 1,
-    };
+    state.draft = buildDraft(brief,d);state.draft.claudeUsd=spent;
     saveDraft();
     renderCreate();
     toast('Propuesta lista. Edítala y revisa el costo antes de aprobar.');
@@ -2018,7 +2092,7 @@ const money = (n) => '$' + (n < 0.1 ? n.toFixed(3) : n.toFixed(2));
 // Motor elegido en Crear para este borrador (si no se tocó, el de la marca)
 const draftMotor = () => {
   const d = state.draft;
-  return d?.motor && motorInfo(d.motor) ? { motor: d.motor, tamano: sizeFor(d.motor, d.tamano) } : brandMotor(d?.brand);
+  return d?.motor && motorInfo(d.motor) ? { motor: d.motor, tamano: sizeFor(d.motor, d.tamano) } : brandMotor(d?.brand,d?.campaign?.brand);
 };
 
 function renderCost() {
@@ -2044,8 +2118,8 @@ function renderCost() {
       ${g.done ? `<div class="form-actions"><button type="button" class="btn accent" id="btn-open-editor">Abrir en el editor</button>
         ${g.items.some((x) => x.status === 'failed') ? '<button type="button" class="btn ghost" id="btn-retry">Reintentar fallidas</button>' : ''}</div>
         ${photos ? `<div class="line"><b>¿No te gustó alguna?</b>
-          <small>Cambia la escena o el prompt en la lámina y pulsa <b>Regenerar esta foto</b>, o regenera todas. Puedes cambiar de motor arriba antes de regenerar. La foto anterior queda guardada y puedes volver a ella en el Editor.</small></div>
-        <button type="button" class="btn ghost" id="btn-regen-all" ${ready ? '' : 'disabled'}>Regenerar todas · ${photos} foto${photos === 1 ? '' : 's'}${imgUsd == null ? '' : ` ≈ ${money(imgUsd)}`}</button>` : ''}` : ''}`;
+          <small>Abre el Editor para revisar y aprobar la portada antes de generar las imágenes pendientes. Puedes regenerar cada foto por separado. Puedes cambiar de motor arriba antes de regenerar. La foto anterior queda guardada y puedes volver a ella en el Editor.</small></div>
+        <button type="button" class="btn ghost" id="btn-regen-all" ${ready ? '' : 'disabled'}>Regenerar portada</button>` : ''}` : ''}`;
   }
   $('#cost-panel').innerHTML = `
     <h2>Presupuesto de generación</h2>
@@ -2057,21 +2131,21 @@ function renderCost() {
     <div class="line"><b>Claude · propuesta</b><span class="v">${money(d.claudeUsd || 0)}</span>
       <small>Ya gastado: ${d.calls || 1} propuesta${(d.calls || 1) > 1 ? 's' : ''} con Claude Sonnet 4.6${u.input_tokens ? ` (última: investigación con ${u.web_searches || u.server_tool_use?.web_search_requests || 0} búsquedas web + guion; ${u.input_tokens.toLocaleString('es')} tokens de entrada, ${u.output_tokens.toLocaleString('es')} de salida)` : ''}. Rehacer la propuesta costaría otros ~${money(u.usd || 0)}.</small></div>
     <div class="line total"><b>Falta por gastar</b><span class="v">${imgUsd == null ? '—' : `≈ ${money(imgUsd)}`}</span>
-      <small>Se cobra en la cuenta de ${esc(prov)} de la API key que está en 04_STUDIO_APP/.env.</small></div>
+      <small>Estimación del carrusel completo. Primero se genera solo la portada; el resto espera tu aprobación.</small></div>
     ${g ? genHtml : `<div class="form-actions">
-      <button type="button" class="btn accent" id="btn-approve" ${ready || !photos ? '' : 'disabled'}>${photos ? `Aprobar y generar ${photos} foto${photos === 1 ? '' : 's'}` : 'Aprobar sin fotos'}</button>
+      <button type="button" class="btn accent" id="btn-approve" ${ready || !photos ? '' : 'disabled'}>${photos ? 'Generar portada primero' : 'Guardar y revisar en el editor'}</button>
     </div>`}`;
 }
 
 function draftToProject() {
   const d = state.draft;
   return normalizeProject({
-    id: d.projectId || 'p' + Date.now(), requestId: d.requestId || '', brand: d.brand, modo: d.modo || '', name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
-    slides: d.slides.map(({ gen, janica, people, ...s }) => ({ ...s, image: '', bw: !!s.bw })),
+    id: d.projectId || 'p' + Date.now(), requestId: d.requestId || '', brand: d.brand, campaign:d.campaign,motor:d.motor||draftMotor().motor,tamano:d.tamano||draftMotor().tamano,modo: d.modo || defaultMode(d.brand), name: d.name, caption: d.caption, concept: d.concept, visualSystem: d.visualSystem || '', avoid: d.avoid || '',
+    slides: d.slides.map(({ gen, janica, ...s }) => ({ ...s, id:s.id||(s.id=uid()), image: '', bw: !!s.bw })),
   });
 }
 
-// Sin índices: primera aprobación (crea el proyecto y genera todas). Con índices: regenera solo esas láminas.
+// Sin índices: crea el proyecto y genera solo la portada. El resto requiere revisión.
 async function approve(indices = null) {
   const d = state.draft;
   if (!d.projectId) {
@@ -2080,9 +2154,16 @@ async function approve(indices = null) {
     if (await saveProject() === false) return;
     d.projectId = state.p.id;
   }
-  const want = indices && new Set(indices);
+  if(state.p?.id!==d.projectId)state.p=normalizeProject(await api('/api/projects?id='+encodeURIComponent(d.projectId)));
+  if(!d.gen){for(const ds of d.slides){ds.id ||= uid();const target=state.p.slides.find(s=>s.id===ds.id);if(target)Object.assign(target,slidePayload(ds));}}
+  else for(const ds of d.slides){const target=state.p.slides.find(s=>s.id===ds.id);if(target){target.photo=ds.photo;target.photoPrompt=ds.photoPrompt;target.people=ds.people;}}
+  state.p.motor=draftMotor().motor;state.p.tamano=draftMotor().tamano;
+  if(await saveProject()===false)return;
+  d.campaign=state.p.campaign;
+  const issues=Carousel.validateCarousel(state.p.slides);if(issues.length){toast(issues.join(' '),true);return;}
+  const want = new Set(indices || [0]);
   const items = d.slides.map((s, i) => (s.gen && (s.photoPrompt || s.photo || isFull(d)) && (!want || want.has(i))
-    ? { index: i, prompt: promptFor(s, d.brand), people: slidePeople(s), photo: s.photo, photoPrompt: s.photoPrompt,
+    ? { index: i, slideId:s.id,prompt: promptFor(s, d.brand), people: slidePeople(s), photo: s.photo, photoPrompt: s.photoPrompt,
       slide: slidePayload(s), count: `${i + 1}/${d.slides.length}` } : null)).filter(Boolean);
   if (!items.length) { d.gen = d.gen || { done: true, items: [] }; saveDraft(); renderCreate(); return; }
   try {
@@ -2106,12 +2187,9 @@ async function pollGeneration() {
     d.gen.done = job.done;
     if (state.p?.id === d.projectId) {
       job.items.forEach((x) => {
-        const s = state.p.slides[x.index];
-        if (x.url && s && s.image !== x.url) {
-          if (s.image) Object.assign(s, { prevImage: s.image, prevCutout: s.cutout || '' });
-          const ds = d.slides[x.index] || {};
-          Object.assign(s, { image: x.url, cutout: x.cutout || '', ix: 50, iy: x.full ? 50 : 30, iz: 1, dx: 0, dy: 0, full: !!x.full, soul: !!x.soul, qa: x.qa || '', motor: x.motor || '', tamano: x.tamano || '', layers: x.layers || null, move: dropLayerKeys(s.move), fx: dropLayerKeys(s.fx), layer: dropLayerKeys(s.layer), photo: ds.photo ?? s.photo, photoPrompt: ds.photoPrompt ?? s.photoPrompt });
-        }
+        const target=Carousel.resultTarget(stableProject(state.p).slides,x);
+        const s=target&&state.p.slides.find(s=>s.id===target.id);
+        if(x.status==='completed'&&x.url&&s&&s.image!==x.url)Carousel.applyVisual(s,x);
       });
     }
     saveDraft();
@@ -2134,7 +2212,8 @@ function pickIdeaBrand(b) {
   ideaBrand = b;
   renderBrandPick($('#i-brand'), ideaBrand, pickIdeaBrand);
   $('#i-cta').placeholder = brandOf(b).defaults?.cta || '';
-  $('#i-modo').value = fullMode(b) ? 'editable' : 'foto';
+  $('#i-modo').value = defaultMode(b);
+  $$('#i-modo option').forEach(o=>{o.disabled=o.value==='editable'&&!state.cfg?.layersAvailable;});
   renderOutfits();
 }
 
@@ -2261,7 +2340,7 @@ function bindCreate() {
     if (!b) return;
     if (b.id === 'btn-approve') { b.disabled = true; approve(); }
     else if (b.id === 'btn-retry') { b.disabled = true; approve(state.draft.gen.items.filter((x) => x.status === 'failed').map((x) => x.index)); }
-    else if (b.id === 'btn-regen-all') { b.disabled = true; approve(state.draft.slides.map((_, i) => i)); }
+    else if (b.id === 'btn-regen-all') { b.disabled = true; approve([0]); }
     else if (b.id === 'btn-open-editor') openProject(state.draft.projectId);
   });
   $$('[data-settings]').forEach((b) => b.addEventListener('click', () => { loadConfig(); $('#dlg-settings').showModal(); }));
@@ -2471,6 +2550,7 @@ async function init() {
     if (list[0]) p = await api('/api/projects?id=' + encodeURIComponent(list[0].id)).catch(() => null);
   }
   state.p = normalizeProject(p || sampleProject());
+  await prepareProjectAssets(state.p);
   if (!p) saveProject();
   renderEditor();
   // El Estudio siempre abre en Crear, para empezar describiendo la idea.

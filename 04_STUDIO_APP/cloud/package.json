@@ -17,7 +17,9 @@
     "test:integration": "tsx scripts/integration.ts",
     "migrate:verify": "tsx scripts/verify-import.ts",
     "build": "node scripts/build.mjs",
-    "dev": "tsx scripts/dev.ts"
+    "dev": "tsx scripts/dev.ts",
+    "test:carousel-browser": "node scripts/carousel-browser-test.mjs",
+    "benchmark:carousel": "tsx scripts/carousel-benchmark.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
