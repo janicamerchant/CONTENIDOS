@@ -9,6 +9,7 @@ import * as contract from '../shared/carousel.js';
 import * as campaign from '../src/campaign.js';
 import {HttpError,databaseError} from '../src/auth.js';
 import {groupedDeliveries} from '../src/deliveries.js';
+import {FONT_PAIRS} from '../shared/typography.js';
 process.env.SUPABASE_SECRET_KEY='test-only-campaign-signing-key';
 const source=await readFile(new URL('../api/index.ts',import.meta.url),'utf8');
 const code=(await transform(source.replace(/^import .*;\n/gm,'').replace('export default async function handler','async function handler'),{loader:'ts',target:'esnext'})).code;
@@ -21,7 +22,7 @@ function fixture(){
   assert.equal(name,'guardar_proyecto');if(args.p_version!==project.version)return {error:{code:'40001'},data:null};
   project={...project,documento:structuredClone(args.p_documento),version:project.version+1};return {data:{id:project.id,version:project.version},error:null};
  }};
- const env:any={...contract,...campaign,z,URL,Buffer,randomUUID,createHash,HttpError,databaseError,groupedDeliveries,console,
+ const env:any={...contract,...campaign,FONT_PAIRS,z,URL,Buffer,randomUUID,createHash,HttpError,databaseError,groupedDeliveries,console,
   authenticate:async()=>({id:'editor',role:'editor',db}),authorizeBrand:async()=>{},checked:(r:any)=>{databaseError(r.error);return r.data;},brandDetail:async()=>brand,
   readyFile:async()=>({mime:'image/png'}),
   adminClient:()=>({from:()=>({upsert:async(v:any)=>{uploads.push(v);return {data:null,error:null};}}),rpc:async(_name:string,args:any)=>{published.push(args);return {data:null,error:null};}}),
@@ -51,6 +52,16 @@ test('API: guardar conserva el snapshot existente aunque el cliente envíe otro'
  const f=fixture();const doc=structuredClone(f.project().documento);doc.campaign.brand.name='Forged';
  // Existing projects ignore a client-supplied replacement; preserve the stored campaign.
  const r=await f.call('projects',{...doc,version:1});assert.equal(r.status,200);assert.equal(r.body.campaign.brand.name,'Audit');
+});
+test('API: elegir combinación cambia solo tipografías, firma la campaña y exige nueva revisión',async()=>{
+ const f=fixture();await f.call('projects/review',{projectId:'project',version:1});
+ const old=f.project().documento.campaign;
+ const r=await f.call('projects/typography',{projectId:'project',version:f.project().version,pair:'instrument-montserrat'});
+ assert.equal(r.status,200);assert.equal(r.body.campaign.brand.fonts.display,'Instrument Serif');assert.equal(r.body.campaign.brand.fonts.body,'Montserrat');
+ assert.equal(f.project().documento.review,null);assert.notEqual(r.body.campaign.signature,old.signature);
+ assert.equal(campaign.verifiedCampaign(r.body.campaign,'audit').id,'audit');
+ assert.equal((await f.call('projects/typography',{projectId:'project',version:1,pair:'bodoni-jost'})).status,409);
+ assert.equal((await f.call('projects/typography',{projectId:'project',version:f.project().version,pair:'unknown'})).status,400);
 });
 
 test('API: la portada se firma; editar otra lámina conserva su aprobación y editar la portada la invalida',async()=>{

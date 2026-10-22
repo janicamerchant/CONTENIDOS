@@ -8,7 +8,7 @@ import {editorialRules,blockDirection} from './art-direction.js';
 import {readSite} from './sitio.js';
 import {reelsJob} from './reels.js';
 import {buildLayers,slideTexts,LAYERS_USD} from './layers.js';
-import {slideRevision,resolveMode,requestedCount,validateCarousel,validateSlide,resultTarget,applyVisual,proposalIssues} from '../shared/carousel.js';
+import {slideRevision,resolveMode,requestedCount,validateCarousel,validateSlide,resultTarget,applyVisual,proposalIssues,normalizePhotoColor} from '../shared/carousel.js';
 import {freezeCampaign,verifiedCampaign,identityContext} from './campaign.js';
 import {leased,executionSignal} from './execution.js';
 import {normalizeFrame} from './frames.js';
@@ -142,12 +142,12 @@ async function textJob(j:any,w:Identity){const {campaign:_snapshot,...input}=j.p
  let data=await call(request),usage={...(data.usage||{})},researchContent=[...data.content];
  const cost=()=>Number(usage.input_tokens||0)*3e-6+Number(usage.output_tokens||0)*15e-6+Number(usage.server_tool_use?.web_search_requests||0)*.01;
  const decode=(d:any)=>{if(['max_tokens','refusal'].includes(d.stop_reason))throw new Error('La propuesta no pudo completarse.');return JSON.parse(d.content.filter((x:any)=>x.type==='text').map((x:any)=>x.text).join(''));};
- let result=decode(data);
+ let result=profile?decode(data):normalizePhotoColor(decode(data),{...brief,marca:j.marca_id});
  if(!profile){
   let errors=proposalIssues(result,brief);
   if(errors.length){
    const corrected=await call({...request,tools:[],messages:[...messages,{role:'assistant',content:JSON.stringify(result)},{role:'user',content:'Corrige la propuesta sin cambiar el tema ni inventar fuentes. Debes resolver estos errores y conservar exactamente la cantidad pedida: '+errors.join(' ')}]});
-   usage={...usage,input_tokens:Number(usage.input_tokens||0)+Number(corrected.usage?.input_tokens||0),output_tokens:Number(usage.output_tokens||0)+Number(corrected.usage?.output_tokens||0)};researchContent.push(...corrected.content);data=corrected;result=decode(data);errors=proposalIssues(result,brief);
+   usage={...usage,input_tokens:Number(usage.input_tokens||0)+Number(corrected.usage?.input_tokens||0),output_tokens:Number(usage.output_tokens||0)+Number(corrected.usage?.output_tokens||0)};researchContent.push(...corrected.content);data=corrected;result=normalizePhotoColor(decode(data),{...brief,marca:j.marca_id});errors=proposalIssues(result,brief);
   }
   if(errors.length){await saveJob(j,{estado:'failed',error:'La propuesta necesita ajustes: '+errors.slice(0,5).join(' '),resultado:{validationErrors:errors,usage:{...usage,usd:cost()}},coste_usd:cost()});return;}
   result.campaign=campaign;

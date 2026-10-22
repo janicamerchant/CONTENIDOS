@@ -9,7 +9,8 @@ import {authenticate,authorizeBrand,databaseError,HttpError} from '../src/auth.j
 import {adminClient,config} from '../src/config.js';
 import {teamRoute} from '../src/team.js';
 import {reelsRoute} from '../src/reels.js';
-import {freezeCampaign,verifiedCampaign,signReview,validReview,reviewHash} from '../src/campaign.js';
+import {freezeCampaign,verifiedCampaign,campaignTypography,signReview,validReview,reviewHash} from '../src/campaign.js';
+import {FONT_PAIRS} from '../shared/typography.js';
 import {resolveMode,reviewRevision,reviewIssues,coverRevision,coverIssues,slideContent} from '../shared/carousel.js';
 import {groupedDeliveries} from '../src/deliveries.js';
 const id=z.string().min(1).max(128);
@@ -47,6 +48,17 @@ export default async function handler(req:IncomingMessage,res:ServerResponse){
    const projectId=id.parse(url.searchParams.get('id'));const project=checked(await who.db.from('proyectos').select('marca_id').eq('id',projectId).single());await authorizeBrand(who,project.marca_id);
    const rows=checked(await who.db.from('trabajos').select('id,payload,resultado,created_at').eq('proyecto_id',projectId).eq('tipo','imagen').eq('estado','succeeded').order('created_at',{ascending:false}).limit(30));
    return send(200,rows.filter((j:any)=>j.resultado?.url).map((j:any)=>({id:j.id,slideId:j.payload.slideId||j.payload.slide?.id,slide:j.payload.slide,createdAt:j.created_at,...j.resultado})));
+  }
+  if(route==='projects/typography'&&req.method==='POST'){
+   const b=z.object({projectId:id,version:z.number().int().positive(),pair:z.string().max(64)}).parse(await body(req));
+   const pair=FONT_PAIRS.find(p=>p.id===b.pair);if(!pair)throw new HttpError(400,'Combinación tipográfica desconocida.');
+   const row=checked(await who.db.from('proyectos').select('*').eq('id',b.projectId).single());await authorizeBrand(who,row.marca_id,true);
+   if(row.version!==b.version)throw new HttpError(409,'El proyecto cambió. Recarga antes de elegir la tipografía.');
+   const {display,body:fontBody,displayWeight,bodyWeight}=pair;
+   const campaign=campaignTypography(row.documento.campaign,row.marca_id,{display,body:fontBody,displayWeight,bodyWeight});
+   const document={...row.documento,campaign,review:null,coverReview:null};
+   const saved=checked(await who.db.rpc('guardar_proyecto',{p_id:row.id,p_marca:row.marca_id,p_documento:document,p_version:row.version}));
+   return send(200,{id:row.id,version:saved.version,campaign});
   }
   if(route==='projects/cover-review'&&req.method==='POST'){
    const b=z.object({projectId:id,version:z.number().int().positive()}).parse(await body(req));

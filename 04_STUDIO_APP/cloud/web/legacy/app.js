@@ -141,23 +141,13 @@ async function loadBrands() {
 }
 
 // Tipografías de Google Fonts de las marcas nuevas. Si la familia no tiene todos los pesos, se pide la básica.
-const loadedFonts = new Set(['Anton', 'Archivo', 'Barlow', 'Bodoni Moda', 'IBM Plex Mono', 'Instrument Serif', 'Jost', 'Montserrat']);
 function loadFont(family) {
   const f = String(family || '').trim();
-  if (!f || loadedFonts.has(f)) return;
-  loadedFonts.add(f);
-  const fam = encodeURIComponent(f).replace(/%20/g, '+');
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.crossOrigin = 'anonymous';
-  link.href = `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap`;
-  link.onerror = () => { link.onerror = null; link.href = `https://fonts.googleapis.com/css2?family=${fam}&display=swap`; };
-  link.onload = () => document.fonts.ready.then(() => { if (state.p && state.view === 'editor') renderEditor(); });
-  document.head.appendChild(link);
+  if(f)loadFontFull(f);
 }
 
 // Fuente elegida para un elemento en el Editor: se piden todos los grosores y la cursiva.
-// Prueba primero como variable (300–900), luego pesos sueltos y al final la básica.
+// Solicita primero los pesos reales conocidos; para familias nuevas conserva los fallbacks.
 const fullFonts = new Set();
 function loadFontFull(family) {
   const f = String(family || '').trim();
@@ -165,6 +155,7 @@ function loadFontFull(family) {
   fullFonts.add(f);
   const fam = encodeURIComponent(f).replace(/%20/g, '+');
   const urls = [
+    Carousel.fontRequest(f),
     `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,300..900;1,300..900&display=swap`,
     `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap`,
     `https://fonts.googleapis.com/css2?family=${fam}:ital,wght@0,400;0,700;1,400;1,700&display=swap`,
@@ -214,6 +205,8 @@ function baseVars(br, theme) {
     '--s-chip': acc, '--s-chip-ink': onAcc, '--s-edge': 'transparent', '--lime': acc,
     '--f-display': `'${f.display || 'Archivo'}', 'Helvetica Neue', Arial, sans-serif`, '--f-body': body, '--f-kicker': body,
     '--t-case': br.titleCase === 'upper' ? 'uppercase' : 'none',
+    ...(f.displayWeight?{'--t-w':Carousel.realFontWeight(f.display,f.displayWeight)}:{}),
+    ...(f.bodyWeight?{'--body-w':f.bodyWeight}:{}),
   };
 }
 
@@ -675,7 +668,6 @@ function buildSlide(p, s, i, n) {
     if (s.layers?.on && s.layers.plate) {
       el.classList.add('layered');
       el.innerHTML = layeredHtml(p, s);
-      applyMoves(el, s);
       return el;
     }
     // La imagen entra completa (Flare la entrega en 3:4, la lámina es 4:5); el sobrante se rellena con la misma imagen desenfocada.
@@ -704,7 +696,6 @@ function buildSlide(p, s, i, n) {
       el.appendChild(c);
     });
   }
-  applyMoves(el, s);
   return el;
 }
 
@@ -803,9 +794,13 @@ function applyMoves(el, s) {
     // Las capas traen su propia letra en línea: solo se pisa si se eligió otra en el panel
     const keep = !!n.dataset.ly;
     if (f.font || !keep) n.style.fontFamily = f.font ? `'${f.font}', serif` : '';
-    if (f.weight || !keep) n.style.fontWeight = f.weight || '';
-    if (f.italic || !keep) n.style.fontStyle = f.italic === 'si' ? 'italic' : f.italic === 'no' ? 'normal' : '';
-    if (f.font) loadFontFull(f.font);
+    const actual=(f.font||getComputedStyle(n).fontFamily).split(',')[0].replace(/['"]/g,'').trim();
+    if (f.weight || !keep) n.style.fontWeight = f.weight ? String(Carousel.realFontWeight(actual,f.weight)) : '';
+    const inheritedWeight=getComputedStyle(n).fontWeight,realWeight=Carousel.realFontWeight(actual,inheritedWeight);
+    if(realWeight!==Number(inheritedWeight))n.style.fontWeight=String(realWeight);
+    if (f.italic || !keep) n.style.fontStyle = f.italic === 'si'&&Carousel.fontCapabilities(actual).italic ? 'italic' : f.italic ? 'normal' : '';
+    if(f.italic)$$('em',n).forEach(em=>{em.style.fontStyle=f.italic==='si'&&Carousel.fontCapabilities(actual).italic?'italic':'normal';});
+    if (f.font||f.weight||f.italic) loadFontFull(actual);
     // Capa respecto a la persona (solo con recorte): la copia de encima (.over) se muestra u oculta
     if (n.closest('.over')) {
       const layer = s.layer?.[k];
@@ -903,6 +898,8 @@ function renderStage() {
   const el = buildSlide(p, cur(), state.sel, n);
   if (safeOn()) el.classList.add('show-safe');
   inner.replaceChildren(el);
+  // La fuente CSS solo se puede resolver cuando el elemento está en el documento.
+  applyMoves(el,cur());
   fitSlide(el);
   fitStage();
   markSelection();
@@ -927,6 +924,7 @@ function renderThumb(i) {
   const frame = $('.frame', li);
   const el = buildSlide(state.p, state.p.slides[i], i, state.p.slides.length);
   frame.replaceChildren(el);
+  applyMoves(el,state.p.slides[i]);
   fitSlide(el);
   el.style.transform = `scale(${frame.clientWidth / 1080})`;
 }
@@ -1093,27 +1091,38 @@ function bindPhotoDrag() {
 }
 
 // Panel del elemento seleccionado: tamaño, tipo de letra, grosor y cursiva
+function partTypeInfo(s,k){
+ const n=$$('[data-mv]',$('#stage-inner')).find(n=>n.dataset.mv===k&&!n.closest('.over'));
+ const layer=k.startsWith('l:')?(s.layers?.texts||[]).find(t=>'l:'+t.id===k):null;
+ let base={family:brandFor(state.p).fonts?.display||'Archivo',weight:'400',italic:false,fragments:false};
+ if(n){const css=n.style.cssText;n.style.fontFamily='';n.style.fontWeight='';n.style.fontStyle='';const cs=getComputedStyle(n);
+  base={family:cs.fontFamily.split(',')[0].replace(/['"]/g,'').trim(),weight:cs.fontWeight,italic:cs.fontStyle==='italic',fragments:!!n.querySelector('em')};n.style.cssText=css;}
+ if(layer)base={family:layer.font,weight:String(layer.weight||400),italic:!!layer.italic,fragments:!!layer.text?.includes('*')};
+  const family=s.fx?.[k]?.font||base.family;return {...base,weight:String(Carousel.realFontWeight(family,base.weight)),inheritedFamily:base.family,family,cap:Carousel.fontCapabilities(family)};
+}
 function partPanel(s) {
   const k = state.part;
   if (!k) return '';
   const f = s.fx?.[k] || {};
   const o = (v, cur, label) => `<option value="${esc(v)}" ${String(v) === String(cur ?? '') ? 'selected' : ''}>${esc(label)}</option>`;
-  const weights = [['', 'Del diseño'], ['300', 'Light 300'], ['400', 'Regular 400'], ['500', 'Medium 500'], ['600', 'Semibold 600'], ['700', 'Bold 700'], ['800', 'Extra bold 800'], ['900', 'Black 900']];
+  const type=partTypeInfo(s,k),weights = [['', `Del diseño · ${type.weight}`], ['300', 'Light 300'], ['400', 'Regular 400'], ['500', 'Medium 500'], ['600', 'Semibold 600'], ['700', 'Bold 700'], ['800', 'Extra bold 800'], ['900', 'Black 900']].filter(([v])=>!v||type.cap.weights.includes(Number(v)));
+  const activeWeight=f.weight?String(Carousel.realFontWeight(type.family,f.weight)):'';
   const sc = f.scale || 1;
   return `<section class="sec part-sec">
       <h3 class="sec-title">Seleccionado · ${esc(partLabel(s, k))}</h3>
       <label class="range"><span>Tamaño</span><input type="range" id="fx-scale" min="0.3" max="4" step="0.01" value="${sc}" data-fx="scale"><output>${sc}×</output></label>
       <label class="lbl" for="fx-font">Tipo de letra</label>
-      <select id="fx-font" class="inp" data-fx="font">${o('', f.font, 'Del diseño')}${EDIT_FONTS().map((x) => o(x, f.font, x)).join('')}</select>
+      <select id="fx-font" class="inp" data-fx="font">${o('', f.font, 'Del carrusel · '+type.inheritedFamily)}${EDIT_FONTS().map((x) => o(x, f.font, x)).join('')}</select>
       <span class="lbl">Capa</span>
       ${(s.layers?.on ? s.layers.cutout && k.startsWith('l:t') : s.image && s.cutout) ? `<div class="seg" role="group" aria-label="Capa">
         <button type="button" data-layer="front" aria-pressed="${layerOf(s, k) === 'front'}">Delante de la persona</button>
         <button type="button" data-layer="back" aria-pressed="${layerOf(s, k) === 'back'}">Detrás de la persona</button></div>`
       : `<p class="help">Para poner el texto detrás de la persona, la foto necesita su <b>Recorte</b> (sección Foto → Recorte automático).</p>`}
       <div class="fx-row">
-        <select class="inp" data-fx="weight" aria-label="Grosor">${weights.map(([v, l]) => o(v, f.weight, l)).join('')}</select>
-        <select class="inp" data-fx="italic" aria-label="Cursiva">${o('', f.italic, 'Cursiva: del diseño')}${o('no', f.italic, 'Sin cursiva')}${o('si', f.italic, 'Cursiva')}</select>
+        <select class="inp" data-fx="weight" aria-label="Grosor">${weights.map(([v, l]) => o(v, activeWeight, l)).join('')}</select>
+        <select class="inp" data-fx="italic" aria-label="Cursiva">${o('', f.italic, 'Del bloque · '+(type.italic?'cursiva':type.fragments?'cursiva en palabras marcadas':'sin cursiva'))}${o('no', f.italic, 'Sin cursiva')}${type.cap.italic?o('si', f.italic, 'Cursiva'):''}</select>
       </div>
+      <p class="help">${esc(type.family)} · ${type.cap.weights.length===1?'solo peso '+type.cap.weights[0]+'. Para más grosor elige otra familia o combinación.':'pesos reales '+type.cap.weights.join(', ')+'.'} La opción «Del bloque» usa el estilo de esta plantilla y las palabras entre *asteriscos*.</p>
       <p class="help">Arrastra el elemento para moverlo y la esquina lima para agrandarlo o achicarlo. Doble clic lo devuelve a su lugar; Esc quita la selección.</p>
       <div class="form-actions">
         <button type="button" class="btn sm ghost" id="fx-reset">Restablecer este elemento</button>
@@ -1245,6 +1254,9 @@ function renderInspector() {
     <details class="sec"><summary>Versiones generadas</summary><button type="button" class="btn sm ghost" id="load-history">Ver versiones guardadas</button>${(state.resultHistory?.projectId===p.id?state.resultHistory.items:[]).map(r=>`<div class="history-result"><img src="${esc(r.url)}" width="90" alt="Versión generada"><p>${esc(r.slide?.title||r.slide?.template||'Lámina')} · ${esc(new Date(r.createdAt).toLocaleString('es'))}</p><button type="button" class="btn sm" data-restore-result="${esc(r.id)}">Recuperar versión</button></div>`).join('')}</details>
     ${p.slides.some(s=>!s.image)?`<section class="sec"><h3 class="sec-title">Láminas sin imagen</h3><p class="help">Genera de una vez todas las láminas que todavía no tienen imagen.</p><button type="button" class="btn sm accent" id="generate-remaining">Generar láminas pendientes</button></section>`:''}
     <section class="sec"><h3 class="sec-title">Revisión del carrusel</h3><p class="help">${p.review?'Revisión aprobada.':'Revisa textos, rostros, logos y consistencia de todas las láminas antes de exportar.'}</p><button type="button" class="btn sm accent" id="approve-review">He revisado el carrusel</button>${p.review?'<button type="button" class="btn sm" id="save-brand-pattern">Usar como patrón de marca</button>':''}<button type="button" class="btn sm ghost" id="refresh-campaign">Actualizar configuración de marca</button></section>
+    <section class="sec"><h3 class="sec-title">Tipografía del carrusel</h3><label class="lbl" for="project-font-pair">Combinación de fuentes</label>
+     <select class="inp" id="project-font-pair"><option value="">Actual · ${esc(brandFor(p).fonts?.display||'Del diseño')} + ${esc(brandFor(p).fonts?.body||'Del diseño')}</option>${Carousel.FONT_PAIRS.map(pair=>`<option value="${pair.id}">${pair.label}${pair.id==='instrument-montserrat'?' · predeterminada de Janica':''}</option>`).join('')}</select>
+     <p class="help">Aplica la combinación a este carrusel y conserva tus ajustes por elemento. En fotos cambia el texto editable; en imágenes completas, los textos ya dibujados requieren regenerar o convertir a capas.</p></section>
     <section class="sec">
       <h3 class="sec-title">Lámina ${state.sel + 1}</h3>
       <div class="layouts" role="group" aria-label="Diseño">
@@ -1277,6 +1289,7 @@ function renderInspector() {
       ${field('Escena de la foto', 'photo', 'textarea', 3, 'Qué pasa en la foto y por qué cuenta el titular: quién hace qué, dónde, con qué objeto. Una persona aprobada de la marca solo si su acción explica la idea.')}
       ${field('Prompt para generar (inglés)', 'photoPrompt', 'textarea', 4, 'Es lo que se envía al motor de imagen al generar o regenerar. Si lo dejas vacío, se arma desde la escena.')}
       ${s.image && s.motor ? `<p class="help">Foto actual hecha con ${esc(motorLabel(s.motor, s.tamano))}.</p>` : ''}
+      ${p.brand==='janica'&&s.image&&/(?:black[- ]and[- ]white|monochrome|gr[ae]yscale)\s+(?:photograph|photo|portrait)/i.test(s.photoPrompt||'')?'<p class="help">Esta foto se pidió en blanco y negro. Quitar el filtro no recupera el color del archivo original.</p><button type="button" class="btn sm" id="regen-color">Regenerar foto a color</button>':''}
       ${s.photo || s.photoPrompt || isFull(p) ? motorPicker('editor', editorMotor(), !!state.egen) : ''}
       <div class="form-actions">
         <button type="button" class="btn sm ghost" id="copy-prompt">Copiar prompt</button>
@@ -1349,6 +1362,9 @@ function bindInspector() {
   });
   ins.addEventListener('change', (e) => {
     const t = e.target;
+    if(t.dataset.fx==='font'){renderInspector();return;}
+    if(t.id==='project-font-pair'&&t.value){const project=state.p;clearTimeout(state.saveTimer);t.disabled=true;
+     saveProject().then(async ok=>{if(!ok)throw new Error('No se pudo guardar el proyecto.');const r=await api('/api/projects/typography',{projectId:project.id,version:project.version,pair:t.value});Object.assign(project,{version:r.version,campaign:r.campaign,review:null,coverReview:null});await prepareProjectAssets(project);if(state.p===project)renderEditor();toast('Combinación aplicada al carrusel.');}).catch(err=>{t.disabled=false;toast(err.message,true);});return;}
     if (t.id === 'ly-orig' && cur().layers) { cur().layers.on = !t.checked; state.part = null; refreshSlide(); renderInspector(); return; }
     if (t.dataset.lf === 'upper' && cur().layers) { cur().layers.texts[+t.closest('[data-li]').dataset.li].upper = t.checked; refreshSlide(); return; }
     if (t.dataset.c) { cur()[t.dataset.c] = t.checked; refreshSlide(); }
@@ -1383,6 +1399,10 @@ function bindInspector() {
     const b = e.target.closest('button');
     if (!b) return;
     const s = cur();
+    if(b.id==='regen-color'){
+     const r=Carousel.normalizePhotoColor({slides:[s]},{marca:'janica'}).slides[0];s.bw=false;s.photoPrompt=r.photoPrompt+(s.theme==='dark'?' Leave a genuinely dark, clean upper-left text area in the background, with the person on the right; keep all text away from her face.':' Leave a clean light upper-left area for dark text.');
+     refreshSlide();renderInspector();regenerateInEditor(state.sel);return;
+    }
     if(b.id==='load-history'){const project=state.p;api('/api/projects/results?id='+encodeURIComponent(project.id)).then(items=>{if(state.p.id===project.id){state.resultHistory={projectId:project.id,items};renderInspector();$('#load-history').closest('details').open=true;}}).catch(e=>toast(e.message,true));return;}
     if(b.dataset.restoreResult){const r=state.resultHistory?.items.find(r=>r.id===b.dataset.restoreResult);if(!r)return;let target=state.p.slides.find(s=>s.id===r.slideId);if(!target){target=blankSlide(r.slide?.layout,state.p.brand,{id:r.slideId||uid()});state.p.slides.push(target);}Object.assign(target,slidePayload(r.slide||target));Carousel.applyVisual(target,r);state.sel=state.p.slides.indexOf(target);scheduleSave();renderEditor();toast('Versión recuperada. Revisa el carrusel antes de exportar.');return;}
     if(b.id==='approve-review'){approveReview();return;}
@@ -1604,6 +1624,7 @@ async function renderForExport(i) {
   const host = $('#export-stage');
   const el = buildSlide(state.p, state.p.slides[i], i, state.p.slides.length);
   host.replaceChildren(el);
+  applyMoves(el,state.p.slides[i]);
   await Promise.all($$('img', el).map(img=>img.decode().catch(()=>{throw new Error('No se pudo cargar una imagen de la lámina. Vuelve a abrir el proyecto antes de exportar.');})));
   await document.fonts.ready;
   fitSlide(el);
@@ -1613,7 +1634,7 @@ async function renderForExport(i) {
     if(node.classList.contains('blk')&&node.scrollWidth>node.clientWidth+2)throw new Error(`Lámina ${i+1}: una palabra no cabe en su columna. Amplía la columna o reduce el tamaño antes de exportar.`);
     if(box.left<bounds.left-2||box.top<bounds.top-2||box.right>bounds.right+2||box.bottom>bounds.bottom+2)throw new Error(`Lámina ${i+1}: hay texto fuera del lienzo. Ajusta su tamaño o posición antes de exportar.`);
   }
-  const fk = state.p.brand + '|' + [...new Set(state.p.slides.flatMap((x) => [...Object.values(x.fx || {}).map((f) => f.font), ...(x.layers?.on ? x.layers.texts.map((t) => t.font) : [])].filter(Boolean)))].sort().join(',');
+  const fk = state.p.brand + '|' + JSON.stringify(brandFor(state.p).fonts) + '|' + [...new Set(state.p.slides.flatMap((x) => [...Object.values(x.fx || {}).map((f) => f.font), ...(x.layers?.on ? x.layers.texts.map((t) => t.font) : [])].filter(Boolean)))].sort().join(',');
   if (fontCSS[fk] === undefined) {
     try { fontCSS[fk] = await htmlToImage.getFontEmbedCSS(el); } catch (e) { throw new Error('No se pudieron incrustar las fuentes de la marca. Revisa la conexión y vuelve a exportar.'); }
   }

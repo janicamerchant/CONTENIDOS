@@ -18,6 +18,7 @@ window.cloudApi=async(path,body)=>{
  if(path==='/api/projects'&&!body)return [{id:project.id}];
  if(path.startsWith('/api/projects?id='))return structuredClone(project);
  if(path==='/api/projects'&&body){const review=project.review&&CarouselFixture.reviewRevision(project)===CarouselFixture.reviewRevision(body)?project.review:null;const coverReview=project.coverReview&&CarouselFixture.coverRevision(project)===CarouselFixture.coverRevision(body)?project.coverReview:null;project={...structuredClone(body),review,coverReview,version:project.version+1};return {id:project.id,version:project.version,campaign:project.campaign,review,coverReview};}
+ if(path==='/api/projects/typography'){const pair=CarouselFixture.FONT_PAIRS.find(p=>p.id===body.pair);project.campaign.brand.fonts={display:pair.display,body:pair.body,displayWeight:pair.displayWeight,bodyWeight:pair.bodyWeight};project.review=null;project.coverReview=null;project.version++;return {id:project.id,version:project.version,campaign:structuredClone(project.campaign)};}
  if(path==='/api/projects/review'){project.review={approvedAt:new Date().toISOString(),signature:'fixture'};project.version++;return {id:project.id,version:project.version,review:project.review};}
  if(path==='/api/projects/cover-review'){project.coverReview={signature:'fixture'};project.version++;return {id:project.id,version:project.version,coverReview:project.coverReview};}
  if(path==='/api/projects/pattern'){fixture.patterns++;return {ok:true};}
@@ -75,6 +76,30 @@ try{
  assert.ok(await page.evaluate(()=>state.p.slides.every(s=>!!s.image)));assert.equal(await page.locator('#generate-remaining').count(),0);
  await page.locator('#approve-review').click();await page.waitForFunction(()=>!!state.p.review);
  await page.locator('#save-brand-pattern').click();await page.waitForFunction(()=>fixture.patterns===1);
+ // Font combinations persist; Instrument Serif never receives an invented Bold 700.
+ await page.evaluate(async()=>{state.p.campaign.brand.design='janica';Object.assign(cur(),{layout:'bloques',template:'voz-interior',blocks:[{id:'heading',style:'titulo-xl',zone:'arriba',text:'Una *idea* importante'},{id:'support',style:'sans-grande',zone:'abajo',text:'Un apoyo con más cuerpo'}],fx:{'b:heading':{weight:'700',scale:.8}},move:{'b:heading':[10,20]}});await saveProject();renderEditor();});
+ await page.locator('#project-font-pair').selectOption('instrument-montserrat');
+ await page.waitForFunction(()=>state.p.campaign.brand.fonts.display==='Instrument Serif');
+ assert.equal(await page.evaluate(()=>state.p.review),null);
+ const fontState=await page.evaluate(()=>{const h=document.querySelector('#stage-inner [data-block="heading"]'),b=document.querySelector('#stage-inner [data-block="support"]');return {family:getComputedStyle(h).fontFamily,weight:getComputedStyle(h).fontWeight,body:getComputedStyle(b).fontFamily,bodyWeight:getComputedStyle(b).fontWeight,move:cur().move,fx:cur().fx};});
+ assert.match(fontState.family,/Instrument Serif/);assert.equal(fontState.weight,'400');assert.match(fontState.body,/Montserrat/);assert.equal(fontState.bodyWeight,'500');assert.deepEqual(fontState.move['b:heading'],[10,20]);assert.equal(fontState.fx['b:heading'].scale,.8);
+ await page.evaluate(()=>{state.part='b:heading';renderInspector();});
+ assert.equal(await page.locator('[data-fx="weight"] option[value="700"]').count(),0);
+ assert.match(await page.locator('[data-fx="italic"] option[value=""]').textContent(),/palabras marcadas/);
+ await page.locator('[data-fx="italic"]').selectOption('no');
+ assert.equal(await page.locator('#stage-inner [data-block="heading"] em').evaluate(n=>getComputedStyle(n).fontStyle),'normal');
+ await page.locator('[data-fx="italic"]').selectOption('');
+ assert.equal(await page.locator('#stage-inner [data-block="heading"] em').evaluate(n=>getComputedStyle(n).fontStyle),'italic');
+ await page.locator('#fx-font').selectOption('Bodoni Moda');
+ assert.equal(await page.locator('[data-fx="weight"]').inputValue(),'700');
+ assert.equal(await page.locator('#stage-inner [data-block="heading"]').evaluate(n=>getComputedStyle(n).fontWeight),'700');
+ await page.locator('#fx-font').selectOption('');
+ await page.locator('#project-font-pair').selectOption('bodoni-jost');
+ await page.waitForFunction(()=>state.p.campaign.brand.fonts.display==='Bodoni Moda');
+ await page.evaluate(async()=>{await saveProject();await openProject(state.p.id);});
+ assert.equal(await page.evaluate(()=>state.p.campaign.brand.fonts.body),'Jost');
+ assert.equal(await page.locator('#stage-inner [data-block="heading"]').evaluate(n=>getComputedStyle(n).fontWeight),'700');
+ assert.equal(await page.locator('#stage-inner [data-block="support"]').evaluate(n=>getComputedStyle(n).fontWeight),'500');
  assert.deepEqual(errors,[]);await writeFile('artifacts/consistency-fix/browser.json',JSON.stringify({passed:true,exports:result.exports,commits:result.commits,typography,errors},null,2));
  console.log('Chrome: revisión, doble exportación, orden, identidad al reordenar, deshacer, fuentes, móvil, todas las láminas de una vez y patrón de marca: OK.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

@@ -1,4 +1,5 @@
 // Pure contract shared by browser, API and worker. No credentials or browser APIs.
+export {FONT_PAIRS,fontCapabilities,realFontWeight,fontRequest} from './typography.js';
 export const MAX_SLIDES=10;
 export const CONTENT_FIELDS=['layout','theme','kicker','title','body','number','numberLabel','items','leftLabel','leftItems','rightLabel','rightItems','cta','source','photo','photoPrompt','basePhoto','outfit','blocks','template','bw','people'] as const;
 export function canonical(value:any):string {
@@ -11,6 +12,19 @@ export function slideContent(s:any){return Object.fromEntries(CONTENT_FIELDS.map
 export const slideRevision=(s:any)=>canonical(slideContent(s));
 export function resolveMode(requested:any,brand:any){return ['foto','completa','editable'].includes(requested)?requested:['foto','completa','editable'].includes(brand?.modo)?brand.modo:'foto';}
 export const cleanText=(v:any)=>String(v||'').replace(/[*_=]/g,'').trim();
+export function janicaNaturalColor(brief:any){
+ if(brief.marca!=='janica')return false;
+ const text=[brief.idea,brief.tema,brief.notas,brief.instrucciones].filter(Boolean).join('\n');
+ const ask=/(?:foto(?:graf[ií]a)?s?|im[aá]genes?|carrusel|l[aá]minas?)\s+(?:en\s+)?(?:blanco\s+y\s+negro|monocrom[oas]+)|(?:black.and.white|monochrome)\s+(?:photo|image|carousel)/iu;
+ return !ask.test(text)||/(?:sin|evita|no\s+(?:uses|quiero))\s+(?:fotos?\s+(?:en\s+)?)?(?:blanco\s+y\s+negro|monocrom[ií]a)/iu.test(text);
+}
+export function normalizePhotoColor(proposal:any,brief:any){
+ if(!janicaNaturalColor(brief))return proposal;
+ return {...proposal,slides:(proposal.slides||[]).map((s:any)=>{
+  const prompt=String(s.photoPrompt||'').replace(/(?:black[- ]and[- ]white|b&w|monochrome|gr[ae]yscale)\s+(?:(?:editorial|portrait|fashion)\s+)?(?:photograph(?:y)?|photo|image|portrait)/gi,(m:string,at:number,all:string)=>/\b(?:no|not|avoid)\s*$/i.test(all.slice(Math.max(0,at-12),at))?m:'natural color photograph');
+  return {...s,bw:false,...(prompt?{photoPrompt:prompt+'\nPhotography in natural color with realistic skin and material colors. No monochrome treatment.'}:{})};
+ })};
+}
 const wordCount=(v:any)=>cleanText(v).split(/\s+/).filter(Boolean).length;
 export const TEMPLATE_WORDS:Record<string,number>={'portada-subrayado':18,'a-ti-si':45,'cifra-resaltada':25,'arriba-abajo':35,'voz-interior':45,escalera:40,'dato-centrado':40,'cierre-guardar':55,'remate-linea':35};
 export function slideTexts(s:any):string[]{
