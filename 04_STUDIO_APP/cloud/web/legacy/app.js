@@ -778,7 +778,7 @@ const MOVABLE = [
 const PART_LABEL = { kicker: 'Antetítulo', title: 'Titular', body: 'Texto de apoyo', source: 'Fuente del dato', accent: 'Línea de acento',
   number: 'Cifra', numlabel: 'Texto de la cifra', items: 'Lista', cols: 'Columnas', lines: 'Líneas', punch: 'Remate', cta: 'Botón / CTA',
   sign: 'Firma', count: 'Contador', quote: 'Comillas' };
-// s.fx[clave] = { scale, font, weight, italic: 'si' | 'no' }: tamaño con el mouse y tipografía desde el panel
+// s.fx[clave]: tamaño, tipografía, textColor y fondo con backdropColor/backdropOpacity (0–100).
 function applyMoves(el, s) {
   const parts = [];
   MOVABLE.forEach(([k, sel]) => $$(sel, el).forEach((n) => parts.push([k, n])));
@@ -801,11 +801,21 @@ function applyMoves(el, s) {
     if (f.italic || !keep) n.style.fontStyle = f.italic === 'si'&&Carousel.fontCapabilities(actual).italic ? 'italic' : f.italic ? 'normal' : '';
     if(f.italic)$$('em',n).forEach(em=>{em.style.fontStyle=f.italic==='si'&&Carousel.fontCapabilities(actual).italic?'italic':'normal';});
     if (f.font||f.weight||f.italic) loadFontFull(actual);
+    const ink=hexRgb(f.textColor),bg=hexRgb(f.backdropColor)||[20,20,20];
+    const opacity=Math.max(0,Math.min(100,Number(f.backdropOpacity)||0));
+    n.classList.toggle('fx-ink',!!ink);
+    if(ink)n.style.setProperty('--fx-ink',f.textColor);
+    n.classList.toggle('fx-backdrop',opacity>0);
+    if(opacity>0)n.style.setProperty('--fx-backdrop',`rgba(${bg.join(',')},${opacity/100})`);
     // Capa respecto a la persona (solo con recorte): la copia de encima (.over) se muestra u oculta
     if (n.closest('.over')) {
       const layer = s.layer?.[k];
       n.style.visibility = layer === 'front' ? 'visible' : layer === 'back' ? 'hidden' : '';
     }
+  });
+  // La copia delante del recorte no debe sumar dos veces el alfa del fondo.
+  parts.filter(([,n])=>n.closest('.over')&&n.classList.contains('fx-backdrop')&&getComputedStyle(n).visibility!=='hidden').forEach(([k])=>{
+    parts.filter(([key,n])=>key===k&&!n.closest('.over')).forEach(([,n])=>n.classList.remove('fx-backdrop'));
   });
 }
 // Por defecto (slides.css) solo el titular y la cifra pasan detrás de la persona
@@ -1094,11 +1104,16 @@ function bindPhotoDrag() {
 function partTypeInfo(s,k){
  const n=$$('[data-mv]',$('#stage-inner')).find(n=>n.dataset.mv===k&&!n.closest('.over'));
  const layer=k.startsWith('l:')?(s.layers?.texts||[]).find(t=>'l:'+t.id===k):null;
- let base={family:brandFor(state.p).fonts?.display||'Archivo',weight:'400',italic:false,fragments:false};
+ let base={family:brandFor(state.p).fonts?.display||'Archivo',weight:'400',italic:false,fragments:false,color:s.theme==='dark'?'#FFFFFF':'#1F1D1B'};
  if(n){const css=n.style.cssText;n.style.fontFamily='';n.style.fontWeight='';n.style.fontStyle='';const cs=getComputedStyle(n);
-  base={family:cs.fontFamily.split(',')[0].replace(/['"]/g,'').trim(),weight:cs.fontWeight,italic:cs.fontStyle==='italic',fragments:!!n.querySelector('em')};n.style.cssText=css;}
- if(layer)base={family:layer.font,weight:String(layer.weight||400),italic:!!layer.italic,fragments:!!layer.text?.includes('*')};
+  base={family:cs.fontFamily.split(',')[0].replace(/['"]/g,'').trim(),weight:cs.fontWeight,italic:cs.fontStyle==='italic',fragments:!!n.querySelector('em'),color:cs.color};n.style.cssText=css;}
+ if(layer)base={family:layer.font,weight:String(layer.weight||400),italic:!!layer.italic,fragments:!!layer.text?.includes('*'),color:layer.color};
   const family=s.fx?.[k]?.font||base.family;return {...base,weight:String(Carousel.realFontWeight(family,base.weight)),inheritedFamily:base.family,family,cap:Carousel.fontCapabilities(family)};
+}
+function pickerColor(color){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+ const ctx=canvas.getContext('2d');ctx.fillStyle=color||'#FFFFFF';ctx.fillRect(0,0,1,1);
+ return '#'+[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(v=>v.toString(16).padStart(2,'0')).join('');
 }
 function partPanel(s) {
   const k = state.part;
@@ -1123,6 +1138,15 @@ function partPanel(s) {
         <select class="inp" data-fx="italic" aria-label="Cursiva">${o('', f.italic, 'Del bloque · '+(type.italic?'cursiva':type.fragments?'cursiva en palabras marcadas':'sin cursiva'))}${o('no', f.italic, 'Sin cursiva')}${type.cap.italic?o('si', f.italic, 'Cursiva'):''}</select>
       </div>
       <p class="help">${esc(type.family)} · ${type.cap.weights.length===1?'solo peso '+type.cap.weights[0]+'. Para más grosor elige otra familia o combinación.':'pesos reales '+type.cap.weights.join(', ')+'.'} La opción «Del bloque» usa el estilo de esta plantilla y las palabras entre *asteriscos*.</p>
+      <div class="fx-contrast">
+        <label class="lbl" for="fx-text-color">Color del texto</label>
+        <div class="fx-color-row"><input type="color" id="fx-text-color" data-fx="textColor" value="${hexRgb(f.textColor)?f.textColor:pickerColor(type.color)}"><button type="button" class="btn sm ghost" id="fx-color-reset">Del diseño</button></div>
+        <label class="lbl" for="fx-backdrop-color">Fondo detrás del texto</label>
+        <div class="fx-color-row"><input type="color" id="fx-backdrop-color" data-fx="backdropColor" value="${hexRgb(f.backdropColor)?f.backdropColor:'#141414'}"><button type="button" class="btn sm ghost" id="fx-backdrop-reset">Quitar fondo</button></div>
+        <label class="range"><span>Opacidad del fondo</span><input type="range" id="fx-backdrop-opacity" min="0" max="100" step="1" value="${Math.max(0,Math.min(100,Number(f.backdropOpacity)||0))}" data-fx="backdropOpacity"><output>${Math.max(0,Math.min(100,Number(f.backdropOpacity)||0))}%</output></label>
+        <div class="form-actions"><button type="button" class="btn sm" data-contrast="dark">Blanco + fondo oscuro</button><button type="button" class="btn sm" data-contrast="light">Negro + fondo claro</button></div>
+        <p class="help">El fondo ayuda a leer sobre la foto sin transparentar las letras. 0% lo apaga; 100% lo hace sólido. Se aplica solo a este elemento.</p>
+      </div>
       <p class="help">Arrastra el elemento para moverlo y la esquina lima para agrandarlo o achicarlo. Doble clic lo devuelve a su lugar; Esc quita la selección.</p>
       <div class="form-actions">
         <button type="button" class="btn sm ghost" id="fx-reset">Restablecer este elemento</button>
@@ -1339,11 +1363,12 @@ function bindInspector() {
       return;
     }
     if (t.dataset.fx && state.part) {
-      const v = t.dataset.fx === 'scale' ? parseFloat(t.value) : t.value;
+      const v = ['scale','backdropOpacity'].includes(t.dataset.fx) ? parseFloat(t.value) : t.value;
       const fx = { ...(s.fx?.[state.part] || {}), [t.dataset.fx]: v };
-      if (!v || v === 1) delete fx[t.dataset.fx];
+      if (v === '' || (t.dataset.fx === 'scale' && v === 1) || (t.dataset.fx === 'backdropOpacity' && v === 0)) delete fx[t.dataset.fx];
       s.fx = { ...(s.fx || {}), [state.part]: fx };
       if (t.dataset.fx === 'scale') t.nextElementSibling.textContent = v + '×';
+      if (t.dataset.fx === 'backdropOpacity') t.nextElementSibling.textContent = v + '%';
       refreshSlide();
       return;
     }
@@ -1399,6 +1424,13 @@ function bindInspector() {
     const b = e.target.closest('button');
     if (!b) return;
     const s = cur();
+    if(state.part&&(b.dataset.contrast||['fx-color-reset','fx-backdrop-reset'].includes(b.id))){
+      const fx={...(s.fx?.[state.part]||{})};
+      if(b.dataset.contrast){const dark=b.dataset.contrast==='dark';Object.assign(fx,{textColor:dark?'#FFFFFF':'#1F1D1B',backdropColor:dark?'#141414':'#FFFFFF',backdropOpacity:80});}
+      if(b.id==='fx-color-reset')delete fx.textColor;
+      if(b.id==='fx-backdrop-reset'){delete fx.backdropColor;delete fx.backdropOpacity;}
+      s.fx={...(s.fx||{}),[state.part]:fx};refreshSlide();renderInspector();return;
+    }
     if(b.id==='regen-color'){
      const r=Carousel.normalizePhotoColor({slides:[s]},{marca:'janica'}).slides[0];s.bw=false;s.photoPrompt=r.photoPrompt+(s.theme==='dark'?' Leave a genuinely dark, clean upper-left text area in the background, with the person on the right; keep all text away from her face.':' Leave a clean light upper-left area for dark text.');
      refreshSlide();renderInspector();regenerateInEditor(state.sel);return;

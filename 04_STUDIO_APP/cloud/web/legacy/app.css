@@ -509,6 +509,11 @@ details.fine summary { font-size: 12.5px; color: var(--faint); cursor: pointer; 
   background: #ecfe6e; border: 2px solid #111; cursor: nwse-resize; box-shadow: 0 2px 8px #0008;
 }
 .fx-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.fx-contrast { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+.fx-contrast .help { margin: 0; }
+.fx-color-row { display: flex; gap: 8px; align-items: center; }
+.fx-color-row input[type="color"] { width: 60px; height: 38px; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; }
+.fx-color-row .btn { flex: 1; }
 .part-sec { border: 1px solid rgba(236, 254, 110, .35); border-radius: 8px; padding: 12px; }
 .seg:has(> :nth-child(3)) { flex-wrap: wrap; }
 

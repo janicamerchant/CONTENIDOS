@@ -16,6 +16,12 @@
 .slide * { box-sizing: border-box; }
 .slide .z { position: absolute; }
 
+/* Contraste por elemento: el alfa solo afecta al fondo, nunca a las letras.
+   La extensión de 12 px no cambia las medidas ni los saltos de línea del texto. */
+.slide .fx-ink, .slide .fx-ink * { color: var(--fx-ink) !important; -webkit-text-fill-color: var(--fx-ink); }
+.slide .fx-ink, .slide .fx-backdrop { opacity: 1 !important; }
+.slide .fx-backdrop { background-color: var(--fx-backdrop) !important; box-shadow: 0 0 0 12px var(--fx-backdrop); border-radius: 4px; }
+
 /* ---------------- Marcas ---------------- */
 
 /* EVA — premium, oscuro, editorial; lima eléctrica muestreada del logo (#ECFE6E) */

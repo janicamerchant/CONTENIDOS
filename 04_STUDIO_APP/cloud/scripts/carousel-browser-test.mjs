@@ -10,8 +10,8 @@ window.carouselContract=CarouselFixture;window.cloudPersistent=v=>v;
 const photo=(()=>{const c=document.createElement('canvas');c.width=108;c.height=135;c.getContext('2d').fillRect(0,0,108,135);return c.toDataURL();})();
 const brand={id:'fixture',name:'Fixture',file:'FIXTURE',design:'base',modo:'foto',theme:'light',fonts:{display:'Arial',body:'Arial'},colors:{accent:'#123ABC',lightBg:'#F3EEE6',lightInk:'#222222',darkBg:'#222222',darkInk:'#FFFFFF'},people:[],logos:{},defaults:{idioma:'Español'}};
 let project={id:'p-fixture',brand:'fixture',name:'Prueba de consistencia',version:1,modo:'foto',campaign:{brand,signature:'fixture'},slides:[{id:'slide-A',layout:'frase',theme:'light',title:'Primera idea',photo:'A room',photoPrompt:'A room',image:photo},{id:'slide-B',layout:'frase',theme:'light',title:'Segunda idea',photo:'Another room',photoPrompt:'Another room',image:photo}]};
-window.fixture={exports:[],commits:[],generated:null,complete:false,patterns:0};
-window.htmlToImage={getFontEmbedCSS:async()=>'',toPng:async()=>photo};
+window.fixture={exports:[],commits:[],generated:null,complete:false,patterns:0,renders:[]};
+window.htmlToImage={getFontEmbedCSS:async()=>'',toPng:async(el)=>{fixture.renders.push([...el.querySelectorAll('[data-mv]')].map(n=>({key:n.dataset.mv,color:getComputedStyle(n).color,background:getComputedStyle(n).backgroundColor,opacity:getComputedStyle(n).opacity})));return photo;}};
 window.cloudApi=async(path,body)=>{
  if(path==='/api/brands')return {brands:[structuredClone(brand)]};
  if(path==='/api/config')return {hasKey:true,layersAvailable:true,motorDefecto:'hf_flare',motores:[{id:'hf_flare',nombre:'Flare',proveedor:'Fixture',disponible:true,tamanos:{'2k':null},modes:['foto','completa','editable']}]};
@@ -77,7 +77,7 @@ try{
  await page.locator('#approve-review').click();await page.waitForFunction(()=>!!state.p.review);
  await page.locator('#save-brand-pattern').click();await page.waitForFunction(()=>fixture.patterns===1);
  // Font combinations persist; Instrument Serif never receives an invented Bold 700.
- await page.evaluate(async()=>{state.p.campaign.brand.design='janica';Object.assign(cur(),{layout:'bloques',template:'voz-interior',blocks:[{id:'heading',style:'titulo-xl',zone:'arriba',text:'Una *idea* importante'},{id:'support',style:'sans-grande',zone:'abajo',text:'Un apoyo con más cuerpo'}],fx:{'b:heading':{weight:'700',scale:.8}},move:{'b:heading':[10,20]}});await saveProject();renderEditor();});
+ await page.evaluate(async()=>{state.p.campaign.brand.design='janica';Object.assign(cur(),{layout:'bloques',title:'',body:'',template:'voz-interior',blocks:[{id:'heading',style:'titulo-xl',zone:'arriba',align:'izq',text:'Una *idea* importante'},{id:'support',style:'sans-grande',zone:'abajo',align:'izq',text:'Un apoyo con más cuerpo'}],fx:{'b:heading':{weight:'700',scale:.8}},move:{'b:heading':[10,20]}});await saveProject();renderEditor();});
  await page.locator('#project-font-pair').selectOption('instrument-montserrat');
  await page.waitForFunction(()=>state.p.campaign.brand.fonts.display==='Instrument Serif');
  assert.equal(await page.evaluate(()=>state.p.review),null);
@@ -100,6 +100,44 @@ try{
  assert.equal(await page.evaluate(()=>state.p.campaign.brand.fonts.body),'Jost');
  assert.equal(await page.locator('#stage-inner [data-block="heading"]').evaluate(n=>getComputedStyle(n).fontWeight),'700');
  assert.equal(await page.locator('#stage-inner [data-block="support"]').evaluate(n=>getComputedStyle(n).fontWeight),'500');
+ // Text colors and translucent backgrounds survive save/reopen and reach the export DOM.
+ const setControl=async(selector,value)=>page.locator(selector).evaluate((n,value)=>{n.value=value;n.dispatchEvent(new Event('input',{bubbles:true}));},value);
+ const appearance=()=>page.locator('#stage-inner [data-block="heading"]').evaluate(n=>({color:getComputedStyle(n).color,marked:getComputedStyle(n.querySelector('em')).color,background:getComputedStyle(n).backgroundColor,opacity:getComputedStyle(n).opacity,width:n.getBoundingClientRect().width}));
+ await page.locator('#approve-review').click();await page.waitForFunction(()=>!!state.p.review);
+ await page.evaluate(()=>{state.part='b:heading';renderInspector();});
+ const widthBefore=(await appearance()).width;
+ await setControl('#fx-text-color','#11aabb');await setControl('#fx-backdrop-color','#223344');await setControl('#fx-backdrop-opacity','65');
+ assert.deepEqual(await appearance(),{color:'rgb(17, 170, 187)',marked:'rgb(17, 170, 187)',background:'rgba(34, 51, 68, 0.65)',opacity:'1',width:widthBefore});
+ assert.equal(await page.evaluate(()=>state.p.review),null);
+ await setControl('#fx-backdrop-opacity','1');assert.equal((await appearance()).background,'rgba(34, 51, 68, 0.01)');
+ await setControl('#fx-backdrop-opacity','0');assert.equal((await appearance()).background,'rgba(0, 0, 0, 0)');
+ await setControl('#fx-backdrop-opacity','100');assert.equal((await appearance()).background,'rgb(34, 51, 68)');
+ await setControl('#fx-backdrop-opacity','65');
+ await page.evaluate(async()=>{await saveProject();await openProject(state.p.id);});
+ assert.equal((await appearance()).background,'rgba(34, 51, 68, 0.65)');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.querySelector('#strip .thumb[data-i="0"] [data-block="heading"]')).color),'rgb(17, 170, 187)');
+ await page.evaluate(()=>renderForExport(0));
+ const exported=await page.evaluate(()=>fixture.renders.at(-1).find(x=>x.key==='b:heading'));
+ assert.deepEqual(exported,{key:'b:heading',color:'rgb(17, 170, 187)',background:'rgba(34, 51, 68, 0.65)',opacity:'1'});
+ await page.evaluate(()=>{state.part='b:heading';renderInspector();});
+ await page.locator('#fx-color-reset').click();assert.equal(await page.evaluate(()=>cur().fx['b:heading'].textColor),undefined);assert.equal((await appearance()).background,'rgba(34, 51, 68, 0.65)');
+ await page.locator('[data-contrast="dark"]').click();assert.equal((await appearance()).color,'rgb(255, 255, 255)');assert.equal((await appearance()).background,'rgba(20, 20, 20, 0.8)');
+ await page.locator('[data-contrast="light"]').click();assert.equal((await appearance()).color,'rgb(31, 29, 27)');assert.equal((await appearance()).background,'rgba(255, 255, 255, 0.8)');
+ assert.equal(await page.evaluate(()=>cur().fx['b:heading'].scale),.8);assert.deepEqual(await page.evaluate(()=>cur().move['b:heading']),[10,20]);
+ await page.locator('#fx-text-color').scrollIntoViewIfNeeded();await page.screenshot({path:'artifacts/consistency-fix/contrast-editor.png'});
+ await page.setViewportSize({width:390,height:844});await page.locator('#fx-text-color').scrollIntoViewIfNeeded();assert.ok(!await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth));await page.screenshot({path:'artifacts/consistency-fix/contrast-mobile.png'});await page.setViewportSize({width:1440,height:1000});
+ await page.locator('#fx-backdrop-reset').click();assert.equal((await appearance()).background,'rgba(0, 0, 0, 0)');assert.equal((await appearance()).color,'rgb(31, 29, 27)');
+ // A foreground copy gets the backdrop once, so 80% does not become 96%.
+ await page.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=2;cur().cutout=c.toDataURL();cur().layer={'b:heading':'front'};renderEditor();state.part='b:heading';renderInspector();});
+ await page.locator('[data-contrast="dark"]').click();
+ assert.equal(await page.locator('#stage-inner .fx-backdrop[data-block="heading"]').count(),1);
+ assert.equal(await page.locator('#stage-inner .over [data-block="heading"]').evaluate(n=>getComputedStyle(n).backgroundColor),'rgba(20, 20, 20, 0.8)');
+ // Generated editable layers use the same color and backdrop controls, including accents.
+ await page.evaluate(()=>{const s=cur();s.full=true;s.layers={on:true,w:1080,h:1350,plate:s.image,texts:[{id:'t1',text:'Texto *marcado*',font:'Arial',weight:400,color:'#111111',accent:'#FF0000',box:[.1,.1,.7,.2],align:'left'}]};renderEditor();state.part='l:t1';renderInspector();});
+ await page.locator('[data-contrast="dark"]').click();
+ assert.equal(await page.locator('#stage-inner [data-ly="t1"] .ly-acc').evaluate(n=>getComputedStyle(n).color),'rgb(255, 255, 255)');
+ await page.evaluate(()=>renderForExport(0));
+ assert.equal(await page.evaluate(()=>fixture.renders.at(-1).find(x=>x.key==='l:t1').background),'rgba(20, 20, 20, 0.8)');
  assert.deepEqual(errors,[]);await writeFile('artifacts/consistency-fix/browser.json',JSON.stringify({passed:true,exports:result.exports,commits:result.commits,typography,errors},null,2));
- console.log('Chrome: revisión, doble exportación, orden, identidad al reordenar, deshacer, fuentes, móvil, todas las láminas de una vez y patrón de marca: OK.');
+ console.log('Chrome: revisión, exportación, orden, deshacer, fuentes, color, opacidad, persistencia, recorte, capas, móvil, generación y patrón de marca: OK.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

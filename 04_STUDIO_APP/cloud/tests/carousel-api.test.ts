@@ -42,6 +42,14 @@ test('API: aprobar una revisión firma el contenido; modificarlo invalida la apr
  const saved=await f.call('projects',edited);assert.equal(saved.status,200);assert.equal(saved.body.review,null);
  const denied=await f.call('deliveries',{...exportBody(),version:f.project().version});assert.equal(denied.status,409);assert.equal(f.uploads.length,0);
 });
+test('API: guarda color y fondo translúcido por elemento e invalida la revisión',async()=>{
+ const f=fixture();await f.call('projects/review',{projectId:'project',version:1});
+ const doc=structuredClone(f.project().documento);doc.version=f.project().version;
+ doc.slides[0].fx={title:{textColor:'#FFFFFF',backdropColor:'#141414',backdropOpacity:80,scale:.8}};
+ const r=await f.call('projects',doc);assert.equal(r.status,200);assert.equal(r.body.review,null);
+ assert.deepEqual(f.project().documento.slides[0].fx,doc.slides[0].fx);
+ assert.equal(f.project().documento.slides[0].image,'storage://photo');
+});
 test('API: una entrega aprobada conserva posición, lámina, exportación y versión hasta la publicación',async()=>{
  const f=fixture();await f.call('projects/review',{projectId:'project',version:1});const body={...exportBody(),version:f.project().version};
  assert.equal((await f.call('deliveries',body)).status,200);assert.equal(f.uploads[0].lamina_id,'slide-A');assert.equal(f.uploads[0].exportacion_id,body.exportId);assert.equal(f.uploads[0].posicion,0);
