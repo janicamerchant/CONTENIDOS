@@ -84,6 +84,11 @@
 /* Video UGC de un guion */
 .rl-video { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-2); font-size: 14px; }
 .rl-video > summary { cursor: pointer; }
+.rl-video-guion { margin-top: 16px; }
+#rl-video-editor > .rl-h3 { margin-top: 18px; }
+#rl-video-lista .rl-lista-item { cursor: default; }
+#rl-video-lista .rl-lista-item > div { min-width: 0; overflow-wrap: anywhere; }
+#rl-video-lista .rl-lista-item .btn { flex-shrink: 0; }
 .rl-clip { border: 1px solid var(--line-2); border-radius: 8px; padding: 12px; margin-top: 12px; }
 .rl-clip h3 { font-size: 14px; }
 .rl-tag.mal { border-color: var(--bad); color: var(--bad); }

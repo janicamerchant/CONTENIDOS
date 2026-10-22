@@ -26,14 +26,23 @@ const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF'
 const VISTA=`
 <div class="rl-wrap">
  <h1 class="h1">Generador de Reels</h1>
- <p class="lede">Convierte podcasts, entrevistas y videos largos en guiones para Reels, con el estilo de cada cliente.</p>
+ <p class="lede">Crea guiones desde tus videos y prepara Reels UGC con las personas de cada marca.</p>
  <p class="banner" id="rl-aviso" hidden></p>
  <nav class="rl-nav" role="tablist">
+  <button data-rl="video">Video UGC</button>
   <button data-rl="largo" class="on">Video largo → Guiones</button>
   <button data-rl="reel">Reels → Transcripción</button>
   <button data-rl="clientes">Clientes y estilos</button>
   <button data-rl="historial">Historial</button>
  </nav>
+
+ <section id="rl-tab-video" class="rl-panel" hidden>
+  <h2 class="h2">Video UGC desde un guion</h2>
+  <p>Elige un proyecto y un guion para preparar un Reel con una persona de la marca.</p>
+  <p class="rl-meta">Disponible: plan de clips e imágenes para revisar y aprobar. La generación de los clips de video y el montaje final están pendientes.</p>
+  <div id="rl-video-proyectos"></div>
+  <div id="rl-video-editor" aria-live="polite"></div>
+ </section>
 
  <section id="rl-tab-largo" class="rl-panel">
   <form id="rl-f-largo">
@@ -141,9 +150,12 @@ function selector(cont,inicial={}){
 // ---------- pestañas internas
 let leerSelLargo=()=>({});
 async function abrirTab(nombre,abrirCliente){
- $$('.rl-nav button').forEach(b=>b.classList.toggle('on',b.dataset.rl===nombre));
+ ++videoCarga;
+ $$('.rl-nav button').forEach(b=>{b.classList.toggle('on',b.dataset.rl===nombre);b.setAttribute('aria-selected',String(b.dataset.rl===nombre));});
  $$('#view-reels .rl-panel').forEach(s=>{s.hidden=s.id!=='rl-tab-'+nombre;});$('#rl-proyecto').hidden=true;store.set('tab',nombre);
+ $('#rl-proyecto').replaceChildren();$('#rl-video-editor').replaceChildren();
  try{
+  if(nombre==='video')await cargarVideos();
   if(nombre==='historial')await cargarLista();
   if(nombre==='clientes')await pintarClientes(abrirCliente);
   if(nombre==='largo'){await cargarClientes();leerSelLargo=selector($('#rl-sel-largo'));modoLargo();}
@@ -339,6 +351,58 @@ async function cargarLista(){
  $$('.rl-lista-item').forEach(el=>el.onclick=()=>verProyecto(el.dataset.id));
 }
 
+// Entrada visible a Video UGC: usa los mismos guiones y controles del proyecto, sin transcribir de nuevo.
+let videoCarga=0;
+async function cargarVideos(){
+ const turno=++videoCarga,lista=$('#rl-video-proyectos'),editor=$('#rl-video-editor');
+ lista.hidden=false;lista.textContent='Cargando proyectos con guiones…';editor.replaceChildren();
+ try{
+  const [,,proyectos]=await Promise.all([cargarClientes(),cargarPersonas(),request('/api/reels/proyectos')]);
+  if(turno!==videoCarga)return;
+  const disponibles=proyectos.filter(p=>p.guiones>0);
+  lista.innerHTML=`<label class="lbl" for="rl-video-cliente">Cliente / cuenta</label>
+   <select class="inp" id="rl-video-cliente"><option value="">Todos los clientes</option>${CLIENTES.map(c=>`<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select>
+   <div id="rl-video-lista"></div>`;
+  const pintar=()=>{
+   const marca=$('#rl-video-cliente').value,filtrados=disponibles.filter(p=>!marca||p.marca===marca);
+   $('#rl-video-lista').innerHTML=filtrados.length?filtrados.map(p=>`<div class="rl-lista-item"><div><b>${esc(p.titulo)}</b>
+    <div class="rl-meta">${esc(nombreCliente(p.marca)||p.marca)} · ${p.guiones} guion${p.guiones===1?'':'es'}</div></div>
+    <button class="btn ghost sm" data-video-proyecto="${esc(p.id)}">Elegir guion</button></div>`).join(''):
+    '<p class="rl-meta">Todavía no hay proyectos con guiones para esta selección. Crea uno en «Video largo → Guiones» y vuelve aquí.</p>';
+   $$('[data-video-proyecto]',lista).forEach(b=>b.onclick=()=>abrirVideo(b.dataset.videoProyecto));
+  };
+  $('#rl-video-cliente').onchange=pintar;pintar();
+ }catch(e){
+  if(turno!==videoCarga)return;
+  lista.innerHTML=`<p class="rl-err">${esc(e.message)}</p><button class="btn ghost sm" id="rl-video-reintentar">Volver a cargar</button>`;
+  $('#rl-video-reintentar').onclick=cargarVideos;
+ }
+}
+async function abrirVideo(pid,gid){
+ const turno=++videoCarga,editor=$('#rl-video-editor');
+ editor.textContent='Cargando guion…';$('#rl-video-proyectos').hidden=true;
+ try{
+  const p=await request('/api/reels/proyectos?id='+encodeURIComponent(pid));
+  if(turno!==videoCarga)return;
+  const guiones=p.analisis?.guiones||[];
+  editor.innerHTML=`<button class="btn ghost sm" id="rl-video-volver">← Cambiar proyecto</button><h3 class="rl-h3">${esc(p.info?.titulo||'(sin título)')}</h3>
+   ${guiones.length?`<label class="lbl" for="rl-video-guion">Guion para el video</label><select class="inp" id="rl-video-guion">${guiones.map(g=>`<option value="${esc(g.id)}" ${g.id===gid?'selected':''}>${esc(g.titulo)}${g.cliente?' · '+esc(g.cliente):''}</option>`).join('')}</select><div id="rl-video-trabajo"></div>`:'<p class="rl-meta">Este proyecto ya no tiene guiones. Elige otro proyecto.</p>'}`;
+  $('#rl-video-volver').onclick=cargarVideos;
+  if(!guiones.length)return;
+  const pintar=()=>{
+   const g=guiones.find(g=>g.id===$('#rl-video-guion').value),caja=$('#rl-video-trabajo');
+   caja.innerHTML=`<details class="rl-video-guion"><summary>Ver guion</summary><div class="rl-guion">${esc(sinPretitulos(g.guion))}</div></details>${videoHtml(p,g)}`;
+   $('[data-video]',caja).open=true;
+   activarVideos(pid,caja,()=>{if(turno===videoCarga&&$('#rl-video-guion')?.value===g.id)abrirVideo(pid,g.id);});
+  };
+  $('#rl-video-guion').onchange=pintar;pintar();
+ }catch(e){
+  if(turno!==videoCarga)return;
+  editor.innerHTML=`<p class="rl-err">${esc(e.message)}</p><button class="btn ghost sm" id="rl-video-volver">Volver a los proyectos</button>`;
+  $('#rl-video-volver').onclick=cargarVideos;
+ }
+}
+
 // ---------- vista de proyecto
 const aSegundos=tc=>String(tc).split(':').map(Number).reduce((a,n)=>a*60+n,0);
 function enlaceTiempo(url,tc){if(!url||!/youtu/.test(url))return `<span class="rl-tc">${esc(tc)}</span>`;return `<a class="rl-tc" target="_blank" rel="noopener" href="${esc(url+(url.includes('?')?'&':'?')+'t='+aSegundos(tc))}">${esc(tc)}</a>`;}
@@ -371,6 +435,7 @@ function videoHtml(p,g){
  const elegir=`<div class="rl-row"><div><label class="lbl">Persona</label><select class="inp" data-v-persona>${personas.length?personas.map(x=>`<option value="${esc(x.id)}" ${x.id===v?.persona?'selected':''}>${esc(x.name)}</option>`).join(''):'<option value="">Ninguna persona asociada a esta marca</option>'}</select></div>
   <div class="rl-span2"><label class="lbl">Indicaciones (opcional)</label><input class="inp" data-v-indicaciones placeholder="Ej.: caminando por Brickell al atardecer, blazer azul"></div></div>`;
  if(!v)return `<details class="rl-video" data-video="${esc(g.id)}"><summary><b>Video UGC</b> <span class="rl-meta">· convertir este guion en un reel con la persona de la marca</span></summary>${elegir}
+  ${personas.length?'':'<p class="rl-meta">Asocia una persona a este cliente en «Marcas» para poder preparar el video.</p>'}
   <div class="rl-acciones"><button class="btn accent sm" data-v-planear ${personas.length?'':'disabled'}>Planear video con Claude</button></div><div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
  const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona),imgs=v.imagenes||[],base=imgs[0];
  const faltan=plan.clips.map((_,i)=>i).filter(i=>i>0&&!imgs[i]);
@@ -405,7 +470,11 @@ function leerPlan(caja){
 }
 function activarVideos(pid,v,recargar){
  for(const caja of $$('[data-video]',v)){
-  const gid=caja.dataset.video,jobs=$('#rl-jobs-video-'+gid);
+  if(role==='lector'){
+   $$('button,input,select,textarea',caja).forEach(el=>{el.disabled=true;el.title='Tu rol permite solo lectura.';});
+   continue;
+  }
+  const gid=caja.dataset.video,jobs=$('.rl-jobs',caja);
   for(const b of $$('[data-v-planear]',caja))b.onclick=async()=>{
    const zona=b.closest('details.rl-rehacer')||caja,persona=$('[data-v-persona]',zona).value;if(!persona){alert('Elige la persona.');return;}
    if(b.closest('.rl-rehacer')&&!confirm('¿Rehacer el plan? Se reemplaza el actual y se pierden tus cambios.'))return;b.disabled=true;
@@ -428,8 +497,9 @@ function activarVideos(pid,v,recargar){
 }
 
 async function verProyecto(pid,filtro={}){
+ ++videoCarga;$('#rl-video-editor').replaceChildren();
  let p;try{await Promise.all([cargarClientes(),cargarPersonas()]);p=await request('/api/reels/proyectos?id='+encodeURIComponent(pid));}catch(e){aviso(e.message);return;}
- $$('#view-reels .rl-panel').forEach(s=>{s.hidden=true;});$$('.rl-nav button').forEach(b=>b.classList.remove('on'));
+ $$('#view-reels .rl-panel').forEach(s=>{s.hidden=true;});$$('.rl-nav button').forEach(b=>{b.classList.remove('on');b.setAttribute('aria-selected','false');});
  const v=$('#rl-proyecto');v.hidden=false;const url=p.info?.url,a=p.analisis,trans=p.transcripcion||{texto:'',parrafos:[]};
  const textoPlano=trans.parrafos.length?trans.parrafos.map(x=>`[${x.inicio}] ${x.texto}`).join('\n\n'):trans.texto;
  let h=`<div class="rl-panel"><h2 class="h2">${esc(p.info?.titulo||'(sin título)')}</h2>
@@ -517,7 +587,7 @@ async function verProyecto(pid,filtro={}){
 export function setupReels(deps){
  ({request,uploadBlob,uploadSigned,resolve,role}=deps);
  const vista=document.querySelector('#view-reels');if(!vista)return;vista.innerHTML=VISTA;
- $$('.rl-nav button').forEach(b=>b.onclick=()=>abrirTab(b.dataset.rl));
+ $$('.rl-nav button').forEach(b=>{b.setAttribute('role','tab');b.setAttribute('aria-controls','rl-tab-'+b.dataset.rl);b.onclick=()=>abrirTab(b.dataset.rl);});
  $('#rl-op-entregable').onchange=e=>{$('#rl-op-guia').hidden=!e.target.checked;};
  $$('#rl-f-largo input[name=modo]').forEach(r=>r.onchange=modoLargo);
  $('#rl-f-largo').onsubmit=e=>{e.preventDefault();enviar(e.target,'largo');};
@@ -527,7 +597,8 @@ export function setupReels(deps){
  const mostrar=async()=>{if(vista.hidden||iniciado)return;iniciado=true;
   try{CONFIG=await request('/api/reels/config');const faltan=[!CONFIG.deepgram&&'DEEPGRAM_API_KEY',!CONFIG.apify&&'APIFY_TOKEN',!CONFIG.anthropic&&'ANTHROPIC_API_KEY'].filter(Boolean);
    if(faltan.length)aviso(`Faltan claves en Vercel: ${faltan.join(', ')}. Sin ellas no se puede transcribir o escribir guiones.`);}catch(e){aviso(e.message);}
-  await abrirTab(['largo','reel','clientes','historial'].includes(store.get('tab'))?store.get('tab'):'largo');
+  const tab=new URLSearchParams(location.search).get('tab')||store.get('tab');
+  await abrirTab(['video','largo','reel','clientes','historial'].includes(tab)?tab:'largo');
   // Retoma los trabajos que seguían en curso al recargar la página
   for(const x of pendientes()){const caja=document.getElementById(x.caja);if(caja)seguir(x.grupo,$('.rl-jobs',caja)||caja);}
  };

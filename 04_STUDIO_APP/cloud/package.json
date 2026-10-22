@@ -19,6 +19,7 @@
     "build": "node scripts/build.mjs",
     "dev": "tsx scripts/dev.ts",
     "test:carousel-browser": "node scripts/carousel-browser-test.mjs",
+    "test:reels-browser": "node scripts/reels-browser-test.mjs",
     "benchmark:carousel": "tsx scripts/carousel-benchmark.ts"
   },
   "dependencies": {
