@@ -80,3 +80,14 @@
   .rl-span2 { grid-column: auto; }
   .rl-cab { flex-wrap: wrap; }
 }
+
+/* Video UGC de un guion */
+.rl-video { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-2); font-size: 14px; }
+.rl-video > summary { cursor: pointer; }
+.rl-clip { border: 1px solid var(--line-2); border-radius: 8px; padding: 12px; margin-top: 12px; }
+.rl-clip h3 { font-size: 14px; }
+.rl-tag.mal { border-color: var(--bad); color: var(--bad); }
+.rl-avisos { margin: 8px 0; }
+.rl-prompt pre { white-space: pre-wrap; font-size: 12px; margin: 8px 0 0; }
+.rl-rehacer > summary { list-style: none; display: inline-block; }
+.rl-rehacer[open] { display: block; width: 100%; }

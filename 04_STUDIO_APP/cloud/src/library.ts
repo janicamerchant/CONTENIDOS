@@ -15,6 +15,8 @@ export async function storeFile(brand:string,bytes:Buffer,mime:string,nombre:str
  const uploaded=await db.storage.from('estudio').upload(id+'/original',bytes,{contentType:mime});if(uploaded.error){await db.from('archivos').delete().eq('id',id);databaseError(uploaded.error);}
  checked(await db.from('archivos').update({listo:true}).eq('id',id));return id;
 }
+// Voz de la persona para los videos de Reels: voz de ElevenLabs, cuenta (1 = ELEVENLABS_API_KEY, 2 = ELEVENLABS_API_KEY_2) y acento.
+const vozSchema=z.object({voice_id:z.string().trim().regex(/^[A-Za-z0-9]{0,40}$/,'ID de voz inválido.'),cuenta:z.coerce.number().int().min(1).max(2).default(1),acento:z.string().trim().max(300).default('')});
 const peopleCache=new WeakMap<Identity,Promise<any[]>>();
 export function people(w:Identity){if(!peopleCache.has(w))peopleCache.set(w,loadPeople(w));return peopleCache.get(w)!;}
 async function loadPeople(w:Identity){
@@ -53,7 +55,7 @@ export async function libraryRoute(w:Identity,route:string,method:string,b:any):
  if(section==='people'){
   adminOnly(w);
   if(!id){const n=name.parse(b.name),pid=b.id?z.string().regex(/^[a-z0-9-]{1,64}$/).parse(b.id):slug(n)+'-'+randomUUID().slice(0,6);const old=checked(await db.from('personas').select('*').eq('id',pid).maybeSingle());const brands=z.array(z.string()).max(100).parse(b.brands||[]);for(const brand of brands)await authorizeBrand(w,brand,true);
-   checked(await db.rpc('guardar_persona',{p_actor:w.id,p_id:pid,p_identidad:{...old?.identidad,name:n,aliases:z.array(z.string().max(100)).max(30).parse(b.aliases||[]),descripcion:z.string().max(4000).parse(b.descripcion||''),identidad:z.string().max(8000).parse(b.identidad||'')},p_marcas:brands}));return {id:pid};
+   checked(await db.rpc('guardar_persona',{p_actor:w.id,p_id:pid,p_identidad:{...old?.identidad,name:n,aliases:z.array(z.string().max(100)).max(30).parse(b.aliases||[]),descripcion:z.string().max(4000).parse(b.descripcion||''),identidad:z.string().max(8000).parse(b.identidad||''),...(b.voz!==undefined?{voz:vozSchema.parse(b.voz)}:{})},p_marcas:brands}));return {id:pid};
   }
   const person=checked(await db.from('personas').select('id').eq('id',id).maybeSingle());if(!person)throw new HttpError(404,'Persona no encontrada.');
   if(action==='archive'){checked(await db.from('personas').update({archivada:true}).eq('id',id));return {ok:true};}

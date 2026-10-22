@@ -1,7 +1,8 @@
 // Pestaña Reels del Estudio (portada del Generador de Reels): video largo → guiones, reels → transcripción,
 // clientes y estilos, historial y proyecto. Los clientes son las marcas del Estudio. Todo lo pesado va a la cola (/api/reels/*).
+import {promptVideo,palabras,MAX_PALABRAS} from '../shared/ugc.ts';
 let request,uploadBlob,uploadSigned,resolve,role;
-let CLIENTES=[],CONFIG={};
+let CLIENTES=[],CONFIG={},PERSONAS=null;
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -20,7 +21,7 @@ export function sinPretitulos(t){
 }
 const nombreCliente=id=>(CLIENTES.find(c=>c.id===id)||{}).nombre||'';
 async function cargarClientes(){CLIENTES=await request('/api/reels/clientes');return CLIENTES;}
-const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa'};
+const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video'};
 
 const VISTA=`
 <div class="rl-wrap">
@@ -362,8 +363,55 @@ async function descargarWord(p,guiones,boton){
  }catch(e){alert('No se pudo armar el Word: '+e.message);}
  finally{boton.disabled=false;boton.textContent=antes;}
 }
+// ---------- video UGC de un guion (src/reels-video.ts): persona → plan de clips con Claude → revisión
+async function cargarPersonas(){if(!PERSONAS)PERSONAS=await request('/api/people').catch(()=>[]);return PERSONAS;}
+const CAMPOS_CLIP=[['frase','Frase (lo que dice; [gestos] entre corchetes)',3],['que_se_ve','Qué se ve',1],['prompt_imagen','Prompt de imagen (inglés)',4],['camera','Cámara',1],['movement','Movimiento',1],['micro_action','Gesto',1]];
+function videoHtml(p,g){
+ const v=p.videos?.[g.id],marca=g.cliente_id||p.marca,personas=(PERSONAS||[]).filter(x=>x.brands.includes(marca));
+ const elegir=`<div class="rl-row"><div><label class="lbl">Persona</label><select class="inp" data-v-persona>${personas.length?personas.map(x=>`<option value="${esc(x.id)}" ${x.id===v?.persona?'selected':''}>${esc(x.name)}</option>`).join(''):'<option value="">Ninguna persona asociada a esta marca</option>'}</select></div>
+  <div class="rl-span2"><label class="lbl">Indicaciones (opcional)</label><input class="inp" data-v-indicaciones placeholder="Ej.: caminando por Brickell al atardecer, blazer azul"></div></div>`;
+ if(!v)return `<details class="rl-video" data-video="${esc(g.id)}"><summary><b>Video UGC</b> <span class="rl-meta">· convertir este guion en un reel con la persona de la marca</span></summary>${elegir}
+  <div class="rl-acciones"><button class="btn accent sm" data-v-planear ${personas.length?'':'disabled'}>Planear video con Claude</button></div><div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
+ const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona);
+ return `<details class="rl-video" data-video="${esc(g.id)}" open><summary><b>Video UGC</b> <span class="rl-meta">· ${plan.clips.length} clips · ${esc(persona?.name||v.persona)} · plan del ${esc(v.editado||v.creado)}</span></summary>
+  ${v.avisos?.length?`<div class="rl-avisos">${v.avisos.map(a=>`<div class="rl-err">⚠ ${esc(a)}</div>`).join('')}</div>`:''}
+  <label class="lbl">Escena</label><textarea class="inp" rows="2" data-v-plan="escena">${esc(plan.escena)}</textarea>
+  <div class="rl-row"><div><label class="lbl">Habla</label><select class="inp" data-v-plan="sujeto"><option value="she" ${plan.sujeto==='she'?'selected':''}>Ella (she)</option><option value="he" ${plan.sujeto==='he'?'selected':''}>Él (he)</option></select></div>
+   <div class="rl-span2"><label class="lbl">Voz (igual en todos los clips)</label><input class="inp" data-v-plan="voice" value="${esc(plan.voice)}"></div></div>
+  <label class="lbl">Acento (igual en todos los clips)</label><input class="inp" data-v-plan="accent" value="${esc(plan.accent)}">
+  ${plan.clips.map((c,i)=>`<div class="rl-clip" data-clip="${i}"><div class="rl-cab-punto"><h3>Clip ${i+1}</h3>
+    <span class="rl-tag ${c.modelo==='omni'&&palabras(c.frase)>MAX_PALABRAS?'mal':''}">${palabras(c.frase)} palabras · ~${c.segundos} s</span></div>
+   <div class="rl-row"><div><label class="lbl">Modelo</label><select class="inp" data-c="modelo"><option value="omni" ${c.modelo==='omni'?'selected':''}>Omni · habla a cámara</option><option value="grok" ${c.modelo==='grok'?'selected':''}>Grok · voz en off</option></select></div>
+    <div><label class="lbl">Segundos</label><input class="inp" type="number" min="3" max="15" data-c="segundos" value="${c.segundos}"></div></div>
+   ${CAMPOS_CLIP.map(([k,l,r])=>`<label class="lbl">${l}</label>${r>1?`<textarea class="inp" rows="${r}" data-c="${k}">${esc(c[k])}</textarea>`:`<input class="inp" data-c="${k}" value="${esc(c[k])}">`}`).join('')}
+   <details class="rl-prompt"><summary class="rl-meta">Ver el prompt de video que se enviará</summary><pre>${esc(promptVideo(plan,c))}</pre></details></div>`).join('')}
+  <div class="rl-acciones"><button class="btn accent sm" data-v-guardar>Guardar cambios del plan</button>
+   <details class="rl-rehacer"><summary class="btn ghost sm">Rehacer el plan con Claude</summary>${elegir}<button class="btn ghost sm" data-v-planear>Rehacer plan (reemplaza el actual)</button></details></div>
+  <p class="rl-meta">Siguiente etapa: generar la imagen de inicio de cada clip para revisarla antes de pagar los clips de video.</p>
+  <div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
+}
+function leerPlan(caja){
+ const val=s=>$(`[data-v-plan="${s}"]`,caja).value;
+ return {escena:val('escena'),sujeto:val('sujeto'),voice:val('voice'),accent:val('accent'),
+  clips:$$('[data-clip]',caja).map(el=>{const c={};for(const x of $$('[data-c]',el))c[x.dataset.c]=x.dataset.c==='segundos'?Number(x.value):x.value;return c;})};
+}
+function activarVideos(pid,v,recargar){
+ for(const caja of $$('[data-video]',v)){
+  const gid=caja.dataset.video,jobs=$('#rl-jobs-video-'+gid);
+  for(const b of $$('[data-v-planear]',caja))b.onclick=async()=>{
+   const zona=b.closest('details.rl-rehacer')||caja,persona=$('[data-v-persona]',zona).value;if(!persona){alert('Elige la persona.');return;}
+   if(b.closest('.rl-rehacer')&&!confirm('¿Rehacer el plan? Se reemplaza el actual y se pierden tus cambios.'))return;b.disabled=true;
+   try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video`,{idempotencyKey:crypto.randomUUID(),guion:gid,persona,indicaciones:$('[data-v-indicaciones]',zona).value});seguir(d.grupo,jobs,recargar);}
+   catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}};
+  const guardar=$('[data-v-guardar]',caja);
+  if(guardar)guardar.onclick=async()=>{guardar.disabled=true;
+   try{await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/video-plan`,{guion:gid,plan:leerPlan(caja)});recargar();}
+   catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);guardar.disabled=false;}};
+ }
+}
+
 async function verProyecto(pid,filtro={}){
- let p;try{await cargarClientes();p=await request('/api/reels/proyectos?id='+encodeURIComponent(pid));}catch(e){aviso(e.message);return;}
+ let p;try{await Promise.all([cargarClientes(),cargarPersonas()]);p=await request('/api/reels/proyectos?id='+encodeURIComponent(pid));}catch(e){aviso(e.message);return;}
  $$('#view-reels .rl-panel').forEach(s=>{s.hidden=true;});$$('.rl-nav button').forEach(b=>b.classList.remove('on'));
  const v=$('#rl-proyecto');v.hidden=false;const url=p.info?.url,a=p.analisis,trans=p.transcripcion||{texto:'',parrafos:[]};
  const textoPlano=trans.parrafos.length?trans.parrafos.map(x=>`[${x.inicio}] ${x.texto}`).join('\n\n'):trans.texto;
@@ -389,7 +437,7 @@ async function verProyecto(pid,filtro={}){
       <div class="rl-acciones">${g.entregable.pdf?`<button class="btn accent sm" data-pdf-ver="${esc(g.entregable.pdf)}">Ver PDF</button><button class="btn ghost sm" data-pdf-bajar="${esc(g.entregable.pdf)}" data-nombre="${esc(g.entregable.titulo)}">Descargar PDF</button>`:''}
        <button class="btn ghost sm" data-pdf-guion="${esc(g.id)}" data-rehacer="1">Rehacer PDF</button></div>`
      :`<div class="rl-acciones"><button class="btn ghost sm" data-pdf-guion="${esc(g.id)}">Crear entregable PDF de este guion</button></div>`}
-     <div class="rl-jobs" id="rl-jobs-pdf-${esc(g.id)}"></div></div></div>`).join('')}</div>
+     <div class="rl-jobs" id="rl-jobs-pdf-${esc(g.id)}"></div></div>${videoHtml(p,g)}</div>`).join('')}</div>
    <div class="rl-panel"><h2 class="h2">Entregables PDF</h2>
     <p class="rl-meta">Cada guion lleva su propio PDF (máximo 4 páginas): es el lead magnet que recibe quien responde al llamado a la acción de ese reel. ${a.guiones.filter(g=>g.entregable).length} de ${a.guiones.length} guiones tienen su PDF.</p>
     <label class="lbl">Guía de estructura para los entregables <span class="rl-meta">(opcional: si la dejas vacía se usa la del cliente)</span></label>
@@ -428,6 +476,7 @@ async function verProyecto(pid,filtro={}){
    seguir(d.grupo,caja,()=>verProyecto(pid,{...filtro,mantenerScroll:true}));}catch(e){caja.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);boton.disabled=false;}};
  $('#rl-mas').onclick=e=>pedir({},e.target,$('#rl-mas-jobs'));
  if(!a)return;
+ activarVideos(pid,v,()=>verProyecto(pid,{...filtro,mantenerScroll:true}));
  const pedirPDF=async(guiones,boton,caja)=>{boton.disabled=true;
   try{const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/entregables`,{idempotencyKey:crypto.randomUUID(),guiones,guia_entregable:$('#rl-guia-entregable').value});
    seguir(d.grupo,caja,()=>verProyecto(pid,{...filtro,mantenerScroll:true}));}catch(e){caja.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);boton.disabled=false;}};

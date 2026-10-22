@@ -350,6 +350,9 @@ function renderPeople() {
         <div class="field full"><label class="lbl">Bloqueo de identidad (inglés, va en cada foto con esta persona)</label>
           <textarea class="inp mono-area" name="identidad" rows="4" placeholder="${esc(p.lock)}">${esc(p.identidad || '')}</textarea>
           <p class="help">Vacío = se usa el texto genérico que ves de fondo. Describe rasgos concretos (forma de la cara, cejas, ojos, cabello, piel) para que no cambie.</p></div>
+        <div class="field"><label class="lbl">Voz de ElevenLabs (ID, para videos de Reels)</label><input class="inp" name="voz_id" value="${esc(p.voz?.voice_id || '')}" placeholder="Ej. StEdYb2QFUXaib1ZP0Hk"></div>
+        <div class="field"><label class="lbl">Cuenta de ElevenLabs de esa voz</label><select class="inp" name="voz_cuenta">${[1, 2].map((n) => `<option value="${n}" ${(p.voz?.cuenta || 1) === n ? 'selected' : ''}>Cuenta ${n}</option>`).join('')}</select></div>
+        <div class="field full"><label class="lbl">Acento al hablar (inglés)</label><input class="inp" name="voz_acento" value="${esc(p.voz?.acento || '')}" placeholder="Ej. Spanish with a Venezuelan (Caracas) accent"></div>
         <div class="field full checks"><span class="lbl">Marcas donde puede aparecer</span><div class="mk-inline">${brands.map((b) => `<label><input type="checkbox" name="brands" value="${esc(b.id)}" ${p.brands.includes(b.id) ? 'checked' : ''}> ${esc(b.name)}</label>`).join('')}</div></div>
       </div>
       <div class="mk-photos">${p.photos.map((f, i) => `<figure class="mk-photo ${f.active ? '' : 'off'}" data-photo="${esc(f.name)}">
@@ -614,6 +617,7 @@ function bindBrands() {
       try {
         await api('/api/people', {
           id: f.dataset.person, name: f.elements.name.value, descripcion: f.elements.descripcion.value, identidad: f.elements.identidad.value,
+          voz: { voice_id: f.elements.voz_id.value.trim(), cuenta: Number(f.elements.voz_cuenta.value), acento: f.elements.voz_acento.value.trim() },
           aliases: f.elements.aliases.value.split(','), brands: $$('input[name="brands"]:checked', f).map((x) => x.value),
         });
         await reloadPeople();
