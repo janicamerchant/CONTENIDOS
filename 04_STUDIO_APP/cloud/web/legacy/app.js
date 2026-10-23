@@ -976,6 +976,22 @@ function fitSlide(el) {
   }
   fitLayers(el);
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
+  keepInside(el);
+}
+// Texto movido o agrandado a mano que quedó fuera de la lámina (p. ej. después de un reajuste de tamaños): vuelve al borde,
+// y si es más grande que la lámina se achica lo justo. Solo es visual (s.move y s.fx no cambian): se exporta lo mismo que se ve.
+function keepInside(el) {
+  const b = el.getBoundingClientRect(), k = b.width / 1080 || 1, pad = 40 * k;
+  for (const n of $$('.s-title,.s-body,.s-source,.s-items,.blk,.ly-t', el).filter((n) => !n.closest('.over') && n.textContent.trim())) {
+    const same = n.dataset.mv ? $$(`[data-mv="${CSS.escape(n.dataset.mv)}"]`, el) : [n];
+    let r = n.getBoundingClientRect();
+    const shrink = Math.min(1, (b.width - 2 * pad) / r.width, (b.height - 2 * pad) / r.height);
+    if (shrink < 1) { const sc = parseFloat(n.style.scale) || 1; same.forEach((x) => { x.style.scale = String(sc * shrink); }); r = n.getBoundingClientRect(); }
+    const dx = r.left < b.left + pad ? b.left + pad - r.left : r.right > b.right - pad ? b.right - pad - r.right : 0;
+    const dy = r.top < b.top + pad ? b.top + pad - r.top : r.bottom > b.bottom - pad ? b.bottom - pad - r.bottom : 0;
+    if (!dx && !dy) continue;
+    same.forEach((x) => { const [tx, ty] = (x.style.translate || '').split(' ').map(parseFloat); x.style.translate = `${(tx || 0) + dx / k}px ${(ty || 0) + dy / k}px`; });
+  }
 }
 
 // ---------------------------------------------------------------- estado
