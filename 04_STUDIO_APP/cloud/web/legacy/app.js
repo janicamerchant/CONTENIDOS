@@ -1690,7 +1690,9 @@ async function pollEditorGen() {
         const actual=state.p.slides.find(s=>s.id===target.id);Carousel.applyVisual(actual,x);applied++;
       }
       if(applied){scheduleSave();renderEditor();}
-      toast(failed?`${failed} imágenes fallaron. Puedes reintentarlas.`:applied?`${applied} imágenes listas. Puedes volver a la versión anterior.`:'La lámina cambió: recupera la imagen desde Versiones generadas.',!!failed);
+      // Si la foto terminó pero no se pudo asociar aquí, el servidor sí la recupera al abrir el proyecto: se vuelve a abrir (como recargar la página)
+      else if(job.items.some(x=>x.status==='completed')){const sel=state.sel,ids=job.items.filter(x=>x.status==='completed').map(x=>x.slideId),before=new Map(stableProject(state.p).slides.map(s=>[s.id,s.image]));clearTimeout(state.saveTimer);if(await saveProject()!==false){await openProject(g.projectId);select(Math.min(sel,state.p.slides.length-1));applied=stableProject(state.p).slides.filter(s=>ids.includes(s.id)&&s.image!==before.get(s.id)).length;}}
+      toast(failed?`${failed} imágenes fallaron. Puedes reintentarlas.`:applied?`${applied===1?'Foto lista':applied+' fotos listas'}. Puedes volver a la versión anterior.`:'La lámina cambió: recupera la imagen desde Versiones generadas.',!!failed);
     }
     if (state.view === 'editor') renderInspector();
   } catch (e) {
