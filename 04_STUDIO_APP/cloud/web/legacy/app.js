@@ -829,8 +829,8 @@ const CELL = 20, cutImages = new Map();
 function cutReady(url) {
   if (!cutImages.has(url)) cutImages.set(url, loadImage(url).then((img) => {
     cutImages.set(url, img);
-    // Primera vez que llega el recorte: se vuelve a diagramar lo que está a la vista
-    if (state.p && $('#stage-inner')) { try { renderStage(); state.p.slides.forEach((_, i) => renderThumb(i)); } catch {} }
+    // Primera vez que llega el recorte: se vuelve a diagramar solo la lámina que lo usa (no todas: cada miniatura carga fotos grandes)
+    if (state.p && $('#stage-inner')) { try { state.p.slides.forEach((s, i) => { if (s.cutout !== url) return; if (i === state.sel) renderStage(); renderThumb(i); }); } catch {} }
     return img;
   }, () => { cutImages.set(url, null); return null; }));
   const v = cutImages.get(url);
@@ -877,7 +877,7 @@ function dodgePerson(box, M, shrink) {
   if (!M || box.classList.contains('z-izquierda') || box.classList.contains('z-derecha')) return;
   const r = textRect(box), before = r && covered(M, r);
   if (!r || before < 0.06) return;
-  const k0 = parseFloat(box.style.getPropertyValue('--fit')) || 1, ok = (k) => k >= 0.7 || k >= k0 - 0.05;
+  const k0 = parseFloat(box.style.getPropertyValue('--fit')) || 1, words = () => $$('.blk:not(.blk-linea)', box).every((n) => n.scrollWidth <= n.clientWidth + 2), ok = (k) => words() && (k >= 0.7 || k >= k0 - 0.05);
   // Columnas donde está la persona a la altura del texto
   const y0 = Math.max(0, Math.floor(r[1] / CELL)), y1 = Math.min(M.H, Math.ceil(r[3] / CELL)), cols = [];
   for (let x = 0; x < M.W; x++) { let n = 0; for (let y = y0; y < y1; y++) n += M.m[y * M.W + x]; if (n > (y1 - y0) * 0.12) cols.push(x); }
@@ -939,6 +939,11 @@ function fitSlide(el) {
     box.style.setProperty('--fit', 1);
     while ((box.scrollHeight > limit + 2 || box.scrollWidth > box.clientWidth + 2 || wordOverflow()) && k > 0.55) {
       k = Math.max(0.55, k - 0.025);
+      box.style.setProperty('--fit', k.toFixed(3));
+    }
+    // Una palabra más ancha que su columna corta el texto y bloquea la exportación: solo en ese caso se baja del mínimo
+    while (wordOverflow() && k > 0.4) {
+      k = Math.max(0.4, k - 0.025);
       box.style.setProperty('--fit', k.toFixed(3));
     }
     return k;
@@ -1781,7 +1786,7 @@ async function renderForExport(i) {
   host.replaceChildren(el);
   applyMoves(el,state.p.slides[i]);
   const cutUrl=$('.s-cut img',el)?.getAttribute('src');if(cutUrl)await cutReady(cutUrl);
-  await Promise.all($$('img', el).map(img=>img.decode().catch(()=>{throw new Error('No se pudo cargar una imagen de la lámina. Vuelve a abrir el proyecto antes de exportar.');})));
+  await Promise.all($$('img', el).map(imgReady));
   await document.fonts.ready;
   fitSlide(el);
   const bounds=el.getBoundingClientRect();
@@ -1796,8 +1801,29 @@ async function renderForExport(i) {
   }
   const opts = { width: 1080, height: 1350, pixelRatio: parseFloat($('#exp-scale').value) || 1, fontEmbedCSS: fontCSS[fk] || undefined, cacheBust: false };
   // Safari a veces pinta el primer render sin imágenes: se descarta una pasada de calentamiento.
-  if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) await htmlToImage.toPng(el, opts);
-  return htmlToImage.toPng(el, opts);
+  if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) await htmlToImage.toPng(el, opts).catch(() => {});
+  // html-to-image rechaza con un Event (sin mensaje) cuando una imagen no se puede leer: se renuevan los enlaces y se reintenta una vez
+  try { return await htmlToImage.toPng(el, opts); }
+  catch (e) {
+    if (!(e instanceof Event)) throw e;
+    await window.cloudRefreshImages?.();
+    await Promise.all($$('img', el).map(imgReady));
+    try { return await htmlToImage.toPng(el, opts); }
+    catch (e2) { throw e2 instanceof Event ? new Error(`Lámina ${i + 1}: una imagen no se pudo leer al exportar. Recarga la página y vuelve a exportar.`) : e2; }
+  }
+}
+// Espera a que una imagen esté cargada; si falla (red o enlace vencido), renueva los enlaces y la vuelve a pedir una vez
+async function imgReady(img) {
+  const wait = () => new Promise((ok, ko) => {
+    if (img.complete) return img.naturalWidth ? ok() : ko();
+    const t = setTimeout(ko, 45000);
+    img.addEventListener('load', () => { clearTimeout(t); ok(); }, { once: true });
+    img.addEventListener('error', () => { clearTimeout(t); ko(); }, { once: true });
+  });
+  try { await wait(); return; } catch {}
+  await window.cloudRefreshImages?.();
+  const src = img.getAttribute('src');img.removeAttribute('src');img.setAttribute('src', src);
+  try { await wait(); } catch { throw new Error('No se pudo cargar una imagen de la lámina. Recarga la página y vuelve a exportar.'); }
 }
 
 const exportFolder = () => `${brandOf(state.p.brand).file}_${slugify(state.p.name)}`;
