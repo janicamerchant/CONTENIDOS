@@ -986,11 +986,17 @@ function fitSlide(el) {
 // Texto movido o agrandado a mano que quedó fuera de la lámina: se achica hacia el borde por el que se sale, sin moverse de donde
 // lo dejó la persona; solo si tendría que achicarse demasiado (menos de 60%) se corre hacia adentro. Es solo visual (s.move y s.fx
 // no cambian): se exporta lo mismo que se ve.
+// Rectángulo de la letra, no de su caja: un bloque ocupa el ancho de su columna aunque sus líneas sean más cortas
+function inkRect(n) {
+  const range = document.createRange(); range.selectNodeContents(n);
+  const r = range.getBoundingClientRect();
+  return r.width && r.height ? r : n.getBoundingClientRect();
+}
 function keepInside(el) {
   const b = el.getBoundingClientRect(), k = b.width / 1080 || 1, pad = 40 * k;
   for (const n of $$('.s-title,.s-body,.s-source,.s-items,.blk,.ly-t', el).filter((n) => !n.closest('.over') && n.textContent.trim())) {
     const same = n.dataset.mv ? $$(`[data-mv="${CSS.escape(n.dataset.mv)}"]`, el) : [n];
-    let r = n.getBoundingClientRect();
+    let r = inkRect(n);
     const L = b.left + pad, R = b.right - pad, T = b.top + pad, D = b.bottom - pad;
     const scaleBy = (f) => { const sc = parseFloat(n.style.scale) || 1; same.forEach((x) => { x.style.scale = String(sc * f); }); };
     const nudge = (dx, dy) => same.forEach((x) => { const [tx, ty] = (x.style.translate || '').split(' ').map(parseFloat); x.style.translate = `${(tx || 0) + dx / k}px ${(ty || 0) + dy / k}px`; });
@@ -1002,12 +1008,12 @@ function keepInside(el) {
     if (r.top < T && r.bottom <= D) f = Math.min(f, (r.bottom - T) / r.height);
     if (f < 1 && f >= 0.6) {
       const before = r;
-      scaleBy(f); r = n.getBoundingClientRect();
+      scaleBy(f); r = inkRect(n);
       nudge(before.right > R ? before.left - r.left : before.left < L ? before.right - r.right : 0, before.bottom > D ? before.top - r.top : before.top < T ? before.bottom - r.bottom : 0);
-      r = n.getBoundingClientRect();
+      r = inkRect(n);
     } else if (f < 0.6) {
       const g = Math.min(1, (R - L) / r.width, (D - T) / r.height);
-      if (g < 1) { scaleBy(g); r = n.getBoundingClientRect(); }
+      if (g < 1) { scaleBy(g); r = inkRect(n); }
     }
     const dx = r.left < b.left + pad ? b.left + pad - r.left : r.right > b.right - pad ? b.right - pad - r.right : 0;
     const dy = r.top < b.top + pad ? b.top + pad - r.top : r.bottom > b.bottom - pad ? b.bottom - pad - r.bottom : 0;
@@ -1807,7 +1813,7 @@ async function renderForExport(i) {
   fitSlide(el);
   const bounds=el.getBoundingClientRect();
   for(const node of $$('.s-title,.s-body,.s-source,.s-items,.blk,.ly-t',el)){
-    if(!node.textContent.trim())continue;const box=node.getBoundingClientRect();
+    if(!node.textContent.trim())continue;const box=inkRect(node);
     if(node.classList.contains('blk')&&node.scrollWidth>node.clientWidth+2)throw new Error(`Lámina ${i+1}: una palabra no cabe en su columna. Amplía la columna o reduce el tamaño antes de exportar.`);
     if(box.left<bounds.left-2||box.top<bounds.top-2||box.right>bounds.right+2||box.bottom>bounds.bottom+2)throw new Error(`Lámina ${i+1}: hay texto fuera del lienzo. Ajusta su tamaño o posición antes de exportar.`);
   }
