@@ -1,6 +1,14 @@
 import {userClient} from './config.js';
 import type {SupabaseClient} from '@supabase/supabase-js';
 export class HttpError extends Error {constructor(public status:number,message:string){super(message);}}
+// Clave de Anthropic tal como debe ir en la cabecera: al pegarla en Vercel se cuelan comillas, espacios, saltos de línea
+// o el prefijo «x-api-key:». Se limpian; si aun así trae caracteres que no son de una clave, se avisa en vez de fallar a ciegas.
+export function anthropicKey(){
+ const k=String(process.env.ANTHROPIC_API_KEY||'').replace(/^\s*(?:x-api-key\s*:|ANTHROPIC_API_KEY\s*=)/i,'').replace(/["'“”‘’\s]/g,'');
+ if(!k)throw new HttpError(503,'Anthropic no está configurado.');
+ if(!/^sk-ant-[A-Za-z0-9_-]+$/.test(k))throw new HttpError(503,'La clave de Anthropic guardada en Vercel no es válida (tiene caracteres de más o está incompleta). Vuelve a pegarla en Vercel → Environment Variables → ANTHROPIC_API_KEY y haz Redeploy.');
+ return k;
+}
 export type Identity={id:string;role:'admin'|'editor'|'lector';db:SupabaseClient};
 export async function authenticate(authorization:string|undefined,clientFactory=userClient):Promise<Identity>{
  const token=authorization?.match(/^Bearer ([A-Za-z0-9._~-]+)$/)?.[1];

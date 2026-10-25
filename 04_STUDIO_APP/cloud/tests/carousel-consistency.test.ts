@@ -25,7 +25,7 @@ const slide=(over:any={})=>({id:'slide-A',layout:'frase',theme:'light',title:'Un
 function chain(data:any){const q:any={then:(resolve:any)=>Promise.resolve({data,error:null}).then(resolve)};for(const m of ['select','eq','order','limit','is'])q[m]=()=>q;q.single=q.maybeSingle=async()=>({data,error:null});return q;}
 function fixture(){
  let brand=structuredClone(base),project:any,jobs:any[]=[],queued:any[]=[],stored:any[]=[],current:any=null;
- const env:any={...contract,...campaign,editorialRules,blockDirection,prompts,console,Buffer,URL,Date,Set,Map,structuredClone,createHash,randomUUID,z,HttpError,executionSignal,
+ const env:any={...contract,...campaign,editorialRules,blockDirection,prompts,console,Buffer,URL,Date,Set,Map,structuredClone,createHash,randomUUID,z,HttpError,anthropicKey:()=>'sk-ant-test',executionSignal,
   process:{env:{HF_CREDENTIALS:'dummy',GEMINI_API_KEY:'dummy'}},normalizeFrame,
   brandDetail:async(_w:any,id:string)=>id==='_comun'?{...base,name:'Common'}:structuredClone(brand),authorizeBrand:async()=>{},
   checked:(r:any)=>{if(r.error)throw r.error;return r.data;},

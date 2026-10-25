@@ -5,7 +5,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
 import {adminClient} from './config.js';
-import {authorizeBrand,HttpError,type Identity} from './auth.js';
+import {authorizeBrand,HttpError,anthropicKey,type Identity} from './auth.js';
 import {checked,readyFile,storeFile} from './library.js';
 import {saveJob,ProviderError} from './generation.js';
 import {planVideoJob,imagenClipJob,videoRoute,type Ayudas} from './reels-video.js';
@@ -32,7 +32,7 @@ Reglas:
 
 // ---------------------------------------------------------------- Claude
 
-function anthropic(){const ws=process.env.ANTHROPIC_WORKSPACE_ID?.trim();return new Anthropic({apiKey:process.env.ANTHROPIC_API_KEY,maxRetries:1,...(ws?{defaultHeaders:{'anthropic-workspace-id':ws}}:{})});}
+function anthropic(){const ws=process.env.ANTHROPIC_WORKSPACE_ID?.trim();return new Anthropic({apiKey:anthropicKey(),maxRetries:1,...(ws?{defaultHeaders:{'anthropic-workspace-id':ws}}:{})});}
 // Respuesta JSON con esquema. Si un filtro de seguridad rechaza la petición, la API reintenta con otro modelo (fallbacks).
 async function claudeJson(o:{system?:string;content:any;schema:any;maxTokens:number;effort:'low'|'medium'|'high';timeout:number}){
  let msg;
@@ -175,7 +175,7 @@ async function encolar(actor:string,marca:string,grupo:string,keyBase:string,hij
  }
  return out;
 }
-function requireAI(){if(!process.env.ANTHROPIC_API_KEY)throw new HttpError(503,'Anthropic no está configurado.');}
+function requireAI(){anthropicKey();}
 // Desde un trabajo: encola los siguientes pasos en el mismo grupo. Si no hay presupuesto, lo deja como aviso.
 async function encolarDesdeTrabajo(j:any,hijos:Hijo[]){
  try{await encolar(j.user_id,j.marca_id,j.grupo_id,j.id,hijos);return '';}

@@ -1,7 +1,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {adminClient} from './config.js';
-import {authorizeBrand,HttpError,type Identity} from './auth.js';
+import {authorizeBrand,HttpError,anthropicKey,type Identity} from './auth.js';
 import {adminOnly,checked,brandDetail,storeFile} from './library.js';
 import {prompts} from './prompts.js';
 import {editorialRules,blockDirection} from './art-direction.js';
@@ -51,7 +51,7 @@ export async function enqueue(w:Identity,route:string,b:any){
   if(!slide?.full||!/^storage:\/\/[0-9a-f-]{36}$/.test(slide.image||''))throw new HttpError(400,'Solo una lámina completa ya generada se puede separar en capas.');
   const campaign=p.documento.campaign||freezeCampaign(await brandDetail(w,brand));verifiedCampaign(campaign,brand);const payload={index,slideId:slide.id,revision:slideRevision(slide),image:slide.image,originalImage:slide.image,slide,campaign,tamano:'2k'};jobs.push({tipo:'imagen',motor:'capas',payload,key:childKey(key,index),hash:digest(payload),reserva:0.5,proyecto:p.id,lamina:String(index),version:p.version});
  }else{
-  if(!process.env.ANTHROPIC_API_KEY)throw new HttpError(503,'Anthropic no está configurado.');if(route==='brands/_draft'){adminOnly(w);brand='_comun';}else brand=z.string().min(1).parse((b.brief||b).marca);
+  anthropicKey();if(route==='brands/_draft'){adminOnly(w);brand='_comun';}else brand=z.string().min(1).parse((b.brief||b).marca);
   await authorizeBrand(w,brand,true);const {idempotencyKey,campaign:_ignored,...input}=b;const payload:any={...input};if(route!=='brands/_draft'){const count=z.coerce.number().int().min(1).max(10).parse((payload.brief||payload).laminas||7);if(payload.brief)payload.brief={...payload.brief,laminas:String(count)};else payload.laminas=String(count);}if(JSON.stringify(payload).length>20000)throw new HttpError(400,'El brief es demasiado largo.');
   payload.campaign=freezeCampaign(await brandDetail(w,brand));
   jobs.push({tipo:route==='brands/_draft'?'perfil':'propuesta',motor:'claude-sonnet-4-6',payload,key,hash:digest(payload),reserva:2});
@@ -141,7 +141,7 @@ async function textJob(j:any,w:Identity){const {campaign:_snapshot,...input}=j.p
  let site:any=null,siteText='';if(profile&&typeof brief.website==='string'&&brief.website.trim()){try{const r=await readSite(brief.website.trim());site=r.site;siteText=`\n\nIdentidad leída directamente del sitio web (datos reales: úsalos para colores, tipografías, tono y oferta; el color de acento sale de los colores más usados que no son neutros):\n${r.summary}`;}catch(e){siteText=`\n\nNo se pudo leer el sitio web (${e instanceof Error?e.message:'error'}): usa la búsqueda web si hace falta.`;}}
  const messages=[{role:'user',content:[...k.media,{type:'text',text:`Fecha: ${new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago'}).format(new Date())}\nBrief: ${JSON.stringify(brief)}${siteText}\nInvestiga solo si necesitas verificar hechos o el sitio web indicado. Nunca inventes cifras ni afirmes que has consultado fuentes que no consultaste. Devuelve el contenido con el esquema solicitado.`}]}];
  const request={model:'claude-sonnet-4-6',max_tokens:16000,system:(profile?prompts.brand_rules:prompts.draft_rules+full+editorialRules)+'\n'+k.text,tools:[{type:'web_search_20250305',name:'web_search',max_uses:2}],messages,output_config:{format:{type:'json_schema',schema}}};
- const call=(body:any)=>jsonFetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':process.env.ANTHROPIC_API_KEY!,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify(body)},240000);
+ const call=(body:any)=>jsonFetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':anthropicKey(),'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify(body)},240000);
  let data=await call(request),usage={...(data.usage||{})},researchContent=[...data.content];
  const cost=()=>Number(usage.input_tokens||0)*3e-6+Number(usage.output_tokens||0)*15e-6+Number(usage.server_tool_use?.web_search_requests||0)*.01;
  const decode=(d:any)=>{if(['max_tokens','refusal'].includes(d.stop_reason))throw new Error('La propuesta no pudo completarse.');return JSON.parse(d.content.filter((x:any)=>x.type==='text').map((x:any)=>x.text).join(''));};
