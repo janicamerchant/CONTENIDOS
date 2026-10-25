@@ -983,19 +983,35 @@ function fitSlide(el) {
   moved.forEach(([n, t, sc]) => { n.style.translate = t; n.style.scale = sc; });
   keepInside(el);
 }
-// Texto movido o agrandado a mano que quedó fuera de la lámina (p. ej. después de un reajuste de tamaños): vuelve al borde,
-// y si es más grande que la lámina se achica lo justo. Solo es visual (s.move y s.fx no cambian): se exporta lo mismo que se ve.
+// Texto movido o agrandado a mano que quedó fuera de la lámina: se achica hacia el borde por el que se sale, sin moverse de donde
+// lo dejó la persona; solo si tendría que achicarse demasiado (menos de 60%) se corre hacia adentro. Es solo visual (s.move y s.fx
+// no cambian): se exporta lo mismo que se ve.
 function keepInside(el) {
   const b = el.getBoundingClientRect(), k = b.width / 1080 || 1, pad = 40 * k;
   for (const n of $$('.s-title,.s-body,.s-source,.s-items,.blk,.ly-t', el).filter((n) => !n.closest('.over') && n.textContent.trim())) {
     const same = n.dataset.mv ? $$(`[data-mv="${CSS.escape(n.dataset.mv)}"]`, el) : [n];
     let r = n.getBoundingClientRect();
-    const shrink = Math.min(1, (b.width - 2 * pad) / r.width, (b.height - 2 * pad) / r.height);
-    if (shrink < 1) { const sc = parseFloat(n.style.scale) || 1; same.forEach((x) => { x.style.scale = String(sc * shrink); }); r = n.getBoundingClientRect(); }
+    const L = b.left + pad, R = b.right - pad, T = b.top + pad, D = b.bottom - pad;
+    const scaleBy = (f) => { const sc = parseFloat(n.style.scale) || 1; same.forEach((x) => { x.style.scale = String(sc * f); }); };
+    const nudge = (dx, dy) => same.forEach((x) => { const [tx, ty] = (x.style.translate || '').split(' ').map(parseFloat); x.style.translate = `${(tx || 0) + dx / k}px ${(ty || 0) + dy / k}px`; });
+    // Si se sale por un lado, primero se achica hacia ese lado y el borde opuesto queda donde lo puso la persona (no se corre encima de la foto)
+    let f = Math.min(1, (R - L) / r.width, (D - T) / r.height);
+    if (r.right > R && r.left >= L) f = Math.min(f, (R - r.left) / r.width);
+    if (r.left < L && r.right <= R) f = Math.min(f, (r.right - L) / r.width);
+    if (r.bottom > D && r.top >= T) f = Math.min(f, (D - r.top) / r.height);
+    if (r.top < T && r.bottom <= D) f = Math.min(f, (r.bottom - T) / r.height);
+    if (f < 1 && f >= 0.6) {
+      const before = r;
+      scaleBy(f); r = n.getBoundingClientRect();
+      nudge(before.right > R ? before.left - r.left : before.left < L ? before.right - r.right : 0, before.bottom > D ? before.top - r.top : before.top < T ? before.bottom - r.bottom : 0);
+      r = n.getBoundingClientRect();
+    } else if (f < 0.6) {
+      const g = Math.min(1, (R - L) / r.width, (D - T) / r.height);
+      if (g < 1) { scaleBy(g); r = n.getBoundingClientRect(); }
+    }
     const dx = r.left < b.left + pad ? b.left + pad - r.left : r.right > b.right - pad ? b.right - pad - r.right : 0;
     const dy = r.top < b.top + pad ? b.top + pad - r.top : r.bottom > b.bottom - pad ? b.bottom - pad - r.bottom : 0;
-    if (!dx && !dy) continue;
-    same.forEach((x) => { const [tx, ty] = (x.style.translate || '').split(' ').map(parseFloat); x.style.translate = `${(tx || 0) + dx / k}px ${(ty || 0) + dy / k}px`; });
+    if (dx || dy) nudge(dx, dy);
   }
 }
 
