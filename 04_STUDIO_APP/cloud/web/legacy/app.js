@@ -918,7 +918,10 @@ function fitSlide(el) {
     let k = 1;
     box.style.setProperty('--fit', 1);
     let guard = 0;
-    while ((box.scrollHeight > box.clientHeight + 2 || box.scrollWidth > box.clientWidth + 2) && guard++ < 16) {
+    // Caja que crece con el texto (Portada): se mide contra su alto máximo. Contra su propio alto, la palabra de acento
+    // (más alta que la línea) siempre sobresalía unos px y el titular se achicaba al mínimo aunque cupiera.
+    const cap = parseFloat(getComputedStyle(box).maxHeight), limit = () => Math.max(box.clientHeight, cap || 0);
+    while ((box.scrollHeight > limit() + 2 || box.scrollWidth > box.clientWidth + 2) && guard++ < 16) {
       k *= 0.94;
       box.style.setProperty('--fit', k.toFixed(3));
     }
