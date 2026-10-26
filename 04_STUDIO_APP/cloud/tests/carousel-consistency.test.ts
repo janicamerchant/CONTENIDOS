@@ -180,8 +180,9 @@ test('un patrón fija tipografías, colores y dirección visual en campañas fut
 });
 test('modo foto con tres personas manda las caras de las tres y dice de quién es cada foto',async()=>{
  const f=fixture(),person=(id:string,name:string)=>({id,name,aliases:[],lock:'',fotos_base:{},photos:[1,2,3].map(n=>({active:true,name:`${id}-${n}.jpg`,url:`storage://${id}-${n}`}))});
- const b={...base,modo:'foto',people:[person('andrea','Andrea'),person('raul','Raul'),person('janica','Janica')]};f.setBrand(b);
+ const b={...base,modo:'foto',people:[person('andrea','Andrea'),person('raul','Raul'),{...person('janica','Janica'),lock:'IDENTITY LOCK: the woman is Janica, shown in every reference image.'}]};f.setBrand(b);
  const r=await f.request({modo:'foto',people:['andrea','raul','janica'],campaign:campaign.freezeCampaign(b)});
  assert.deepEqual([...r.refs],['andrea','raul','janica'].flatMap(id=>[`storage://${id}-1`,`storage://${id}-2`]));
  assert.match(r.prompt,/two photos of Andrea, then two photos of Raul, then two photos of Janica/);
+ assert.match(r.prompt,/\[Only for Janica, from Janica's own reference photos; it does not describe anyone else in the scene\] IDENTITY LOCK: the woman is Janica/);
 });
