@@ -344,6 +344,8 @@ const withBlockIds = (s) => { (s.blocks || []).forEach((b) => { b.id ||= uid(); 
 // Claude a veces escribe los textos en bloques pero deja otro diseño (Portada, Frase…): sin esto la lámina y Crear se ven vacías
 function fixBlocks(s) {
   if (s && s.layout !== 'bloques' && (s.blocks || []).some((b) => String(b.text || '').trim()) && ![s.kicker, s.title, s.body, s.number].some((v) => String(v || '').trim())) s.layout = 'bloques';
+  // Copia vieja de bloques en una lámina que ya tiene su texto en los campos (se pasó por Bloques y se volvió): no se usa y bloquea la exportación
+  else if (s && s.layout !== 'bloques' && (s.blocks || []).length) s.blocks = [];
   return s;
 }
 function normalizeProject(p) {
@@ -1633,7 +1635,10 @@ function bindInspector() {
       refreshSlide(); renderInspector(); return;
     }
     if (b.id === 'fx-done') { state.part = null; renderStage(); renderInspector(); return; }
-    if (b.dataset.layout) { s.layout = b.dataset.layout; if (s.layout === 'bloques' && !(s.blocks || []).length) s.blocks = blocksFromFields(s); refreshSlide(); renderInspector(); }
+    if (b.dataset.layout) { s.layout = b.dataset.layout; if (s.layout === 'bloques' && !(s.blocks || []).length) s.blocks = blocksFromFields(s);
+      // Al salir de Bloques quedaba la copia de los bloques y la exportación fallaba con "Este diseño no admite bloques"; el texto sigue en los campos
+      else if (s.layout !== 'bloques' && [s.kicker, s.title, s.body, s.number].some((v) => String(v || '').trim())) s.blocks = [];
+      refreshSlide(); renderInspector(); }
     else if (b.dataset.theme) { s.theme = b.dataset.theme; refreshSlide(); renderInspector(); }
     else if (b.dataset.pick) openAssets(b.dataset.pick);
     else if (b.dataset.clear) { s[b.dataset.clear] = ''; if (b.dataset.clear === 'image') s.cutout = ''; refreshSlide(); renderInspector(); }
