@@ -341,15 +341,24 @@ function sampleProject() {
 
 // Los bloques que escribe Claude llegan sin id: se les pone uno para poder moverlos y editarlos
 const withBlockIds = (s) => { (s.blocks || []).forEach((b) => { b.id ||= uid(); }); return s; };
-// Claude a veces escribe los textos en bloques pero deja otro diseño (Portada, Frase…): sin esto la lámina y Crear se ven vacías
-function fixBlocks(s) {
-  if (s && s.layout !== 'bloques' && (s.blocks || []).some((b) => String(b.text || '').trim()) && ![s.kicker, s.title, s.body, s.number].some((v) => String(v || '').trim())) s.layout = 'bloques';
-  // Copia vieja de bloques en una lámina que ya tiene su texto en los campos (se pasó por Bloques y se volvió): no se usa y bloquea la exportación
-  else if (s && s.layout !== 'bloques' && (s.blocks || []).length) s.blocks = [];
+// Deja el texto en un solo lugar (ver FIELD_KEYS): al abrir un proyecto y al cambiar de diseño en el Editor
+function fixBlocks(s, switching = false) {
+  if (!s) return s;
+  const blockText = (s.blocks || []).some((b) => String(b.text || '').trim());
+  if (s.layout === 'bloques') {
+    if (!blockText && hasFieldText(s)) s.blocks = blocksFromFields(s);
+    if ((s.blocks || []).length) clearFields(s);
+  } else if (blockText && !hasFieldText(s) && !switching) {
+    // Claude a veces escribe los textos en bloques pero deja otro diseño (Portada, Frase…): se pasa a Bloques para no perder su composición
+    s.layout = 'bloques';
+  } else if (blockText) {
+    if (!hasFieldText(s)) fieldsFromBlocks(s);
+    s.blocks = [];
+  } else s.blocks = [];
   return s;
 }
 function normalizeProject(p) {
-  (p.slides || []).forEach(fixBlocks);
+  (p.slides || []).forEach((s) => fixBlocks(s));
   p.slides = (p.slides || []).map((s) => withBlockIds(blankSlide(s.layout || 'frase', p.brand, s)));
   if (!p.slides.length) p.slides.push(blankSlide('portada', p.brand));
   p.caption = p.caption || '';
@@ -596,6 +605,23 @@ function blocksFromFields(s) {
   if (s.cta) out.push(bk('guardar', s.cta, 'abajo'));
   if (s.source) out.push(bk('fuente', s.source, 'abajo'));
   return (out.length ? out : newBlocks('arriba-abajo')).map((b) => ({ ...b, id: b.id || uid() }));
+}
+// El texto vive en un solo lugar: en Bloques solo en los bloques, en los demás diseños solo en los campos.
+// Si quedaba en los dos, la exportación fallaba ("no admite bloques" / "todo el texto debe estar en los bloques")
+// y el motor recibía el texto dos veces.
+const FIELD_KEYS = ['kicker', 'title', 'body', 'number', 'numberLabel', 'cta', 'source', 'leftLabel', 'rightLabel'];
+const LIST_KEYS = ['items', 'leftItems', 'rightItems'];
+const hasFieldText = (s) => FIELD_KEYS.some((k) => String(s[k] || '').trim()) || LIST_KEYS.some((k) => (s[k] || []).some((t) => String(t || '').trim()));
+function clearFields(s) { FIELD_KEYS.forEach((k) => { s[k] = ''; }); LIST_KEYS.forEach((k) => { s[k] = []; }); }
+// Al salir de Bloques: cada bloque vuelve a su campo
+function fieldsFromBlocks(s) {
+  const text = (b) => String(b.text || '').trim(), of = (...st) => (s.blocks || []).filter((b) => st.includes(b.style) && text(b)).map(text);
+  const titles = of('titulo-xl', 'titulo'), serif = of('serif');
+  s.kicker = of('etiqueta')[0] || ''; s.title = titles[0] || ''; s.number = of('cifra')[0] || '';
+  s.numberLabel = s.number ? serif.shift() || '' : '';
+  s.cta = of('guardar')[0] || ''; s.source = of('fuente')[0] || '';
+  const rest = [...titles.slice(1), ...serif, ...of('sans', 'sans-grande', 'espaciado')];
+  if (s.layout === 'lista') { s.items = rest.slice(0, 3); s.body = ''; } else s.body = rest.join(' ');
 }
 
 function slideInner(p, s, i, n) {
@@ -1635,10 +1661,7 @@ function bindInspector() {
       refreshSlide(); renderInspector(); return;
     }
     if (b.id === 'fx-done') { state.part = null; renderStage(); renderInspector(); return; }
-    if (b.dataset.layout) { s.layout = b.dataset.layout; if (s.layout === 'bloques' && !(s.blocks || []).length) s.blocks = blocksFromFields(s);
-      // Al salir de Bloques quedaba la copia de los bloques y la exportación fallaba con "Este diseño no admite bloques"; el texto sigue en los campos
-      else if (s.layout !== 'bloques' && [s.kicker, s.title, s.body, s.number].some((v) => String(v || '').trim())) s.blocks = [];
-      refreshSlide(); renderInspector(); }
+    if (b.dataset.layout) { s.layout = b.dataset.layout; fixBlocks(s, true); refreshSlide(); renderInspector(); }
     else if (b.dataset.theme) { s.theme = b.dataset.theme; refreshSlide(); renderInspector(); }
     else if (b.dataset.pick) openAssets(b.dataset.pick);
     else if (b.dataset.clear) { s[b.dataset.clear] = ''; if (b.dataset.clear === 'image') s.cutout = ''; refreshSlide(); renderInspector(); }
@@ -2298,7 +2321,7 @@ function propCard(s, i) {
 
 function renderProposal() {
   const d = state.draft;
-  (d.slides || []).forEach(fixBlocks);
+  (d.slides || []).forEach((s) => fixBlocks(s));
   $('#d-name').value = d.name || '';
   $('#d-concept').value = d.concept || '';
   $('#d-caption').value = d.caption || '';
