@@ -14,7 +14,7 @@ const clip={frase:'Una sola tarea.',modelo:'omni',segundos:4,que_se_ve:'Sentada 
 const plan={escena:'Una oficina luminosa.',sujeto:'she',voice:'Warm.',accent:'Venezuelan Spanish.',clips:[clip,{...clip,frase:'Anota la urgencia.'}]};
 const guiones=[{id:'g1',titulo:'El bloque de 90 minutos',cliente_id:'janica',guion:'Una sola tarea. Anota la urgencia.'},{id:'g2',titulo:'Otro guion',cliente_id:'janica',guion:'Lo que anotas lo decides tú.'}];
 const proyecto={id:'p1',marca:'janica',tipo:'largo',info:{titulo:'Atención <Janica>'},transcripcion:{texto:'Una transcripción.',parrafos:[]},analisis:{guiones,puntos_clave:[]},videos:{},video_config:{}};
-window.fixture={writes:[],failProject:false};
+window.fixture={writes:[],failProject:false,proyecto};
 const request=async(path,body)=>{
  if(body)fixture.writes.push({path,body});
  if(path==='/api/reels/config')return {deepgram:true,apify:true,anthropic:true,video:{higgsfield:true}};
@@ -34,10 +34,21 @@ const request=async(path,body)=>{
  if(path==='/api/reels/proyectos/p1/video-imagenes'){
   for(const i of body.clips)proyecto.videos[body.guion].imagenes[i]={archivo:'storage://image-'+i,aprobada:false,base:i?proyecto.videos[body.guion].imagenes[0].archivo:null};return {grupo:'fixture'};
  }
- if(path==='/api/reels/proyectos/p1/video-clips'){const v=proyecto.videos[body.guion];v.clips??=[];v.clips[body.clip]={archivo:'storage://video-'+body.clip,revision:'fixture'};return {grupo:'fixture'};}
+ if(path==='/api/reels/proyectos/p1/video-clips'){
+  const v=proyecto.videos[body.guion],grupo='clip-'+body.clip;v.trabajos??=[];v.trabajos.unshift({grupo,op:'video_clip',indice:body.clip,estado:'waiting',paso:'Higgsfield está generando el clip…'});
+  fixture.clips??={};fixture.clips[grupo]={guion:body.guion,indice:body.clip};return {grupo};
+ }
  if(path==='/api/reels/proyectos/p1/video-montaje'){const v=proyecto.videos[body.guion];v.montaje={archivo:'storage://final',revision:'fixture',clips:v.clips.map(c=>c.archivo)};return {grupo:'fixture'};}
  if(path==='/api/reels/proyectos/p1/video-aprobar'){proyecto.videos[body.guion].imagenes[body.clip].aprobada=body.aprobada;return {ok:true};}
- if(path.startsWith('/api/reels/trabajos?'))return {done:true,items:[{op:'plan_video',estado:'succeeded',proyecto:'p1'}]};
+ if(path.startsWith('/api/reels/trabajos?')){
+  const grupo=new URLSearchParams(path.split('?')[1]).get('grupo'),c=fixture.clips?.[grupo];
+  if(c){const v=proyecto.videos[c.guion],pending=fixture.deferClip===c.indice,job=v.trabajos.find(j=>j.grupo===grupo);
+   job.estado=pending?'waiting':'succeeded';
+   if(!pending){v.clips??=[];v.clips[c.indice]={archivo:'storage://video-'+c.indice,revision:'fixture',vigente:true};}
+   return {done:!pending,items:[{op:'video_clip',indice:c.indice,estado:job.estado,proyecto:'p1',paso:job.paso}]};
+  }
+  return {done:true,items:[{op:'plan_video',estado:'succeeded',proyecto:'p1'}]};
+ }
  throw new Error('Unexpected fixture request: '+path);
 };
 setupReels({request,role:new URLSearchParams(location.search).get('role')||'admin',uploadBlob:async(blob,name,scope)=>{fixture.upload={name,scope,mime:blob.type};fixture.uploadCount=(fixture.uploadCount||0)+1;return '00000000-0000-4000-8000-'+String(fixture.uploadCount).padStart(12,'0');},resolve:async refs=>refs.map(()=>'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="160"><rect width="90" height="160" fill="tan"/></svg>'))});`;
@@ -116,8 +127,17 @@ try{
  await page.waitForFunction(()=>!document.querySelector('[data-v-imgs]').disabled);
  assert.equal(await page.locator('[data-v-img="1"]').isEnabled(),true);
  page.on('dialog',d=>d.accept());
+ await page.evaluate(()=>{fixture.deferClip=0;});
  await page.locator('[data-v-clip="0"]').click();
+ await page.locator('[data-v-clip-jobs="0"]').getByText('Higgsfield está generando el clip…',{exact:false}).waitFor();
+ assert.equal(await page.locator('[data-v-clip="0"]').isDisabled(),true);
+ await page.locator('#rl-video-guion').selectOption('g2');await page.locator('#rl-video-guion').selectOption('g1');
+ await page.locator('[data-v-clip-jobs="0"]').getByText('Higgsfield está generando el clip…',{exact:false}).waitFor();
+ assert.equal(await page.locator('[data-v-clip="0"]').isDisabled(),true,'a pending clip stays disabled after returning to the script');
+ assert.equal(await page.evaluate(()=>fixture.writes.filter(w=>w.path.endsWith('/video-clips')).length),1,'resuming does not submit another generation');
+ await page.evaluate(()=>{fixture.deferClip=null;});
  await page.getByRole('button',{name:'Descargar clip',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Clip 1 · Listo',exact:true}).waitFor();
  assert.equal(await page.locator('[data-v-montar]').isDisabled(),true);
  await page.locator('[data-v-img="1"]').click();
  await page.locator('[data-v-aprobar="1"]').check();
@@ -129,6 +149,16 @@ try{
  await page.locator('.rl-config-resumen').evaluate(e=>{e.open=true;});
  assert.equal(await page.locator('[data-v-cfg="vestuario"]').inputValue(),'Blazer azul','configuration survives reload');
  assert.equal(await page.locator('[data-v-audio-nombre]').textContent(),'mi-voz.opus');
+ await page.evaluate(()=>{
+  const v=fixture.proyecto.videos.g1;
+  v.versiones_clips=[{indice:1,archivo:'storage://old-video'}];
+  v.trabajos.unshift({grupo:'failed-retry',op:'video_clip',indice:1,estado:'failed',error:'No se completó el reintento <detalle>'});
+ });
+ await page.locator('#rl-video-guion').selectOption('g2');await page.locator('#rl-video-guion').selectOption('g1');
+ await page.locator('[data-v-clip-jobs="1"]').getByText('No se completó el reintento <detalle>',{exact:true}).waitFor();
+ assert.equal(await page.locator('[data-v-clip-jobs="1"] detalle').count(),0);
+ await page.getByText('Versiones anteriores del clip 2',{exact:true}).click();
+ await page.getByRole('button',{name:'Descargar versión anterior',exact:true}).waitFor();
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile fits viewport');
  await page.screenshot({path:'artifacts/reels-navigation/plan-mobile.png'});

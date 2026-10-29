@@ -110,4 +110,7 @@
 .rl-audio-ref { margin: 12px 0; padding: 12px; border: 1px solid var(--line-2); border-radius: 6px; }
 .rl-video video { max-height: 480px; background: var(--bg); border-radius: 8px; }
 .rl-montaje { margin-top: 20px; border-top: 1px solid var(--line-2); padding-top: 16px; }
+.rl-resumen-clips { margin: 20px 0; padding: 16px 0; border-block: 1px solid var(--line-2); }
+.rl-resumen-clips h3 { margin: 0; font-size: 15px; }
+.rl-versiones { margin-top: 16px; }
 @media (max-width: 600px) { .rl-config .rl-row { grid-template-columns: minmax(0,1fr); } }

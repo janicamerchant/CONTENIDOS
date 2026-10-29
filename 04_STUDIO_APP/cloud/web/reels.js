@@ -203,12 +203,14 @@ function recordar(grupo,caja,quitar){const l=pendientes().filter(x=>x.grupo!==gr
 function seguir(grupo,caja,alTerminar){
  const el=document.createElement('div');el.className='rl-job';el.textContent='En cola…';caja.prepend(el);
  const cajaId=caja.id||caja.closest('section')?.id||'';if(!alTerminar)recordar(grupo,cajaId);
- const linea=x=>{const que=ETIQUETAS[x.op]||x.op;const fuente=x.url?` · ${esc(x.url.length>60?x.url.slice(0,60)+'…':x.url)}`:'';
+ const linea=x=>{const que=(ETIQUETAS[x.op]||x.op)+(x.op==='video_clip'&&Number.isInteger(x.indice)?` ${x.indice+1}`:'');const fuente=x.url?` · ${esc(x.url.length>60?x.url.slice(0,60)+'…':x.url)}`:'';
   if(x.estado==='succeeded')return `<div class="ok">✓ ${que}${fuente}${x.proyecto&&x.op!=='entregable'?` · <a href="#" class="rl-tc" data-ver="${esc(x.proyecto)}">Ver resultado →</a>`:''}${x.aviso?`<div class="rl-err">${esc(x.aviso)}</div>`:''}</div>`;
   if(['failed','uncertain','canceled'].includes(x.estado))return `<div class="rl-err">✕ ${que}${fuente}: ${esc(x.error||'No se completó.')}</div>`;
   return `<div>${que}${fuente}: ${esc(x.paso||(x.estado==='queued'?'En cola…':'Procesando…'))}</div>`;};
  const tick=async()=>{
+  if(!el.isConnected)return;
   let t;try{t=await request('/api/reels/trabajos?grupo='+encodeURIComponent(grupo));}catch(e){el.innerHTML=`<div class="rl-err">${esc(e.message)}</div>`;setTimeout(tick,6000);return;}
+  if(!el.isConnected)return;
   el.innerHTML=t.items.map(linea).join('');$$('[data-ver]',el).forEach(a=>a.onclick=ev=>{ev.preventDefault();verProyecto(a.dataset.ver);});
   if(!t.done){setTimeout(tick,3000);return;}
   recordar(grupo,cajaId,true);const fallo=t.items.some(x=>x.estado!=='succeeded');el.classList.add(fallo?'error':'listo');
@@ -396,7 +398,7 @@ async function abrirVideo(pid,gid){
    $('[data-video]',caja).open=true;
    activarVideos(pid,caja,()=>{if(turno===videoCarga&&$('#rl-video-guion')?.value===g.id)abrirVideo(pid,g.id);},p);
   };
-  $('#rl-video-guion').onchange=pintar;pintar();
+  $('#rl-video-guion').onchange=()=>abrirVideo(pid,$('#rl-video-guion').value);pintar();
  }catch(e){
   if(turno!==videoCarga)return;
   editor.innerHTML=`<p class="rl-err">${esc(e.message)}</p><button class="btn ghost sm" id="rl-video-volver">Volver a los proyectos</button>`;
@@ -479,6 +481,9 @@ function videoHtml(p,g){
   ${personas.length?'':'<p class="rl-meta">Asocia una persona a este cliente en «Marcas» para poder preparar el video.</p>'}
   <div class="rl-acciones"><button class="btn accent sm" data-v-planear ${personas.length?'':'disabled'}>Planear video con Claude</button></div><div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
  const plan=v.plan,persona=(PERSONAS||[]).find(x=>x.id===v.persona),imgs=v.imagenes||[],base=imgs[0],config={...VIDEO_DEFAULTS,...(p.video_config?.[g.id]||v.configuracion)};
+ const trabajo=i=>v.trabajos?.find(j=>j.op==='video_clip'&&j.indice===i),enCurso=j=>j&&['queued','running','waiting'].includes(j.estado);
+ const vigente=i=>!!v.clips?.[i]&&(v.clips[i].vigente??v.clips[i].revision===v.revision_actual);
+ const estadoClip=i=>enCurso(trabajo(i))?'Generando…':vigente(i)?'Listo':v.clips?.[i]||(v.versiones_clips||[]).some(x=>x.indice===i)?'Versión anterior':trabajo(i)&&['failed','uncertain','canceled'].includes(trabajo(i).estado)?'No completado':'Sin generar';
  const faltan=plan.clips.map((_,i)=>i).filter(i=>i>0&&!imgs[i]);
  const imagen=i=>{const m=imgs[i],bloqueada=i>0&&!base?.aprobada;
   return `<div class="rl-img">${m?`<img data-ref="${esc(m.archivo)}" alt="Imagen del clip ${i+1}">`:`<div class="rl-img-vacia">${bloqueada?'Aprueba primero la imagen del clip 1':'Sin imagen'}</div>`}
@@ -487,6 +492,9 @@ function videoHtml(p,g){
     ${m?`<label class="rl-chip"><input type="checkbox" data-v-aprobar="${i}" ${m.aprobada?'checked':''}> Aprobada</label>`:''}</div></div>`;};
  return `<details class="rl-video" data-video="${esc(g.id)}" open><summary><b>Video UGC</b> <span class="rl-meta">· ${plan.clips.length} clips · ${esc(persona?.name||v.persona)} · plan del ${esc(v.editado||v.creado)}</span></summary>
   <details class="rl-config-resumen"><summary>Configuración del video · ${esc(modeloVideo(config.motor).nombre)}</summary>${elegir}</details>
+  <div class="rl-resumen-clips"><h3>Clips de video · ${plan.clips.filter((_,i)=>vigente(i)).length} de ${plan.clips.length} listos</h3>
+   <p class="rl-meta">Aprueba la imagen y pulsa «Generar clip de video» en cada clip. El reproductor y la descarga aparecen debajo de su imagen cuando termina.</p>
+   <div class="rl-acciones">${plan.clips.map((_,i)=>`<button class="btn ghost sm" data-v-ir-clip="${i}">Clip ${i+1} · ${estadoClip(i)}</button>`).join('')}</div></div>
   ${v.avisos?.length?`<div class="rl-avisos">${v.avisos.map(a=>`<div class="rl-err">⚠ ${esc(a)}</div>`).join('')}</div>`:''}
   <label class="lbl">Escena</label><textarea class="inp" rows="2" data-v-plan="escena">${esc(plan.escena)}</textarea>
   <div class="rl-row"><div><label class="lbl">Habla</label><select class="inp" data-v-plan="sujeto"><option value="she" ${plan.sujeto==='she'?'selected':''}>Ella (she)</option><option value="he" ${plan.sujeto==='he'?'selected':''}>Él (he)</option></select></div>
@@ -501,13 +509,15 @@ function videoHtml(p,g){
    <label class="rl-chip"><input type="checkbox" data-c="voz_off" ${c.voz_off||c.modelo==='grok'||config.audioNarracion?'checked':''}> Plano de apoyo / voz en off</label>
    ${CAMPOS_CLIP.map(([k,l,r])=>`<label class="lbl">${l}</label>${r>1?`<textarea class="inp" rows="${r}" data-c="${k}">${esc(c[k])}</textarea>`:`<input class="inp" data-c="${k}" value="${esc(c[k])}">`}`).join('')}
    <details class="rl-prompt"><summary class="rl-meta">Ver el prompt de video del plan guardado</summary><pre>${esc(promptVideo(plan,{...c,voz_off:!!config.audioNarracion||!config.generarAudio||c.voz_off}))}</pre></details>${imagen(i)}
-   <div class="rl-acciones"><button class="btn accent sm" data-v-clip="${i}" ${imgs[i]?.aprobada&&base?.aprobada&&(i===0||imgs[i].base===base.archivo)&&CONFIG.video?.higgsfield?'':'disabled'}>${v.clips?.[i]?'Rehacer':'Generar'} clip de video</button>
+   <div class="rl-acciones"><button class="btn accent sm" data-v-clip="${i}" ${!enCurso(trabajo(i))&&imgs[i]?.aprobada&&base?.aprobada&&(i===0||imgs[i].base===base.archivo)&&CONFIG.video?.higgsfield?'':'disabled'}>${enCurso(trabajo(i))?'Generando clip…':`${v.clips?.[i]?'Rehacer':'Generar'} clip de video`}</button>
     <span class="rl-meta">Reserva de presupuesto: hasta ${reservaVideo({...config,motor:modeloVideo(c.modelo)?.id||config.motor},c.segundos).toFixed(2)} US$. Tarifa final según Higgsfield.</span></div>
-   ${v.clips?.[i]?`<video controls preload="none" data-ref="${esc(v.clips[i].archivo)}"></video><p class="rl-meta">${v.clips[i].revision===v.revision_actual?'Clip vigente.':'El plan o sus imágenes cambiaron: genera de nuevo el clip.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.clips[i].archivo)}">Descargar clip</button>`:''}</div>`).join('')}
+   <div class="rl-jobs" data-v-clip-jobs="${i}" role="status">${trabajo(i)&&['failed','uncertain','canceled'].includes(trabajo(i).estado)?`<p class="rl-err">${esc(trabajo(i).error||'No se completó este clip.')}</p>`:''}</div>
+   ${v.clips?.[i]?`<video controls preload="metadata" data-ref="${esc(v.clips[i].archivo)}"></video><p class="rl-meta">${vigente(i)?'Clip listo. Puedes reproducirlo o descargarlo.':'El guion, audio o la imagen de este clip cambió. Puedes ver y descargar esta versión anterior.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.clips[i].archivo)}">Descargar clip</button>`:''}
+   ${(v.versiones_clips||[]).some(x=>x.indice===i)?`<details class="rl-versiones"><summary>Versiones anteriores del clip ${i+1}</summary>${v.versiones_clips.filter(x=>x.indice===i).map(x=>`<p class="rl-meta">Generado con un plan o una imagen anterior.</p><video controls preload="none" data-ref="${esc(x.archivo)}"></video><button class="btn ghost sm" data-v-descargar="${esc(x.archivo)}">Descargar versión anterior</button>`).join('')}</details>`:''}</div>`).join('')}
   <div class="rl-acciones"><button class="btn accent sm" data-v-guardar>Guardar cambios del plan</button>
    <button class="btn ghost sm" data-v-planear data-rehacer="1">Rehacer plan (reemplaza el actual)</button></div>
   <div class="rl-montaje"><h3>Montaje con tu narración</h3><p class="rl-meta">Une los clips en orden y usa tu audio original. El video termina con la narración; si falta metraje, mantiene el último fotograma. Exportación MP4 a ${esc(config.resolucion)}.</p>
-   <button class="btn accent sm" data-v-montar ${config.audioNarracion&&plan.clips.every((_,i)=>v.clips?.[i]?.revision===v.revision_actual)?'':'disabled'}>Montar video con mi narración</button>
+   <button class="btn accent sm" data-v-montar ${config.audioNarracion&&plan.clips.every((_,i)=>vigente(i))?'':'disabled'}>Montar video con mi narración</button>
    ${v.montaje?`<video controls preload="none" data-ref="${esc(v.montaje.archivo)}"></video><p class="rl-meta">${v.montaje.revision===v.revision_actual&&JSON.stringify(v.montaje.clips)===JSON.stringify(v.clips.map(c=>c.archivo))?'Montaje vigente.':'Hay cambios: vuelve a montar el video.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.montaje.archivo)}">Descargar video completo</button>`:''}</div>
   <div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
 }
@@ -524,7 +534,8 @@ function activarVideos(pid,v,recargar,proyecto){
    $$('button,input,select,textarea',caja).forEach(el=>{el.disabled=true;el.title='Tu rol permite solo lectura.';});
    continue;
   }
-  const gid=caja.dataset.video,jobs=$('.rl-jobs',caja);
+  const gid=caja.dataset.video,jobs=$('.rl-jobs[id]',caja);
+  for(const b of $$('[data-v-ir-clip]',caja))b.onclick=()=>{const clip=$(`[data-clip="${b.dataset.vIrClip}"]`,caja),destino=$('video',clip)||$('[data-v-clip]',clip)||clip;const versiones=destino.closest('.rl-versiones');if(versiones)versiones.open=true;destino.scrollIntoView({block:'center',behavior:'smooth'});};
   for(const el of $$('[data-v-plan],[data-c]',caja))el.addEventListener('input',()=>{caja.dataset.planDirty='1';});
   const cfg=$('[data-v-config]',caja),estado=$('[data-v-config-estado]',cfg);
   const refDatos=$('[data-v-referencias]',cfg),refArchivo=$('[data-v-audio-referencia]',cfg),refEstado=$('[data-v-referencia-estado]',cfg);
@@ -609,12 +620,19 @@ function activarVideos(pid,v,recargar,proyecto){
    catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}};
   for(const b of $$('[data-v-clip],[data-v-montar]',caja))b.onclick=async()=>{
    b.disabled=true;
+   const salida=b.hasAttribute('data-v-clip')?$(`[data-v-clip-jobs="${b.dataset.vClip}"]`,caja):jobs,etiqueta=b.textContent;
    try{
     if(cfg.dataset.dirty||caja.dataset.planDirty)throw new Error('Guarda la configuración y el plan antes de generar.');
     const action=b.hasAttribute('data-v-clip')?'video-clips':'video-montaje';
-    const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/${action}`,{idempotencyKey:crypto.randomUUID(),guion:gid,...(action==='video-clips'?{clip:Number(b.dataset.vClip)}:{})});seguir(d.grupo,jobs,recargar);
-   }catch(e){jobs.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;}
+    const d=await request(`/api/reels/proyectos/${encodeURIComponent(pid)}/${action}`,{idempotencyKey:crypto.randomUUID(),guion:gid,...(action==='video-clips'?{clip:Number(b.dataset.vClip)}:{})});b.textContent=action==='video-clips'?'Generando clip…':'Montando video…';seguir(d.grupo,salida,recargar);
+   }catch(e){salida.insertAdjacentHTML('afterbegin',`<div class="rl-job error">${esc(e.message)}</div>`);b.disabled=false;b.textContent=etiqueta;}
   };
+  for(const j of proyecto.videos?.[gid]?.trabajos||[]){
+   if(!['queued','running','waiting'].includes(j.estado))continue;
+   const salida=j.op==='video_clip'?$(`[data-v-clip-jobs="${j.indice}"]`,caja):jobs;if(!salida)continue;
+   const b=j.op==='video_clip'?$(`[data-v-clip="${j.indice}"]`,caja):$('[data-v-montar]',caja);if(b){b.disabled=true;b.textContent=j.op==='video_clip'?'Generando clip…':'Montando video…';}
+   seguir(j.grupo,salida,recargar);
+  }
   for(const b of $$('[data-v-descargar]',caja))b.onclick=async()=>{try{const urls=await resolve([b.dataset.vDescargar]);const a=document.createElement('a');a.href=urls[0];a.download='reel.mp4';a.target='_blank';a.rel='noopener';a.click();}catch(e){alert(e.message);}};
   for(const b of $$('[data-v-img]',caja))b.onclick=()=>{const i=+b.dataset.vImg;if(i===0&&$$('[data-v-aprobar]',caja).length>1&&!confirm('Si rehaces el clip 1, las imágenes de los demás clips habrá que rehacerlas. ¿Seguir?'))return;pedirImagenes([i],b);};
   const todas=$('[data-v-imgs]',caja);if(todas)todas.onclick=()=>{const clips=$$('[data-clip]',caja).map(el=>+el.dataset.clip).filter(i=>i>0&&!$('img[data-ref]',$(`[data-clip="${i}"]`,caja)));pedirImagenes(clips,todas);};

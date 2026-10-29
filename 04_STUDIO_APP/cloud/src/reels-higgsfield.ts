@@ -14,6 +14,35 @@ export function revisionVideo(doc:any,gid:string){const v=doc.videos?.[gid],orig
  // Un campo nuevo vacío conserva las revisiones de los clips anteriores a esta función.
  if(config&&!config.audiosReferencia?.length)delete config.audiosReferencia;
  return createHash('sha256').update(JSON.stringify([v?.plan,config,v?.imagenes])).digest('hex');}
+const ordenado=(x:any):any=>Array.isArray(x)?x.map(ordenado):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().filter(k=>x[k]!==undefined).map(k=>[k,ordenado(x[k])])):x;
+const igual=(a:any,b:any)=>JSON.stringify(ordenado(a))===JSON.stringify(ordenado(b));
+export function revisionClip(doc:any,gid:string,i:number){
+ const v=doc.videos?.[gid],{clips,...comun}=v?.plan||{},img=v?.imagenes?.[i],base=v?.imagenes?.[0];
+ const config=videoConfigSchema.parse(doc.video_config?.[gid]||v?.configuracion||{});
+ return createHash('sha256').update(JSON.stringify(ordenado([v?.persona,comun,clips?.[i],config,[img?.archivo,!!img?.aprobada,img?.base||null],[base?.archivo,!!base?.aprobada]]))).digest('hex');
+}
+export function pedidoClipVigente(doc:any,op:any){
+ const v=doc.videos?.[op.guion],img=v?.imagenes?.[op.indice],base=v?.imagenes?.[0];
+ if(!v?.plan?.clips?.[op.indice]||!img?.aprobada||!base?.aprobada||op.indice>0&&img.base!==base.archivo)return false;
+ if(op.revisionClip)return op.revisionClip===revisionClip(doc,op.guion,op.indice);
+ // Existing paid requests predate per-clip signatures. Other images and approvals are not their inputs.
+ const {clips:anteriores,...antes}=op.plan||{},{clips:actuales,...ahora}=v.plan;
+ const config=videoConfigSchema.parse(doc.video_config?.[op.guion]||v.configuracion||{});
+ return op.imagen===img.archivo&&igual(antes,ahora)&&igual(anteriores?.[op.indice],actuales[op.indice])&&igual(videoConfigSchema.parse({...op.configuracion,motor:config.motor}),config);
+}
+export function clipVigente(doc:any,gid:string,i:number){
+ const clip=doc.videos?.[gid]?.clips?.[i];
+ return !!clip?.archivo&&(clip.revisionClip?clip.revisionClip===revisionClip(doc,gid,i):clip.revision===revisionVideo(doc,gid));
+}
+export function conservarClip(doc:any,op:any,archivo:string,creado:string,reemplazar=true){
+ const v=doc.videos?.[op.guion];if(!v)return false;
+ const anterior=v.clips?.[op.indice],vigente=pedidoClipVigente(doc,op)&&(reemplazar||!anterior||anterior.archivo===archivo),registro={archivo,revision:vigente?revisionVideo(doc,op.guion):op.revision,revisionClip:vigente?revisionClip(doc,op.guion,op.indice):op.revisionClip,modelo:op.clip.modelo,creado};
+ v.versiones_clips??=[];
+ const archivar=(c:any)=>{if(!v.versiones_clips.some((x:any)=>x.archivo===c.archivo))v.versiones_clips.push({...c,indice:op.indice});};
+ if(vigente){if(anterior&&anterior.archivo!==archivo)archivar(anterior);v.clips??=[];v.clips[op.indice]=registro;}
+ else if(anterior?.archivo!==archivo)archivar(registro);
+ return vigente;
+}
 export function pedidoHiggsfield(config:ConfigVideo,plan:PlanVideo,clip:Clip,image:string,audioUrls:string[]=[]){
  const motor=modeloVideo(clip.modelo)||modeloVideo(config.motor)!;
  const refs=config.audiosReferencia||[];
@@ -39,7 +68,7 @@ export async function clipVideoJob(j:any,h:Ayudas){
  const op=j.payload;let d:any;
  if(!j.provider_id){
   const row=await h.cargarProyecto(op.proyecto);
-  if(revisionVideo(row.documento,op.guion)!==op.revision)throw new HttpError(409,'El plan o sus imágenes cambiaron. Vuelve a pedir el clip.');
+  if(!pedidoClipVigente(row.documento,op))throw new HttpError(409,'El plan o la imagen de este clip cambiaron. Vuelve a pedir el clip.');
   const urls=await Promise.all((op.configuracion.audiosReferencia||[]).map((r:any)=>firmado('storage://'+r.id,j.marca_id,true)));
   const {endpoint,body}=pedidoHiggsfield(op.configuracion,op.plan,op.clip,await firmado(op.imagen,j.marca_id),urls);
   d=await hf(endpoint,body,j.id);
@@ -55,8 +84,8 @@ export async function clipVideoJob(j:any,h:Ayudas){
  for await(const chunk of r.body!){const bytes=Buffer.from(chunk);total+=bytes.length;if(total>52428800)throw new HttpError(413,'El clip supera 50 MB.');chunks.push(bytes);}
  const bytes=Buffer.concat(chunks);if(bytes.toString('ascii',4,8)!=='ftyp')throw new HttpError(502,'El proveedor no devolvió un MP4 válido.');
  const archivo='storage://'+await storeFile(j.marca_id,bytes,'video/mp4',`video-${op.guion}-clip-${op.indice+1}.mp4`);let vigente=false;
- await h.actualizarProyecto(op.proyecto,doc=>{if(revisionVideo(doc,op.guion)!==op.revision)return;vigente=true;const v=doc.videos[op.guion];v.clips??=[];v.clips[op.indice]={archivo,revision:op.revision,modelo:op.clip.modelo,creado:h.ahora()};});
- await saveJob(j,{estado:'succeeded',coste_usd:null,resultado:{proyecto_id:op.proyecto,paso:vigente?`Clip ${op.indice+1} listo`:'El clip terminó, pero cambió el plan: vuelve a generarlo.'}});
+ await h.actualizarProyecto(op.proyecto,doc=>{vigente=conservarClip(doc,op,archivo,h.ahora());});
+ await saveJob(j,{estado:'succeeded',coste_usd:null,resultado:{proyecto_id:op.proyecto,guion:op.guion,indice:op.indice,archivo,vigente,paso:vigente?`Clip ${op.indice+1} listo`:`Clip ${op.indice+1} guardado en versiones anteriores: cambió su plan o imagen.`}});
 }
 export async function montajeVideoJob(j:any,h:Ayudas){
  const op=j.payload,row=await h.cargarProyecto(op.proyecto),v=row.documento.videos?.[op.guion];
@@ -82,11 +111,13 @@ export async function videoActions(w:Identity,row:any,action:string,b:any,h:Ayud
   if(!clip||!img?.aprobada||!base?.aprobada||(i>0&&img.base!==base.archivo))throw new HttpError(409,'Aprueba la imagen vigente de este clip y la del clip 1.');
   const m=modeloVideo(clip.modelo)||modeloVideo(config.motor)!;pedidoHiggsfield(config,v.plan,clip,'https://example.com/approved.png',config.audiosReferencia.map(()=> 'https://example.com/reference.wav'));
   for(const ref of config.audiosReferencia){const f=await readyFile(w,ref.id,v.marca);if(!f.mime.startsWith('audio/')||f.bytes>MAX_REFERENCE_AUDIO_BYTES)throw new HttpError(400,'La referencia debe ser un audio de hasta 15 MB.');}
-  await h.encolar(w.id,v.marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'video_clip',proyecto:row.id,guion:d.guion,indice:i,clip,plan:v.plan,imagen:img.archivo,configuracion:{...config,motor:m.id},revision},lamina:`${d.guion}-video-${i}`}]);
+  const pendiente=checked(await w.db.from('trabajos').select('grupo_id').eq('tipo','reels').eq('payload->>proyecto',row.id).eq('payload->>guion',d.guion).eq('payload->>op','video_clip').eq('payload->>indice',String(i)).in('estado',['queued','running','waiting','uncertain']).order('created_at',{ascending:false}).limit(1));
+  if(pendiente.length)return {grupo:pendiente[0].grupo_id};
+  await h.encolar(w.id,v.marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'video_clip',proyecto:row.id,guion:d.guion,indice:i,clip,plan:v.plan,imagen:img.archivo,configuracion:{...config,motor:m.id},revision,revisionClip:revisionClip(row.documento,d.guion,i)},lamina:`${d.guion}-video-${i}`}]);
  }else{
   if(!config.audioNarracion)throw new HttpError(400,'Sube y guarda la narración completa antes de montar.');
   await readyFile(w,config.audioNarracion,v.marca);
-  if(v.plan.clips.some((_:any,i:number)=>!v.clips?.[i]?.archivo||v.clips[i].revision!==revision))throw new HttpError(409,'Genera todos los clips con el plan vigente antes de montar.');
+  if(v.plan.clips.some((_:any,i:number)=>!clipVigente(row.documento,d.guion,i)))throw new HttpError(409,'Genera todos los clips con el plan vigente antes de montar.');
   await h.encolar(w.id,v.marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'video_montaje',proyecto:row.id,guion:d.guion,audio:'storage://'+config.audioNarracion,clips:v.clips.map((x:any)=>x.archivo),formato:config.formato,resolucion:config.resolucion,revision},lamina:d.guion}]);
  }
  return {grupo:d.idempotencyKey};

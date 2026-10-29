@@ -36,6 +36,10 @@ Las referencias requieren sonido generado y se usan como alternativa a la narrac
 
 El montaje original sigue descargable después de editar, pero queda marcado como obsoleto. Cambiar el plan, el audio o las imágenes exige regenerar los clips afectados antes de montar. Los cambios de escena/dirección se aplican al rehacer el plan.
 
+La lista «Clips de video» muestra cuáles están listos o generándose y permite saltar al reproductor. El avance y los errores aparecen junto al botón de cada clip y se retoman al volver al guion. Aprobar o generar la imagen de otro clip no invalida los videos ya terminados. Cada video conserva la firma de su propio guion, audio, configuración e imagen; las versiones reemplazadas y los resultados que terminaron con una imagen anterior siguen disponibles para reproducir y descargar en «Versiones anteriores».
+
+Para recuperar MP4 ya generados que no se asociaron al proyecto: `npx tsx scripts/recover-video-clips.ts --project=<id>` muestra el plan; `--apply` lo aplica con copia previa y control de versión. Solo usa archivos ya guardados de la misma marca, conserva las versiones antiguas y nunca sustituye un clip visible ni envía otra generación al proveedor.
+
 ## Operación y validación
 
 Se reutiliza `HF_CREDENTIALS`; no se envían claves al navegador. Las peticiones incluyen `Idempotency-Key`; se persiste el identificador del proveedor para retomar consultas sin reenviar generaciones. El presupuesto utiliza reservas conservadoras sin descuentos. Si Higgsfield no devuelve el importe facturado, la reserva sigue contando contra el límite mensual.

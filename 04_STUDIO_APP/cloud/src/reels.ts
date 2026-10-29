@@ -9,7 +9,7 @@ import {authorizeBrand,HttpError,anthropicKey,type Identity} from './auth.js';
 import {checked,readyFile,storeFile} from './library.js';
 import {saveJob,ProviderError} from './generation.js';
 import {planVideoJob,imagenClipJob,videoRoute,type Ayudas} from './reels-video.js';
-import {clipVideoJob,montajeVideoJob,revisionVideo} from './reels-higgsfield.js';
+import {clipVideoJob,montajeVideoJob,revisionVideo,clipVigente} from './reels-higgsfield.js';
 import {VIDEO_MODELS,reservaVideo} from '../shared/video-config.js';
 import {brandingDe,planAuto,validarPlan,html,renderPdf,contarPaginas,ESQUEMA_PLAN,GUIA_DIRECTOR,type Contenido} from './reels-pdf.js';
 
@@ -406,7 +406,7 @@ async function estadoGrupo(w:Identity,grupo:string){
  const rows=checked(await w.db.from('trabajos').select('id,estado,resultado,error,payload,lamina_id,updated_at').eq('grupo_id',key.parse(grupo)).eq('tipo','reels').order('created_at')) as any[];
  if(!rows.length)throw new HttpError(404,'Trabajo no encontrado.');
  const done=rows.every(x=>['succeeded','failed','uncertain','canceled'].includes(x.estado));
- return {id:grupo,done,items:rows.map(x=>({id:x.id,op:x.payload.op,estado:x.estado,paso:x.resultado?.paso||'',error:x.error,aviso:x.resultado?.aviso||'',proyecto:x.resultado?.proyecto_id||x.payload.proyecto||null,guion:x.payload.guion||null,url:x.payload.fuente?.url||x.payload.fuente?.nombre||'',resultado:x.estado==='succeeded'?x.resultado:null}))};
+ return {id:grupo,done,items:rows.map(x=>({id:x.id,op:x.payload.op,indice:x.payload.indice,estado:x.estado,paso:x.resultado?.paso||'',error:x.error,aviso:x.resultado?.aviso||'',proyecto:x.resultado?.proyecto_id||x.payload.proyecto||null,guion:x.payload.guion||null,url:x.payload.fuente?.url||x.payload.fuente?.nombre||'',resultado:x.estado==='succeeded'?x.resultado:null}))};
 }
 
 export async function reelsRoute(w:Identity,route:string,method:string,url:URL,b:any):Promise<any>{
@@ -474,7 +474,12 @@ export async function reelsRoute(w:Identity,route:string,method:string,url:URL,b
   if(method==='GET'){
    const pid=url.searchParams.get('id');
    if(pid){const r=checked(await w.db.from('reels_proyectos').select('*').eq('id',z.string().max(64).parse(pid)).maybeSingle());if(!r)throw new HttpError(404,'Proyecto no encontrado.');
-    const doc=structuredClone(r.documento);for(const [gid,v] of Object.entries(doc.videos||{}) as [string,any][])v.revision_actual=revisionVideo(r.documento,gid);
+    const jobs=checked(await w.db.from('trabajos').select('grupo_id,estado,payload,resultado,error,created_at').eq('tipo','reels').eq('payload->>proyecto',pid).in('payload->>op',['video_clip','video_montaje']).order('created_at',{ascending:false}).limit(100));
+    const doc=structuredClone(r.documento);for(const [gid,v] of Object.entries(doc.videos||{}) as [string,any][]){
+     v.revision_actual=revisionVideo(r.documento,gid);
+     v.clips?.forEach((c:any,i:number)=>{if(c)c.vigente=clipVigente(r.documento,gid,i);});
+     v.trabajos=jobs.filter((j:any)=>j.payload.guion===gid).map((j:any)=>({grupo:j.grupo_id,op:j.payload.op,indice:j.payload.indice,estado:j.estado,paso:j.resultado?.paso||'',error:j.error}));
+    }
     return {...doc,id:r.id,marca:r.marca_id};}
    const rows=checked(await w.db.from('reels_proyectos').select('id,marca_id,tipo,titulo,created_at,documento->analisis->guiones,documento->creado').order('created_at',{ascending:false}).limit(300)) as any[];
    return rows.map(p=>({id:p.id,tipo:p.tipo,titulo:p.titulo||'(sin título)',creado:p.creado||p.created_at.slice(0,16).replace('T',' '),marca:p.marca_id,guiones:Array.isArray(p.guiones)?p.guiones.length:0}));

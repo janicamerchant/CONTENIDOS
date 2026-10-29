@@ -4,7 +4,7 @@ import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {videoConfigSchema} from '../src/video-settings.js';
-import {pedidoHiggsfield,revisionVideo,clipVideoJob} from '../src/reels-higgsfield.js';
+import {pedidoHiggsfield,revisionVideo,revisionClip,clipVigente,pedidoClipVigente,conservarClip,clipVideoJob} from '../src/reels-higgsfield.js';
 import {pedirPlan,videoRoute} from '../src/reels-video.js';
 import {runFfmpeg,montarNarracion} from '../src/video-montage.js';
 import {validAudio} from '../src/audio-upload.js';
@@ -75,23 +75,57 @@ test('un clip de una revisión anterior se rechaza antes de llamar al proveedor'
  const j={payload:{proyecto:'p',guion:'g',revision:'old'}};
  await assert.rejects(()=>clipVideoJob(j,{cargarProyecto:async()=>({documento:{}})} as any),/cambiaron/);
 });
+test('aprobar o generar otra imagen no invalida un clip pagado; cambiar sus entradas sí',()=>{
+ const cfg=videoConfigSchema.parse({motor:'seedance_2_5'}),doc:any={videos:{g:{plan:{...plan,clips:[clip,{...clip,frase:'Otro clip.'}]},imagenes:[{archivo:'storage://base',aprobada:true}]}},video_config:{g:cfg}};
+ const v=doc.videos.g,op={guion:'g',indice:0,plan:structuredClone(v.plan),clip,configuracion:structuredClone(cfg),imagen:'storage://base',revision:revisionVideo(doc,'g'),revisionClip:revisionClip(doc,'g',0)};
+ assert.ok(conservarClip(doc,op,'storage://paid','now'));assert.ok(clipVigente(doc,'g',0));
+ v.imagenes[1]={archivo:'storage://second',aprobada:true,base:'storage://base'};
+ assert.ok(clipVigente(doc,'g',0));assert.ok(pedidoClipVigente(doc,op));
+ v.plan.clips[1].frase='Cambio del otro clip.';assert.ok(clipVigente(doc,'g',0));
+ v.imagenes[0].aprobada=false;assert.ok(!clipVigente(doc,'g',0));v.imagenes[0].aprobada=true;
+ v.plan.clips[0]={...clip,frase:'Guion cambiado.'};assert.ok(!clipVigente(doc,'g',0));v.plan.clips[0]=clip;
+ doc.video_config.g={...cfg,audiosReferencia:[{id:audio,nombre:'voz.wav'}]};assert.ok(!clipVigente(doc,'g',0));doc.video_config.g=cfg;
+ v.imagenes[0].archivo='storage://replacement';assert.ok(!clipVigente(doc,'g',0));
+});
+test('un pedido anterior se recupera si solo cambiaron otras imágenes; un resultado obsoleto sigue descargable',()=>{
+ const cfg=videoConfigSchema.parse({}),doc:any={videos:{g:{plan:structuredClone(plan),imagenes:[{archivo:'storage://base',aprobada:true}]}},video_config:{g:cfg}};
+ const v=doc.videos.g,op={guion:'g',indice:0,plan:structuredClone(plan),clip,configuracion:cfg,imagen:'storage://base',revision:'legacy'};
+ v.imagenes[1]={archivo:'storage://second',aprobada:true};
+ op.configuracion=Object.fromEntries(Object.entries(cfg).reverse()) as any;
+ assert.ok(conservarClip(doc,op,'storage://paid','now'));assert.ok(clipVigente(doc,'g',0));
+ v.imagenes[0].archivo='storage://new-frame';
+ assert.ok(!conservarClip(doc,op,'storage://old-output','later'));
+ assert.equal(v.clips[0].archivo,'storage://paid');assert.equal(v.versiones_clips[0].archivo,'storage://old-output');
+ assert.ok(conservarClip(doc,{...op,imagen:'storage://new-frame'},'storage://new-output','later'));
+ assert.equal(v.clips[0].archivo,'storage://new-output');assert.equal(v.versiones_clips.length,2);
+ assert.ok(!conservarClip(doc,{...op,imagen:'storage://new-frame'},'storage://recovered-older-output','before',false));
+ assert.equal(v.clips[0].archivo,'storage://new-output','recovery never replaces a newer visible clip');
+});
 test('la cola envía el clip una sola vez, retoma el request_id y guarda el MP4 en su guion',async()=>{
  const cfg=videoConfigSchema.parse({motor:'seedance_2_5',audiosReferencia:[{id:audio}]}),doc:any={videos:{g:{plan,imagenes:[{archivo:'storage://'+audio,aprobada:true}]}},video_config:{g:cfg}};
  const revision=revisionVideo(doc,'g'),calls:{url:string;body?:any;key?:string}[]=[],states:any[]=[],stored:any[]=[];
  const code=ts.transpile((await readFile('src/reels-higgsfield.ts','utf8')).replace(/^import .*$/gm,''),{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}).replace(/^export /gm,'');
  const db={from:(table:string)=>({select(){return this;},eq(){return this;},update(){return this;},maybeSingle:async()=>({data:{listo:true,marca_id:'brand',mime:'audio/wav',bytes:100,object_path:'private/file'},error:null}),then(resolve:any){return Promise.resolve({data:[],error:null}).then(resolve);}}),storage:{from:()=>({createSignedUrl:async()=>({data:{signedUrl:'https://example.com/private-frame'},error:null})})}};
- const env:any={z:(await import('zod')).z,createHash,Buffer,URL,AbortSignal,HttpError,modeloVideo,reservaVideo,MAX_REFERENCE_AUDIO_BYTES,promptVideo,sinGestos,videoConfigSchema,process:{env:{HF_CREDENTIALS:'test-only'}},
+ const env:any={z:(await import('zod')).z,createHash,Buffer,URL,AbortSignal,HttpError,modeloVideo,reservaVideo,MAX_REFERENCE_AUDIO_BYTES,promptVideo,sinGestos,videoConfigSchema,process:{env:{HF_CREDENTIALS:'test-only'}},authorizeBrand:async()=>{},readyFile:async()=>({mime:'audio/wav',bytes:100}),
   adminClient:()=>db,checked:(r:any)=>r.data,ProviderError:class extends Error{},saveJob:async(_j:any,s:any)=>{states.push(s);},storeFile:async(...args:any[])=>{stored.push(args);return audio;},
   fetch:async(input:string|URL,init:any={})=>{const url=String(input);calls.push({url,body:init.body&&JSON.parse(init.body),key:init.headers?.['Idempotency-Key']});
    return url.endsWith('/reference-to-video')?{ok:true,json:async()=>({request_id:'provider-1',status:'queued'})}:url.includes('/status')?{ok:true,json:async()=>({status:'completed',video:{url:'https://example.com/out.mp4'}})}:{ok:true,headers:new Headers(),body:(async function*(){yield Buffer.from('0000ftypmp42');})()};}
  };
- runInNewContext(code+'\nglobalThis.clipWorker=clipVideoJob;',env);
+ runInNewContext(code+'\nglobalThis.clipWorker=clipVideoJob;globalThis.clipActions=videoActions;',env);
  const job:any={id:'job-1',marca_id:'brand',lease_token:'lease',payload:{proyecto:'p',guion:'g',indice:0,revision,configuracion:cfg,plan,clip,imagen:'storage://'+audio}};
  const h={cargarProyecto:async()=>({documento:doc}),actualizarProyecto:async(_p:any,fn:any)=>fn(doc),ahora:()=>''};
  await env.clipWorker(job,h);assert.equal(states[0].estado,'waiting');assert.equal(job.provider_id,'provider-1');
+ doc.videos.g.imagenes[1]={archivo:'storage://other-frame',aprobada:true};
  assert.deepEqual(Array.from(calls[0]!.body.audio_urls),['https://example.com/private-frame']);assert.equal(calls[0]!.body.generate_audio,true);
  await env.clipWorker(job,h);assert.equal(calls.filter(c=>c.body).length,1);assert.equal(calls[0]!.key,'job-1');assert.ok(calls[1]!.url.includes('provider-1/status'));
- assert.equal(stored.length,1);assert.equal(stored[0][2],'video/mp4');assert.equal(doc.videos.g.clips[0].revision,revision);assert.equal(states[1].estado,'succeeded');
+ assert.equal(stored.length,1);assert.equal(stored[0][2],'video/mp4');assert.equal(doc.videos.g.clips[0].revision,revisionVideo(doc,'g'));assert.equal(states[1].estado,'succeeded');
+ assert.equal(states[1].resultado.archivo,'storage://'+audio);assert.ok(clipVigente(doc,'g',0));
+ let pending:any[]=[{grupo_id:'existing-request'}];const queued:any[]=[];
+ const builder:any={select(){return this;},eq(){return this;},in(){return this;},order(){return this;},limit:async()=>({data:pending,error:null})};
+ const who={id:'user',db:{from:()=>builder}},body={guion:'g',clip:0,idempotencyKey:audio},helpers={encolar:async(...args:any[])=>queued.push(args)};
+ const existing=await env.clipActions(who,{id:'p',documento:doc},'video-clips',body,helpers);assert.equal(existing.grupo,'existing-request');assert.equal(queued.length,0,'a pending request is resumed without reserving or generating again');
+ pending=[];await env.clipActions(who,{id:'p',documento:doc},'video-clips',body,helpers);
+ assert.equal(queued[0][4][0].payload.revisionClip,revisionClip(doc,'g',0));
 });
 test('la narración de otra marca no puede adjuntarse a la configuración',async()=>{
  let wrote=false;
