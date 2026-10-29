@@ -32,7 +32,11 @@ Las referencias requieren sonido generado y se usan como alternativa a la narrac
 2. La narración propia desactiva el sonido del motor y pide planos de apoyo sin habla. Su identidad sonora procede del archivo original.
 3. Prepara el plan y guarda cualquier ajuste. Genera y aprueba primero la imagen del clip 1, después las demás imágenes.
 4. Genera los clips individualmente con Higgsfield. Se muestran la reserva de presupuesto, el resultado reproducible y la descarga MP4.
-5. Cuando todos están vigentes, pulsa «Montar video con mi narración». El montaje exporta a la resolución elegida (480p, 720p o 1080p), concatena en orden y reemplaza el sonido de los clips con la narración original. Su duración sigue al audio: recorta metraje sobrante o mantiene el último fotograma si falta.
+5. Cuando todos están vigentes, pulsa «Generar video completo». El montaje exporta a la resolución elegida (480p, 720p o 1080p), concatena en orden y reemplaza el sonido de los clips con la narración original. Su duración sigue al audio: recorta metraje sobrante o mantiene el último fotograma si falta.
+
+## Video completo con la voz de los clips
+
+No necesitas subir una narración completa si los clips ya tienen voz generada. Cuando todos estén listos y vigentes, pulsa «Generar video completo», junto al resumen de clips. Se unen en orden conservando la voz y el sonido de cada uno; los clips sin audio aportan silencio. El resultado aparece en esa misma sección con reproductor y descarga MP4. Este montaje reutiliza los clips existentes y no solicita otra generación a Higgsfield.
 
 El montaje original sigue descargable después de editar, pero queda marcado como obsoleto. Cambiar el plan, el audio o las imágenes exige regenerar los clips afectados antes de montar. Los cambios de escena/dirección se aplican al rehacer el plan.
 

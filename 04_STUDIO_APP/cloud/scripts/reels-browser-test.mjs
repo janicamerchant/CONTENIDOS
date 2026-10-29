@@ -150,6 +150,15 @@ try{
  assert.equal(await page.locator('[data-v-cfg="vestuario"]').inputValue(),'Blazer azul','configuration survives reload');
  assert.equal(await page.locator('[data-v-audio-nombre]').textContent(),'mi-voz.opus');
  await page.evaluate(()=>{
+  fixture.proyecto.video_config.g1={...fixture.proyecto.video_config.g1,audioNarracion:null,audioNombre:'',generarAudio:true};
+  fixture.proyecto.videos.g1.montaje=null;
+ });
+ await page.locator('#rl-video-guion').selectOption('g2');await page.locator('#rl-video-guion').selectOption('g1');
+ assert.equal(await page.locator('[data-v-montar]').isEnabled(),true,'native clip sound enables assembly without a narration upload');
+ assert.equal(await page.locator('.rl-montaje').evaluate(e=>!!(e.compareDocumentPosition(document.querySelector('[data-clip="0"]'))&Node.DOCUMENT_POSITION_FOLLOWING)),true,'the complete video action is above the clip editors');
+ await page.getByRole('button',{name:'Generar video completo',exact:true}).click();
+ await page.getByRole('button',{name:'Descargar video completo',exact:true}).waitFor();
+ await page.evaluate(()=>{
   const v=fixture.proyecto.videos.g1;
   v.versiones_clips=[{indice:1,archivo:'storage://old-video'}];
   v.trabajos.unshift({grupo:'failed-retry',op:'video_clip',indice:1,estado:'failed',error:'No se completó el reintento <detalle>'});

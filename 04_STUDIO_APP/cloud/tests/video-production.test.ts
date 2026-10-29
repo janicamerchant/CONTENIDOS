@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {videoConfigSchema} from '../src/video-settings.js';
 import {pedidoHiggsfield,revisionVideo,revisionClip,clipVigente,pedidoClipVigente,conservarClip,clipVideoJob} from '../src/reels-higgsfield.js';
 import {pedirPlan,videoRoute} from '../src/reels-video.js';
-import {runFfmpeg,montarNarracion} from '../src/video-montage.js';
+import {runFfmpeg,montarNarracion,montarClips} from '../src/video-montage.js';
 import {validAudio} from '../src/audio-upload.js';
 import ts from 'typescript';
 import {runInNewContext} from 'node:vm';
@@ -126,6 +126,14 @@ test('la cola envía el clip una sola vez, retoma el request_id y guarda el MP4 
  const existing=await env.clipActions(who,{id:'p',documento:doc},'video-clips',body,helpers);assert.equal(existing.grupo,'existing-request');assert.equal(queued.length,0,'a pending request is resumed without reserving or generating again');
  pending=[];await env.clipActions(who,{id:'p',documento:doc},'video-clips',body,helpers);
  assert.equal(queued[0][4][0].payload.revisionClip,revisionClip(doc,'g',0));
+ await env.clipActions(who,{id:'p',documento:doc},'video-montaje',{guion:'g',idempotencyKey:audio},helpers);
+ assert.equal(queued[1][4][0].payload.audio,null,'native clip audio does not require a separate narration');
+ assert.deepEqual(Array.from(queued[1][4][0].payload.clips),['storage://'+audio]);
+ pending=[{grupo_id:'existing-montage'}];
+ assert.equal((await env.clipActions(who,{id:'p',documento:doc},'video-montaje',{guion:'g',idempotencyKey:audio},helpers)).grupo,'existing-montage');
+ assert.equal(queued.length,2,'a pending montage is resumed without another reservation');pending=[];
+ doc.videos.g.imagenes[0].aprobada=false;
+ await assert.rejects(()=>env.clipActions(who,{id:'p',documento:doc},'video-montaje',{guion:'g',idempotencyKey:audio},helpers),/vigente/);
 });
 test('la narración de otra marca no puede adjuntarse a la configuración',async()=>{
  let wrote=false;
@@ -159,5 +167,25 @@ for(const [extension,codec,mime] of [['wav','pcm_s16le','audio/wav'],['opus','li
   assert.ok(dot/Math.sqrt(a2*b2)>.98,'decoded voice track matches the original recording');
   await runFfmpeg(['-i',join(dir,'result.mp4'),'-map','0:v:0','-vf','scale=1:1','-an','-f','rawvideo','-pix_fmt','gray',join(dir,'frames.raw')]);
   const frames=await readFile(join(dir,'frames.raw'));assert.ok(Math.abs(frames.length/24-3)<.25,'video ends with the narration');
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('video completo sin narración: conserva el sonido de los clips, el orden y la duración de los clips mudos',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'clips-sound-test-'));
+ try{
+  await runFfmpeg(['-f','lavfi','-i','color=c=red:s=90x160:r=24:d=1','-f','lavfi','-i','sine=frequency=440:sample_rate=16000:duration=0.6','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',join(dir,'a.mp4')]);
+  await runFfmpeg(['-f','lavfi','-i','color=c=green:s=180x320:r=30:d=1','-c:v','libx264','-pix_fmt','yuv420p',join(dir,'b.mp4')]);
+  await runFfmpeg(['-f','lavfi','-i','color=c=blue:s=90x160:r=24:d=1','-f','lavfi','-i','sine=frequency=880:sample_rate=48000:duration=1','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',join(dir,'c.mp4')]);
+  const result=await montarClips(['a.mp4','b.mp4','c.mp4'],'9:16',ref=>readFile(join(dir,ref)),'480p');
+  assert.equal(result.toString('ascii',4,8),'ftyp');await writeFile(join(dir,'result.mp4'),result);
+  await runFfmpeg(['-i',join(dir,'result.mp4'),'-map','0:a:0','-ac','1','-ar','16000','-f','f32le',join(dir,'sound.raw')]);
+  const samples=await readFile(join(dir,'sound.raw'));
+  const rms=(start:number,end:number)=>{let sum=0,n=0;for(let i=Math.round(start*16000);i<Math.round(end*16000);i++){const x=samples.readFloatLE(i*4);sum+=x*x;n++;}return Math.sqrt(sum/n);};
+  const tone=(start:number,hz:number)=>{let re=0,im=0;for(let i=0;i<4000;i++){const x=samples.readFloatLE((Math.round(start*16000)+i)*4),angle=2*Math.PI*hz*i/16000;re+=x*Math.cos(angle);im+=x*Math.sin(angle);}return Math.hypot(re,im)/4000;};
+  assert.ok(Math.abs(samples.length/4/16000-3)<.2,'the assembled audio lasts as long as all three videos');
+  assert.ok(rms(.15,.45)>.02,'the first clip keeps its sound');assert.ok(rms(1.2,1.7)<.001,'the silent clip contributes silence');assert.ok(rms(2.2,2.7)>.02,'the final clip keeps its sound');
+  assert.ok(tone(.2,440)>10*tone(.2,880));assert.ok(tone(2.2,880)>10*tone(2.2,440),'voices remain in clip order');
+  await runFfmpeg(['-i',join(dir,'result.mp4'),'-map','0:v:0','-vf','scale=1:1','-an','-f','rawvideo','-pix_fmt','rgb24',join(dir,'frames.raw')]);
+  const frames=await readFile(join(dir,'frames.raw'));assert.ok(Math.abs(frames.length/3/24-3)<.15,'a short audio track never cuts off the video');
+  for(const [time,channel] of [[.3,0],[1.3,1],[2.3,2]]){const offset=Math.round(time!*24)*3,color=[...frames.subarray(offset,offset+3)];assert.ok(color[channel!]!>Math.max(...color.filter((_,i)=>i!==channel))+30,'video order is preserved');}
  }finally{await rm(dir,{recursive:true,force:true});}
 });

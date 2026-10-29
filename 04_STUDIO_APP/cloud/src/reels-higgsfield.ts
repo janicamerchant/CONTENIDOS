@@ -7,7 +7,7 @@ import {saveJob,ProviderError} from './generation.js';
 import {videoConfigSchema} from './video-settings.js';
 import {modeloVideo,reservaVideo,MAX_REFERENCE_AUDIO_BYTES,type ConfigVideo} from '../shared/video-config.js';
 import {promptVideo,sinGestos,type Clip,type PlanVideo} from '../shared/ugc.js';
-import {montarNarracion} from './video-montage.js';
+import {montarNarracion,montarClips} from './video-montage.js';
 import type {Ayudas} from './reels-video.js';
 
 export function revisionVideo(doc:any,gid:string){const v=doc.videos?.[gid],original=doc.video_config?.[gid]||v?.configuracion,config=original?{...original}:original;
@@ -90,16 +90,16 @@ export async function clipVideoJob(j:any,h:Ayudas){
 export async function montajeVideoJob(j:any,h:Ayudas){
  const op=j.payload,row=await h.cargarProyecto(op.proyecto),v=row.documento.videos?.[op.guion];
  if(revisionVideo(row.documento,op.guion)!==op.revision)throw new HttpError(409,'El video cambió antes de montar. Vuelve a pedir el montaje.');
- const refs=v.clips.map((x:any)=>x.archivo);
+ const refs=v.plan.clips.map((_:any,i:number)=>v.clips?.[i]?.archivo);
  if(JSON.stringify(refs)!==JSON.stringify(op.clips))throw new HttpError(409,'Los clips cambiaron. Vuelve a montar.');
  const download=async(ref:string)=>{const f=await archivoMarca(ref,j.marca_id);return Buffer.from(await checked(await adminClient().storage.from('estudio').download(f.object_path)).arrayBuffer());};
- await h.paso(j,'Montando los clips con tu narración original…');
- const bytes=await montarNarracion(op.clips,op.audio,op.formato,download,op.resolucion);
+ await h.paso(j,op.audio?'Montando los clips con tu narración original…':'Uniendo los clips con su voz y sonido…');
+ const bytes=op.audio?await montarNarracion(op.clips,op.audio,op.formato,download,op.resolucion):await montarClips(op.clips,op.formato,download,op.resolucion);
  if(bytes.length>52428800)throw new HttpError(413,'El montaje supera 50 MB. Elige una calidad menor y vuelve a montar.');
  const archivo='storage://'+await storeFile(j.marca_id,bytes,'video/mp4',`reel-${op.guion}.mp4`);
- let vigente=false;await h.actualizarProyecto(op.proyecto,doc=>{if(revisionVideo(doc,op.guion)!==op.revision||JSON.stringify(doc.videos[op.guion].clips.map((x:any)=>x.archivo))!==JSON.stringify(op.clips))return;
+ let vigente=false;await h.actualizarProyecto(op.proyecto,doc=>{if(revisionVideo(doc,op.guion)!==op.revision||JSON.stringify(doc.videos[op.guion].plan.clips.map((_:any,i:number)=>doc.videos[op.guion].clips?.[i]?.archivo))!==JSON.stringify(op.clips))return;
   vigente=true;doc.videos[op.guion].montaje={archivo,revision:op.revision,clips:op.clips,creado:h.ahora()};});
- await saveJob(j,{estado:'succeeded',coste_usd:0,resultado:{proyecto_id:op.proyecto,paso:vigente?'Video con narración listo':'El montaje terminó, pero los clips cambiaron.'}});
+ await saveJob(j,{estado:'succeeded',coste_usd:0,resultado:{proyecto_id:op.proyecto,archivo,paso:vigente?'Video completo listo':'El montaje terminó, pero los clips cambiaron.'}});
 }
 export async function videoActions(w:Identity,row:any,action:string,b:any,h:Ayudas){
  const d=z.object({guion:z.string().max(16),idempotencyKey:z.uuid(),clip:z.number().int().min(0).max(29).optional()}).parse(b);
@@ -115,10 +115,11 @@ export async function videoActions(w:Identity,row:any,action:string,b:any,h:Ayud
   if(pendiente.length)return {grupo:pendiente[0].grupo_id};
   await h.encolar(w.id,v.marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'video_clip',proyecto:row.id,guion:d.guion,indice:i,clip,plan:v.plan,imagen:img.archivo,configuracion:{...config,motor:m.id},revision,revisionClip:revisionClip(row.documento,d.guion,i)},lamina:`${d.guion}-video-${i}`}]);
  }else{
-  if(!config.audioNarracion)throw new HttpError(400,'Sube y guarda la narración completa antes de montar.');
-  await readyFile(w,config.audioNarracion,v.marca);
+  if(config.audioNarracion)await readyFile(w,config.audioNarracion,v.marca);
   if(v.plan.clips.some((_:any,i:number)=>!clipVigente(row.documento,d.guion,i)))throw new HttpError(409,'Genera todos los clips con el plan vigente antes de montar.');
-  await h.encolar(w.id,v.marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'video_montaje',proyecto:row.id,guion:d.guion,audio:'storage://'+config.audioNarracion,clips:v.clips.map((x:any)=>x.archivo),formato:config.formato,resolucion:config.resolucion,revision},lamina:d.guion}]);
+  const pendiente=checked(await w.db.from('trabajos').select('grupo_id').eq('tipo','reels').eq('payload->>proyecto',row.id).eq('payload->>guion',d.guion).eq('payload->>op','video_montaje').in('estado',['queued','running','waiting','uncertain']).order('created_at',{ascending:false}).limit(1));
+  if(pendiente.length)return {grupo:pendiente[0].grupo_id};
+  await h.encolar(w.id,v.marca,d.idempotencyKey,d.idempotencyKey,[{payload:{op:'video_montaje',proyecto:row.id,guion:d.guion,audio:config.audioNarracion?'storage://'+config.audioNarracion:null,clips:v.plan.clips.map((_:any,i:number)=>v.clips[i].archivo),formato:config.formato,resolucion:config.resolucion,revision},lamina:d.guion}]);
  }
  return {grupo:d.idempotencyKey};
 }

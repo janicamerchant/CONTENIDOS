@@ -22,7 +22,7 @@ export function sinPretitulos(t){
 }
 const nombreCliente=id=>(CLIENTES.find(c=>c.id===id)||{}).nombre||'';
 async function cargarClientes(){CLIENTES=await request('/api/reels/clientes');return CLIENTES;}
-const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video',imagen_clip:'Imagen de clip',video_clip:'Clip de video',video_montaje:'Montaje con narración'};
+const ETIQUETAS={transcribir:'Transcripción',guiones:'Guiones',entregable:'PDF',sugerir:'Sugerencia',muestra:'Vista previa',plan_video:'Plan de video',imagen_clip:'Imagen de clip',video_clip:'Clip de video',video_montaje:'Video completo'};
 
 const VISTA=`
 <div class="rl-wrap">
@@ -40,7 +40,7 @@ const VISTA=`
  <section id="rl-tab-video" class="rl-panel" hidden>
   <h2 class="h2">Video UGC desde un guion</h2>
   <p>Elige un proyecto y un guion para preparar un Reel con una persona de la marca.</p>
-  <p class="rl-meta">Configura el video, prepara y aprueba las imágenes, genera los clips y móntalos con tu narración original.</p>
+  <p class="rl-meta">Configura el video, prepara y aprueba las imágenes, genera los clips y únelos en un video completo.</p>
   <div id="rl-video-proyectos"></div>
   <div id="rl-video-editor" aria-live="polite"></div>
  </section>
@@ -484,6 +484,12 @@ function videoHtml(p,g){
  const trabajo=i=>v.trabajos?.find(j=>j.op==='video_clip'&&j.indice===i),enCurso=j=>j&&['queued','running','waiting'].includes(j.estado);
  const vigente=i=>!!v.clips?.[i]&&(v.clips[i].vigente??v.clips[i].revision===v.revision_actual);
  const estadoClip=i=>enCurso(trabajo(i))?'Generando…':vigente(i)?'Listo':v.clips?.[i]||(v.versiones_clips||[]).some(x=>x.indice===i)?'Versión anterior':trabajo(i)&&['failed','uncertain','canceled'].includes(trabajo(i).estado)?'No completado':'Sin generar';
+ const completos=plan.clips.every((_,i)=>vigente(i)),montando=enCurso(v.trabajos?.find(j=>j.op==='video_montaje'));
+ const montaje=`<div class="rl-montaje"><h3>Video completo</h3><p class="rl-meta">${config.audioNarracion?'Une los clips en orden y usa tu narración original. El video termina con la narración; si falta metraje, mantiene el último fotograma.':'Une los clips en orden y conserva la voz y el sonido de cada uno.'} Exportación MP4 a ${esc(config.resolucion)}.</p>
+   <button class="btn accent sm" data-v-montar ${completos&&!montando?'':'disabled'}>${montando?'Montando video…':'Generar video completo'}</button>
+   ${completos?'':'<p class="rl-meta">El botón se habilita cuando todos los clips del plan están listos y vigentes.</p>'}
+   ${v.montaje?`<video controls preload="metadata" data-ref="${esc(v.montaje.archivo)}"></video><p class="rl-meta">${v.montaje.revision===v.revision_actual&&JSON.stringify(v.montaje.clips)===JSON.stringify(plan.clips.map((_,i)=>v.clips?.[i]?.archivo))?'Video completo listo.':'Hay cambios: vuelve a generar el video completo.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.montaje.archivo)}">Descargar video completo</button>`:''}
+   <div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></div>`;
  const faltan=plan.clips.map((_,i)=>i).filter(i=>i>0&&!imgs[i]);
  const imagen=i=>{const m=imgs[i],bloqueada=i>0&&!base?.aprobada;
   return `<div class="rl-img">${m?`<img data-ref="${esc(m.archivo)}" alt="Imagen del clip ${i+1}">`:`<div class="rl-img-vacia">${bloqueada?'Aprueba primero la imagen del clip 1':'Sin imagen'}</div>`}
@@ -494,7 +500,7 @@ function videoHtml(p,g){
   <details class="rl-config-resumen"><summary>Configuración del video · ${esc(modeloVideo(config.motor).nombre)}</summary>${elegir}</details>
   <div class="rl-resumen-clips"><h3>Clips de video · ${plan.clips.filter((_,i)=>vigente(i)).length} de ${plan.clips.length} listos</h3>
    <p class="rl-meta">Aprueba la imagen y pulsa «Generar clip de video» en cada clip. El reproductor y la descarga aparecen debajo de su imagen cuando termina.</p>
-   <div class="rl-acciones">${plan.clips.map((_,i)=>`<button class="btn ghost sm" data-v-ir-clip="${i}">Clip ${i+1} · ${estadoClip(i)}</button>`).join('')}</div></div>
+   <div class="rl-acciones">${plan.clips.map((_,i)=>`<button class="btn ghost sm" data-v-ir-clip="${i}">Clip ${i+1} · ${estadoClip(i)}</button>`).join('')}</div></div>${montaje}
   ${v.avisos?.length?`<div class="rl-avisos">${v.avisos.map(a=>`<div class="rl-err">⚠ ${esc(a)}</div>`).join('')}</div>`:''}
   <label class="lbl">Escena</label><textarea class="inp" rows="2" data-v-plan="escena">${esc(plan.escena)}</textarea>
   <div class="rl-row"><div><label class="lbl">Habla</label><select class="inp" data-v-plan="sujeto"><option value="she" ${plan.sujeto==='she'?'selected':''}>Ella (she)</option><option value="he" ${plan.sujeto==='he'?'selected':''}>Él (he)</option></select></div>
@@ -516,10 +522,7 @@ function videoHtml(p,g){
    ${(v.versiones_clips||[]).some(x=>x.indice===i)?`<details class="rl-versiones"><summary>Versiones anteriores del clip ${i+1}</summary>${v.versiones_clips.filter(x=>x.indice===i).map(x=>`<p class="rl-meta">Generado con un plan o una imagen anterior.</p><video controls preload="none" data-ref="${esc(x.archivo)}"></video><button class="btn ghost sm" data-v-descargar="${esc(x.archivo)}">Descargar versión anterior</button>`).join('')}</details>`:''}</div>`).join('')}
   <div class="rl-acciones"><button class="btn accent sm" data-v-guardar>Guardar cambios del plan</button>
    <button class="btn ghost sm" data-v-planear data-rehacer="1">Rehacer plan (reemplaza el actual)</button></div>
-  <div class="rl-montaje"><h3>Montaje con tu narración</h3><p class="rl-meta">Une los clips en orden y usa tu audio original. El video termina con la narración; si falta metraje, mantiene el último fotograma. Exportación MP4 a ${esc(config.resolucion)}.</p>
-   <button class="btn accent sm" data-v-montar ${config.audioNarracion&&plan.clips.every((_,i)=>vigente(i))?'':'disabled'}>Montar video con mi narración</button>
-   ${v.montaje?`<video controls preload="none" data-ref="${esc(v.montaje.archivo)}"></video><p class="rl-meta">${v.montaje.revision===v.revision_actual&&JSON.stringify(v.montaje.clips)===JSON.stringify(v.clips.map(c=>c.archivo))?'Montaje vigente.':'Hay cambios: vuelve a montar el video.'}</p><button class="btn ghost sm" data-v-descargar="${esc(v.montaje.archivo)}">Descargar video completo</button>`:''}</div>
-  <div class="rl-jobs" id="rl-jobs-video-${esc(g.id)}"></div></details>`;
+  </details>`;
 }
 function leerPlan(caja){
  const val=s=>$(`[data-v-plan="${s}"]`,caja).value;
