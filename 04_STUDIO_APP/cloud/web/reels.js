@@ -452,13 +452,13 @@ function configuracionHtml(p,g,v,personas){
    ${opciones(['camara','Cámara'],[['','Elegir según el guion'],['fija en trípode','Fija en trípode'],['selfie','Selfie'],['en mano, movimiento suave','En mano, movimiento suave']])}
    ${texto('tono','Tono / energía','Ej.: cercana, segura, reflexiva')}${texto('acento','Acento de la voz generada','Vacío: usar el acento de la persona')}
   </div><label class="rl-campo"><span class="lbl">Otras indicaciones</span><textarea class="inp" rows="3" maxlength="4000" data-v-cfg="indicaciones">${esc(c.indicaciones)}</textarea></label></fieldset>
-  <fieldset><legend>Audios de referencia de voz</legend><p class="rl-meta">Sube muestras cortas de la misma voz, preferiblemente sin música. Seedance las usará para guiar la voz y el tono al decir el guion de cada clip. Hasta ${MAX_AUDIO_REFERENCES} audios, de 15 MB cada uno: MP3, WAV, M4A, OGG, WebM o FLAC.</p>
-   <input class="inp" type="file" multiple data-v-audio-referencia accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.flac">
+  <fieldset><legend>Audios de referencia de voz</legend><p class="rl-meta">Sube muestras cortas de la misma voz, preferiblemente sin música. Seedance las usará para guiar la voz y el tono al decir el guion de cada clip. Hasta ${MAX_AUDIO_REFERENCES} audios, de 15 MB cada uno: MP3, WAV, M4A, OGG, Opus, WebM o FLAC.</p>
+   <input class="inp" type="file" multiple data-v-audio-referencia accept="audio/*,.mp3,.wav,.m4a,.ogg,.opus,.webm,.flac">
    <div data-v-referencias data-items="${esc(JSON.stringify(c.audiosReferencia))}">${referenciasAudioHtml(c.audiosReferencia)}</div>
    <p class="rl-meta" data-v-referencia-info></p><p class="rl-meta" data-v-referencia-estado role="status"></p>
   </fieldset>
-  <fieldset><legend>Tu narración completa</legend><p class="rl-meta">Sube el audio completo del guion. Será la pista de voz del montaje final; los clips se generarán sin hablar. Usa esta opción o las referencias de voz. MP3, WAV, M4A, OGG, WebM o FLAC, hasta 50 MB.</p>
-   <input class="inp" type="file" data-v-audio accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.flac">
+  <fieldset><legend>Tu narración completa</legend><p class="rl-meta">Sube el audio completo del guion. Será la pista de voz del montaje final; los clips se generarán sin hablar. Usa esta opción o las referencias de voz. MP3, WAV, M4A, OGG, Opus, WebM o FLAC, hasta 50 MB.</p>
+   <input class="inp" type="file" data-v-audio accept="audio/*,.mp3,.wav,.m4a,.ogg,.opus,.webm,.flac">
    <div data-v-audio-datos data-id="${esc(c.audioNarracion||'')}" data-nombre="${esc(c.audioNombre)}">
     <p class="rl-meta" data-v-audio-nombre>${esc(c.audioNombre||'Sin narración cargada.')}</p><audio controls preload="metadata" data-ref="${c.audioNarracion?'storage://'+esc(c.audioNarracion):''}" ${c.audioNarracion?'':'hidden'}></audio>
     <button class="btn ghost sm" data-v-audio-quitar ${c.audioNarracion?'':'hidden'}>Quitar narración</button></div>
@@ -560,8 +560,8 @@ function activarVideos(pid,v,recargar,proyecto){
    const botones=$$('button',caja).map(el=>({el,disabled:el.disabled}));botones.forEach(({el})=>{el.disabled=true;});
    try{
     if(file.size>52428800)throw new Error('La narración supera 50 MB.');
-    const tipos={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
-    const mime=tipos[file.name.split('.').pop().toLowerCase()]||file.type;if(!Object.values(tipos).includes(mime))throw new Error('Usa MP3, WAV, M4A, OGG, WebM o FLAC.');
+    const tipos={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',ogg:'audio/ogg',opus:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
+    const mime=tipos[file.name.split('.').pop().toLowerCase()]||file.type;if(!Object.values(tipos).includes(mime))throw new Error('Usa MP3, WAV, M4A, OGG, Opus, WebM o FLAC.');
     const id=await uploadBlob(new Blob([file],{type:mime}),file.name,{brand:cfg.dataset.marca});
     if(!caja.isConnected)return;
     cfg.dataset.dirty='1';audioDatos.dataset.id=id;audioDatos.dataset.nombre=file.name;$('[data-v-audio-nombre]',cfg).textContent=file.name;
@@ -579,8 +579,8 @@ function activarVideos(pid,v,recargar,proyecto){
    refEstado.textContent='Subiendo referencias de voz…';
    try{
     if(before.length+files.length>MAX_AUDIO_REFERENCES)throw new Error(`Puedes guardar hasta ${MAX_AUDIO_REFERENCES} audios de referencia.`);
-    const tipos={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
-    for(const file of files){if(file.size>MAX_REFERENCE_AUDIO_BYTES)throw new Error('Cada referencia debe pesar como máximo 15 MB.');if(!tipos[file.name.split('.').pop().toLowerCase()])throw new Error('Usa MP3, WAV, M4A, OGG, WebM o FLAC.');}
+    const tipos={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',ogg:'audio/ogg',opus:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
+    for(const file of files){if(file.size>MAX_REFERENCE_AUDIO_BYTES)throw new Error('Cada referencia debe pesar como máximo 15 MB.');if(!tipos[file.name.split('.').pop().toLowerCase()])throw new Error('Usa MP3, WAV, M4A, OGG, Opus, WebM o FLAC.');}
     for(const file of files){
      const mime=tipos[file.name.split('.').pop().toLowerCase()],id=await uploadBlob(new Blob([file],{type:mime}),file.name,{brand:cfg.dataset.marca});
      if(!caja.isConnected)return;

@@ -18,7 +18,9 @@ El selector muestra si la clave de Higgsfield está configurada; el saldo y acce
 
 ## Audios de referencia de voz
 
-En la configuración del video puedes subir hasta tres muestras de la misma voz, de hasta 15 MB cada una. Se admiten MP3, WAV, M4A, OGG, WebM y FLAC. Usa grabaciones cortas y limpias, sin música; con Seedance 2.0 procura que sumen hasta 15 s y con 2.5 hasta 30 s. Cada muestra tiene reproductor y botón para quitarla; se guarda automáticamente por guion. No son IDs de ElevenLabs.
+En la configuración del video puedes subir hasta tres muestras de la misma voz, de hasta 15 MB cada una. Se admiten MP3, WAV, M4A, OGG, Opus (`.opus`), WebM y FLAC. Usa grabaciones cortas y limpias, sin música; con Seedance 2.0 procura que sumen hasta 15 s y con 2.5 hasta 30 s. Cada muestra tiene reproductor y botón para quitarla; se guarda automáticamente por guion. No son IDs de ElevenLabs.
+
+Los archivos `.opus` se suben como `audio/ogg`, el tipo recomendado para [Ogg Opus (RFC 7845)](https://www.rfc-editor.org/rfc/rfc7845.html#section-9), aunque el navegador no informe su tipo o use `audio/opus`. Conservan su nombre y contenido original, sin conversión previa.
 
 Seedance 2.5 y 2.0 reciben las muestras como `audio_urls` mediante enlaces firmados temporales de Storage privado. La voz generada se guía con ellas y el diálogo sigue siendo el guion de cada clip. Kling no admite este campo en la integración. La aplicación comprueba marca, archivo disponible, tipo y tamaño al guardar y de nuevo antes de generar; no guarda enlaces firmados en la configuración.
 
@@ -26,7 +28,7 @@ Las referencias requieren sonido generado y se usan como alternativa a la narrac
 
 ## Narración completa
 
-1. Sube tu grabación del guion (MP3, WAV, M4A, OGG, WebM o FLAC, hasta 50 MB). Se guarda en Storage privado y se puede escuchar en el formulario.
+1. Sube tu grabación del guion (MP3, WAV, M4A, OGG, Opus, WebM o FLAC, hasta 50 MB). Se guarda en Storage privado y se puede escuchar en el formulario.
 2. La narración propia desactiva el sonido del motor y pide planos de apoyo sin habla. Su identidad sonora procede del archivo original.
 3. Prepara el plan y guarda cualquier ajuste. Genera y aprueba primero la imagen del clip 1, después las demás imágenes.
 4. Genera los clips individualmente con Higgsfield. Se muestran la reserva de presupuesto, el resultado reproducible y la descarga MP4.

@@ -69,12 +69,13 @@ try{
  await page.locator('[data-v-cfg="segundos"]').fill('20');
  await page.locator('[data-v-cfg="escena"]').fill('Mi oficina');
  await page.locator('[data-v-cfg="vestuario"]').fill('Blazer azul');
- await page.locator('[data-v-audio-referencia]').setInputFiles(['calmada.wav','conversacional.wav'].map(name=>({name,mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')})));
+ await page.locator('[data-v-audio-referencia]').setInputFiles([{name:'calmada.wav',mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')},{name:'conversacional.OPUS',mimeType:'',buffer:Buffer.from('OggS0000OpusHead')}]);
  await page.getByText('Referencias guardadas.',{exact:false}).waitFor();
  assert.equal(await page.locator('[data-v-referencia-quitar]').count(),2);
  assert.equal(await page.locator('[data-v-audio]').isDisabled(),true);assert.equal(await page.locator('[data-v-cfg="generarAudio"]').isChecked(),true);
  const refs=await page.evaluate(()=>fixture.writes.filter(w=>w.path.endsWith('/video-config')).at(-1).body.configuracion.audiosReferencia);
- assert.deepEqual(refs.map(r=>r.nombre),['calmada.wav','conversacional.wav']);
+ assert.deepEqual(refs.map(r=>r.nombre),['calmada.wav','conversacional.OPUS']);
+ assert.deepEqual(await page.evaluate(()=>fixture.upload),{name:'conversacional.OPUS',scope:{brand:'janica'},mime:'audio/ogg'});
  assert.equal(await page.locator('[data-v-referencias] audio[data-ref]').count(),2);
  await page.locator('[data-v-audio-referencia]').setInputFiles(['extra1.wav','extra2.wav'].map(name=>({name,mimeType:'audio/wav',buffer:Buffer.from('RIFF0000WAVE')})));
  await page.getByText('Puedes guardar hasta 3 audios de referencia.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>fixture.uploadCount),2);
@@ -93,6 +94,11 @@ try{
  assert.equal(await page.locator('[data-v-cfg="generarAudio"]').isDisabled(),true);
  assert.equal(await page.locator('audio').isVisible(),true);
  assert.deepEqual(await page.evaluate(()=>fixture.upload),{name:'mi-voz.wav',scope:{brand:'janica'},mime:'audio/wav'});
+ await page.locator('[data-v-audio-quitar]').click();
+ await page.waitForFunction(()=>!document.querySelector('[data-v-audio-datos]').dataset.id);
+ await page.locator('[data-v-audio]').setInputFiles({name:'mi-voz.opus',mimeType:'audio/opus',buffer:Buffer.from('OggS0000OpusHead')});
+ await page.getByText('Narración subida y guardada.',{exact:false}).waitFor();
+ assert.deepEqual(await page.evaluate(()=>fixture.upload),{name:'mi-voz.opus',scope:{brand:'janica'},mime:'audio/ogg'});
  await page.screenshot({path:'artifacts/reels-navigation/configuracion.png'});
  await page.locator('[data-v-planear]').click();
  await page.locator('[data-v-plan="escena"]').waitFor({state:'visible'});
@@ -122,7 +128,7 @@ try{
  await page.getByRole('button',{name:'Descargar video completo',exact:true}).waitFor();
  await page.locator('.rl-config-resumen').evaluate(e=>{e.open=true;});
  assert.equal(await page.locator('[data-v-cfg="vestuario"]').inputValue(),'Blazer azul','configuration survives reload');
- assert.equal(await page.locator('[data-v-audio-nombre]').textContent(),'mi-voz.wav');
+ assert.equal(await page.locator('[data-v-audio-nombre]').textContent(),'mi-voz.opus');
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile fits viewport');
  await page.screenshot({path:'artifacts/reels-navigation/plan-mobile.png'});

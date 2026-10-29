@@ -105,16 +105,19 @@ test('la narración de otra marca no puede adjuntarse a la configuración',async
 test('los archivos de voz deben corresponder a su formato y no pueden ser HTML renombrado',()=>{
  const wav=Buffer.from('RIFF0000WAVE');assert.ok(validAudio(wav,'audio/wav'));
  assert.ok(!validAudio(Buffer.from('<html>not an audio</html>'),'audio/mpeg'));assert.ok(!validAudio(wav,'audio/mp4'));
+ assert.ok(!validAudio(Buffer.from('<html>not an audio</html>'),'audio/ogg'));assert.ok(!validAudio(wav,'audio/ogg'));
 });
-test('montaje real: concatena clips y conserva la narración original hasta su final',async()=>{
+for(const [extension,codec,mime] of [['wav','pcm_s16le','audio/wav'],['opus','libopus','audio/ogg']] as const)test(`montaje real: concatena clips y conserva la narración ${extension} original hasta su final`,async()=>{
  const dir=await mkdtemp(join(tmpdir(),'montage-test-'));
  try{
   await runFfmpeg(['-f','lavfi','-i','color=c=red:s=90x160:r=24:d=1','-c:v','libx264','-pix_fmt','yuv420p',join(dir,'a.mp4')]);
   await runFfmpeg(['-f','lavfi','-i','color=c=blue:s=90x160:r=24:d=1','-c:v','libx264','-pix_fmt','yuv420p',join(dir,'b.mp4')]);
-  await runFfmpeg(['-f','lavfi','-i','sine=frequency=750:sample_rate=16000:duration=3','-c:a','pcm_s16le',join(dir,'voice.wav')]);
-  const result=await montarNarracion(['a.mp4','b.mp4'],'voice.wav','9:16',ref=>readFile(join(dir,ref)));
+  const voice='voice.'+extension;
+  await runFfmpeg(['-f','lavfi','-i','sine=frequency=750:sample_rate=16000:duration=3','-c:a',codec,join(dir,voice)]);
+  assert.ok(validAudio(await readFile(join(dir,voice)),mime));
+  const result=await montarNarracion(['a.mp4','b.mp4'],voice,'9:16',ref=>readFile(join(dir,ref)));
   assert.equal(result.toString('ascii',4,8),'ftyp');await writeFile(join(dir,'result.mp4'),result);
-  for(const [input,out] of [['voice.wav','source.raw'],['result.mp4','result.raw']])await runFfmpeg(['-i',join(dir,input!),'-vn','-ac','1','-ar','16000','-f','f32le',join(dir,out!)]);
+  for(const [input,out] of [[voice,'source.raw'],['result.mp4','result.raw']])await runFfmpeg(['-i',join(dir,input!),'-vn','-ac','1','-ar','16000','-f','f32le',join(dir,out!)]);
   const source=await readFile(join(dir,'source.raw')),decoded=await readFile(join(dir,'result.raw'));
   assert.ok(Math.abs(decoded.length-source.length)<16000*.2*4,'output audio has the original narration duration');
   let dot=0,a2=0,b2=0;
